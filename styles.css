@@ -1,0 +1,298 @@
+:root {
+    --primary-color: #007aff;
+    --background-gradient: linear-gradient(135deg, #1e1e1e, #3a3a3a);
+    --text-color: #ffffff;
+    --ui-background: rgba(0, 0, 0, 0.7);
+    --shadow-color: rgba(0, 0, 0, 0.3);
+}
+
+body { 
+    margin: 0; 
+    overflow: hidden;
+    background: var(--background-gradient);
+    color: var(--text-color);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--background-gradient);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    z-index: 1000;
+}
+
+#ui {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 200;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+}
+
+.control {
+    background: var(--ui-background);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    width: 100%;
+    max-width: 300px;
+    color: rgba(255,255,255,0.6);
+    font-size: 25px;
+}
+
+.slider {
+    --slider-width: 10rem;
+    --slider-height: 10px;
+    --slider-bg: rgb(82, 82, 82);
+    --slider-border-radius: 999px;
+    --level-color: #93ad88;
+    --level-transition-duration: .1s;
+    --icon-margin: 15px;
+    --icon-color: var(--slider-bg);
+    --icon-size: 25px;
+  }
+  
+  .slider {
+    font-family: "Arial";
+    cursor: pointer;
+    display: -webkit-inline-box;
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    -webkit-box-orient: horizontal;
+    -webkit-box-direction: reverse;
+    -ms-flex-direction: row-reverse;
+    flex-direction: row-reverse;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+  }
+  
+  .slider .volume {
+    display: inline-block;
+    vertical-align: top;
+    margin-right: var(--icon-margin);
+    color: var(--icon-color);
+    width: var(--icon-size);
+    height: auto;
+  }
+
+  .slider .value {
+    padding-right: 10px;
+  }
+  
+  .slider .level {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: var(--slider-width);
+    height: var(--slider-height);
+    background: var(--slider-bg);
+    overflow: hidden;
+    border-radius: var(--slider-border-radius);
+    -webkit-transition: height var(--level-transition-duration);
+    -o-transition: height var(--level-transition-duration);
+    transition: height var(--level-transition-duration);
+    cursor: pointer;
+    touch-action: none;
+  }
+  
+  .slider .level::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--level-color);
+    border-radius: 50%;
+    cursor: pointer;
+    -webkit-box-shadow: -200px 0 0 190px var(--level-color);
+    box-shadow: -200px 0 0 190px var(--level-color);
+  }
+  
+  .slider .level::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: var(--level-color);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  
+  .slider:hover .level {
+    height: calc(var(--slider-height) * 2);
+  }
+
+.button {
+    margin: 0;
+    height: auto;
+    background: transparent;
+    padding-right: 0.5rem;
+    border: none;
+    cursor: pointer;
+  }
+
+.button {
+    --border-right: 6px;
+    --text-stroke-color: rgba(255,255,255,0.6);
+    --animation-color: #93ad88;
+    --fs-size: 2em;
+    letter-spacing: 3px;
+    text-decoration: none;
+    font-size: var(--fs-size);
+    font-family: "Arial";
+    position: relative;
+    text-transform: uppercase;
+    color: transparent;
+    -webkit-text-stroke: 1px var(--text-stroke-color);
+  }
+  
+  .hover-text {
+    position: absolute;
+    box-sizing: border-box;
+    content: attr(data-text);
+    color: var(--animation-color);
+    width: 0%;
+    inset: 0;
+    border-right: var(--border-right) solid var(--animation-color);
+    overflow: hidden;
+    transition: 0.5s;
+    -webkit-text-stroke: 1px var(--animation-color);
+  }
+  
+  .button:hover .hover-text {
+    width: 100%;
+    filter: drop-shadow(0 0 23px var(--animation-color))
+  }
+  
+
+input[type="range"] {
+    width: 100%;
+    margin: 8px 0;
+}
+
+.info-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--ui-background);
+    padding: 24px 16px;
+    border-radius: 20px 20px 0 0;
+    max-height: 60vh;
+    overflow-y: auto;
+    z-index: 201;
+    box-shadow: 0 -4px 12px var(--shadow-color);
+}
+
+.info-content {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.avatar-container {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #93ad88;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.robot-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #93ad88;
+    border: none;
+    color: var(--text-color);
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 4px var(--shadow-color);
+    transition: transform 0.2s ease;
+}
+
+.close-btn:active {
+    transform: scale(0.95);
+}
+
+#solarSystemCanvas {
+    display: block;
+    width: 100%;
+    height: 100vh;
+}
+
+/* Larger Screens */
+@media (min-width: 768px) {
+    #ui {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+    }
+    
+    .control {
+        min-width: 200px;
+    }
+    
+    .info-panel {
+        bottom: 20px;
+        left: 20px;
+        right: auto;
+        width: 360px;
+        border-radius: 12px;
+        max-height: 40vh;
+    }
+
+    .avatar-container {
+        width: 64px;
+        height: 64px;
+    }
+
+    .close-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+        top: 12px;
+        right: 12px;
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .button {
+        color: var(--text-stroke-color);
+        -webkit-text-stroke: 0;
+    }
+
+    .button .hover-text {
+        display: none;
+    }
+
+    .button:active {
+        color: var(--animation-color);
+        transform: scale(0.95);
+        transition: transform 0.2s ease;
+    }
+}
