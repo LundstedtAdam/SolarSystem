@@ -12,6 +12,7 @@ import { Starfield } from './Starfield';
 import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
 import { SimClock } from './SimClock';
+import { AudioReactor } from './AudioReactor';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
@@ -66,6 +67,7 @@ export function SolarSystem() {
         ))}
       </Suspense>
       <SimClock />
+      <AudioReactor />
       <CameraRig />
       <Effects />
     </Canvas>

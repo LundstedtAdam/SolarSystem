@@ -3,6 +3,7 @@ import { HUD } from './ui/HUD';
 import { InfoPanel } from './ui/InfoPanel';
 import { Loading } from './ui/Loading';
 import { Controls } from './ui/Controls';
+import { Audio } from './ui/Audio';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
       <InfoPanel />
       <Loading />
       <Controls />
+      <Audio />
     </>
   );
 }

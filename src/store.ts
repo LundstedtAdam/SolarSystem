@@ -47,6 +47,9 @@ interface SimState {
   simTimeDays: number;
   paused: boolean;
   tourActive: boolean;
+  /** Master audio volume 0..1 and mute. */
+  volume: number;
+  muted: boolean;
   /** Live meshes of planets, keyed by name, for programmatic focus. */
   planetObjects: Record<string, Object3D>;
 
@@ -60,6 +63,8 @@ interface SimState {
   focusPlanetByIndex: (index: number) => void;
   cycleFocus: (dir: 1 | -1) => void;
   toggleTour: () => void;
+  setVolume: (v: number) => void;
+  toggleMuted: () => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -72,6 +77,8 @@ export const useStore = create<SimState>((set, get) => ({
   simTimeDays: daysSinceJ2000(new Date()),
   paused: false,
   tourActive: false,
+  volume: 0.6,
+  muted: false,
   planetObjects: {},
 
   setSpeed: (speed) => set({ speed }),
@@ -107,4 +114,6 @@ export const useStore = create<SimState>((set, get) => ({
     s.focusPlanetByIndex(next);
   },
   toggleTour: () => set((s) => ({ tourActive: !s.tourActive })),
+  setVolume: (v) => set({ volume: v }),
+  toggleMuted: () => set((s) => ({ muted: !s.muted })),
 }));
