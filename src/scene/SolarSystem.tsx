@@ -9,6 +9,7 @@ import {
 } from 'three/webgpu';
 import { Starfield } from './Starfield';
 import { Sun } from './Sun';
+import { SolarWind } from './SolarWind';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
@@ -54,6 +55,7 @@ export function SolarSystem() {
         <ambientLight intensity={0.05} color={0x223355} />
         <Starfield />
         <Sun />
+        <SolarWind />
         <Orbits />
         {PLANETS.map((p) => (
           <Planet key={p.name} data={p} />

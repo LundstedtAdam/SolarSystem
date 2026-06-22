@@ -4,6 +4,7 @@ import { useTexture } from '@react-three/drei';
 import type { Mesh } from 'three';
 import { type MoonData } from '../systems/bodies';
 import { useStore } from '../store';
+import { Atmosphere } from './Atmosphere';
 
 const MOON_INCLINATION = Math.sin(0.1); // legacy constant tilt for all moons
 
@@ -45,6 +46,9 @@ export function Moon({ data }: { data: MoonData }) {
     <mesh ref={ref} onClick={onClick}>
       <sphereGeometry args={[data.size, 32, 32]} />
       <meshStandardMaterial map={texture} roughness={0.95} metalness={0} />
+      {data.atmosphere && (
+        <Atmosphere radius={data.size * data.atmosphere.scale} data={data.atmosphere} />
+      )}
     </mesh>
   );
 }

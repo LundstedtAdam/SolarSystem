@@ -51,11 +51,10 @@ function makeStars(): Points {
 
 /** Legacy texture skybox plus a procedural additive star layer for depth. */
 export function Starfield() {
-  const texture = useTexture(TEXTURES.stars, (t) => {
+  const texture = useTexture(TEXTURES.milkyway, (t) => {
     const tex = Array.isArray(t) ? t[0] : t;
     tex.wrapS = RepeatWrapping;
     tex.wrapT = RepeatWrapping;
-    tex.repeat.set(2, 2);
   });
 
   const stars = useMemo(() => makeStars(), []);
