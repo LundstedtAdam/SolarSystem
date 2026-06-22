@@ -1,28 +1,31 @@
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Vector3 } from 'three';
+import { Vector3, type PerspectiveCamera } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useStore } from '../store';
 
 const DEFAULT_POS = new Vector3(0, 200, 500);
 const DEFAULT_TARGET = new Vector3(0, 0, 0);
+const INTRO_POS = new Vector3(0, 1100, 2600);
 
-const easeCubicInOut = (t: number) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const easeQuadInOut = (t: number) =>
-  t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const DEFAULT_FOV = 75;
+const FOCUS_FOV = 62; // subtle dolly-in when framing a body
+const INTRO_FOV = 92;
 
-type Mode = 'idle' | 'focusing' | 'following' | 'resetting';
+const easeCubicInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+type Mode = 'intro' | 'focusing' | 'following' | 'resetting' | 'idle';
 
 /**
- * Camera controller that reproduces the legacy feel: damped OrbitControls, a
- * 1.5s eased zoom-to-body on selection that then follows the moving body, and a
- * 1s eased return to the default view on reset.
+ * Cinematic camera: an intro fly-in, eased framed-focus transitions that home
+ * onto the (moving) target, follow-cam that tracks a body's orbital translation
+ * while leaving the user free to orbit/zoom, a return-to-overview reset, and a
+ * subtle FOV dolly. Driven by store focus state.
  */
 export function CameraRig() {
   const controls = useRef<OrbitControlsImpl>(null);
-  const camera = useThree((s) => s.camera);
+  const camera = useThree((s) => s.camera) as PerspectiveCamera;
 
   const focusObject = useStore((s) => s.focusObject);
   const resetCounter = useStore((s) => s.resetCounter);
@@ -34,30 +37,51 @@ export function CameraRig() {
   const toPos = useRef(new Vector3());
   const fromTarget = useRef(new Vector3());
   const toTarget = useRef(new Vector3());
+  const camDir = useRef(new Vector3());
+  const focusDist = useRef(50);
+  const fromFov = useRef(DEFAULT_FOV);
+  const toFov = useRef(DEFAULT_FOV);
+  const followPrev = useRef(new Vector3());
+  const tmp = useRef(new Vector3());
 
-  // Begin a focus transition whenever a body is selected.
+  // Cinematic intro fly-in (once, on mount).
+  useEffect(() => {
+    camera.position.copy(INTRO_POS);
+    camera.fov = INTRO_FOV;
+    camera.updateProjectionMatrix();
+    fromPos.current.copy(INTRO_POS);
+    toPos.current.copy(DEFAULT_POS);
+    fromTarget.current.copy(DEFAULT_TARGET);
+    toTarget.current.copy(DEFAULT_TARGET);
+    fromFov.current = INTRO_FOV;
+    toFov.current = DEFAULT_FOV;
+    duration.current = 3800;
+    start.current = performance.now();
+    mode.current = 'intro';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Begin a framed-focus transition whenever a body is selected.
   useEffect(() => {
     if (!focusObject || !controls.current) return;
-    // Render radius of the focused body, from its geometry bounding sphere.
-    const geom = (focusObject as { geometry?: { boundingSphere?: { radius: number } | null; computeBoundingSphere?: () => void } }).geometry;
+    const geom = (
+      focusObject as { geometry?: { boundingSphere?: { radius: number } | null; computeBoundingSphere?: () => void } }
+    ).geometry;
     geom?.computeBoundingSphere?.();
     const size = geom?.boundingSphere?.radius ?? 5;
-    const dir = new Vector3();
-    camera.getWorldDirection(dir);
-    const planetPos = focusObject.getWorldPosition(new Vector3());
-    const sizeFactor = size > 5 ? 3 : 5;
-    const distance = Math.max(size * sizeFactor, 20);
+    camera.getWorldDirection(camDir.current); // viewing direction, kept for the framing offset
+    focusDist.current = Math.max(size * (size > 5 ? 3 : 5), 18);
 
     fromPos.current.copy(camera.position);
     fromTarget.current.copy(controls.current.target);
-    toPos.current.copy(planetPos).sub(dir.multiplyScalar(distance));
-    toTarget.current.copy(planetPos);
+    fromFov.current = camera.fov;
+    toFov.current = FOCUS_FOV;
     duration.current = 1500;
     start.current = performance.now();
     mode.current = 'focusing';
   }, [focusObject, camera]);
 
-  // Begin a reset transition when the user asks to reset (skip first mount).
+  // Return to the system overview on reset (skip the initial mount).
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) {
@@ -69,7 +93,9 @@ export function CameraRig() {
     fromTarget.current.copy(controls.current.target);
     toPos.current.copy(DEFAULT_POS);
     toTarget.current.copy(DEFAULT_TARGET);
-    duration.current = 1000;
+    fromFov.current = camera.fov;
+    toFov.current = DEFAULT_FOV;
+    duration.current = 1200;
     start.current = performance.now();
     mode.current = 'resetting';
   }, [resetCounter, camera]);
@@ -77,16 +103,45 @@ export function CameraRig() {
   useFrame(() => {
     const c = controls.current;
     if (!c) return;
+    const m = mode.current;
 
-    if (mode.current === 'focusing' || mode.current === 'resetting') {
+    if (m === 'focusing' || m === 'intro' || m === 'resetting') {
       const t = Math.min((performance.now() - start.current) / duration.current, 1);
-      const e = mode.current === 'focusing' ? easeCubicInOut(t) : easeQuadInOut(t);
+      const e = easeCubicInOut(t);
+
+      if (m === 'focusing' && focusObject) {
+        // Home onto the body's *current* position so fast time-scales still land.
+        const bodyPos = focusObject.getWorldPosition(tmp.current);
+        toTarget.current.copy(bodyPos);
+        toPos.current.copy(bodyPos).addScaledVector(camDir.current, -focusDist.current);
+      }
       camera.position.lerpVectors(fromPos.current, toPos.current, e);
       c.target.lerpVectors(fromTarget.current, toTarget.current, e);
-      if (t >= 1) mode.current = mode.current === 'focusing' ? 'following' : 'idle';
-    } else if (mode.current === 'following' && focusObject) {
-      // Track the moving body without overriding the user's orbit.
-      focusObject.getWorldPosition(c.target);
+      camera.fov = fromFov.current + (toFov.current - fromFov.current) * e;
+      camera.updateProjectionMatrix();
+
+      if (t >= 1) {
+        if (m === 'focusing' && focusObject) {
+          focusObject.getWorldPosition(followPrev.current);
+          mode.current = 'following';
+        } else {
+          mode.current = 'idle';
+        }
+      }
+    } else if (m === 'following' && focusObject) {
+      // Move the camera and target by the body's per-frame translation, so it
+      // stays framed while the user is still free to orbit/zoom around it.
+      const bodyPos = focusObject.getWorldPosition(tmp.current);
+      const dx = bodyPos.x - followPrev.current.x;
+      const dy = bodyPos.y - followPrev.current.y;
+      const dz = bodyPos.z - followPrev.current.z;
+      camera.position.x += dx;
+      camera.position.y += dy;
+      camera.position.z += dz;
+      c.target.x += dx;
+      c.target.y += dy;
+      c.target.z += dz;
+      followPrev.current.copy(bodyPos);
     }
 
     c.update();
@@ -98,8 +153,8 @@ export function CameraRig() {
       makeDefault
       enableDamping
       dampingFactor={0.05}
-      minDistance={50}
-      maxDistance={2000}
+      minDistance={5}
+      maxDistance={6000}
     />
   );
 }

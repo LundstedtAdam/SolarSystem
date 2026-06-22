@@ -1,10 +1,10 @@
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import type { Group, Mesh, Texture } from 'three';
 import { type PlanetData } from '../systems/bodies';
-import { positionAtTime, periodDays } from '../systems/ephemeris';
-import { useStore } from '../store';
+import { positionAtTime } from '../systems/ephemeris';
+import { useStore, planetSelected } from '../store';
 import { Moon } from './Moon';
 import { SaturnRing } from './SaturnRing';
 import { Atmosphere } from './Atmosphere';
@@ -22,8 +22,19 @@ const DEG = Math.PI / 180;
  */
 export function Planet({ data }: { data: PlanetData }) {
   const anchor = useRef<Group>(null);
-  const mesh = useRef<Mesh>(null);
+  const mesh = useRef<Mesh | null>(null);
   const select = useStore((s) => s.select);
+  const registerPlanet = useStore((s) => s.registerPlanet);
+
+  // Callback ref: register the mesh for programmatic focus (keyboard cycling,
+  // tour) the moment R3F attaches it.
+  const setMesh = useCallback(
+    (m: Mesh | null) => {
+      mesh.current = m;
+      if (m) registerPlanet(data.name, m);
+    },
+    [data.name, registerPlanet]
+  );
 
   // Visual spin rate (rad per sim-day), sign preserved for retrograde bodies.
   const spinVis = useMemo(
@@ -66,24 +77,13 @@ export function Planet({ data }: { data: PlanetData }) {
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    select(
-      {
-        name: data.name,
-        radiusKm: data.realRadiusKm,
-        semiMajorAxisAU: data.elements.aAU,
-        orbitalPeriodDays: periodDays(data.elements),
-        rotationPeriodDays: data.rotationPeriodDays,
-        axialTiltDeg: data.axialTiltDeg,
-        eccentricity: data.elements.e,
-      },
-      e.object
-    );
+    select(planetSelected(data), e.object);
   };
 
   return (
     <group ref={anchor}>
       <group rotation={[0, 0, data.axialTiltDeg * DEG]}>
-        <mesh ref={mesh} onClick={onClick} castShadow receiveShadow>
+        <mesh ref={setMesh} onClick={onClick} castShadow receiveShadow>
           <sphereGeometry args={[data.size, 64, 64]} />
           <primitive object={material} attach="material" />
         </mesh>

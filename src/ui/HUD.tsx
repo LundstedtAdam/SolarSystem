@@ -9,6 +9,8 @@ export function HUD() {
   const reset = useStore((s) => s.reset);
   const paused = useStore((s) => s.paused);
   const togglePause = useStore((s) => s.togglePause);
+  const tourActive = useStore((s) => s.tourActive);
+  const toggleTour = useStore((s) => s.toggleTour);
   // Re-render only when the whole day changes, not every frame.
   const dayInt = useStore((s) => Math.floor(s.simTimeDays));
 
@@ -43,6 +45,12 @@ export function HUD() {
         <span className="actual-text">&nbsp;{paused ? 'Play' : 'Pause'}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">
           &nbsp;{paused ? 'Play' : 'Pause'}&nbsp;
+        </span>
+      </button>
+      <button className="button" onClick={toggleTour}>
+        <span className="actual-text">&nbsp;{tourActive ? 'Stop' : 'Tour'}&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">
+          &nbsp;{tourActive ? 'Stop' : 'Tour'}&nbsp;
         </span>
       </button>
       <button className="button" onClick={toggleOrbits}>
