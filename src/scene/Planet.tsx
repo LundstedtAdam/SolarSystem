@@ -49,7 +49,7 @@ export function Planet({ data }: { data: PlanetData }) {
     <group ref={anchor}>
       <mesh ref={mesh} onClick={onClick}>
         <sphereGeometry args={[data.size, 64, 64]} />
-        <meshPhongMaterial map={texture} specular={0x222222} shininess={10} />
+        <meshStandardMaterial map={texture} roughness={0.92} metalness={0} />
         {data.hasRing && data.ringTexture && (
           <SaturnRing planetSize={data.size} texture={data.ringTexture} />
         )}

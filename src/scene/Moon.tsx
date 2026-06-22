@@ -44,7 +44,7 @@ export function Moon({ data }: { data: MoonData }) {
   return (
     <mesh ref={ref} onClick={onClick}>
       <sphereGeometry args={[data.size, 32, 32]} />
-      <meshPhongMaterial map={texture} />
+      <meshStandardMaterial map={texture} roughness={0.95} metalness={0} />
     </mesh>
   );
 }

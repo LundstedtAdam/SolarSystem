@@ -1,23 +1,57 @@
-import { Suspense } from 'react';
+import { Suspense, useCallback, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { AmbientLight, PointLight } from 'three';
+import {
+  WebGPURenderer,
+  ACESFilmicToneMapping,
+  AmbientLightNode,
+  PointLightNode,
+} from 'three/webgpu';
 import { Starfield } from './Starfield';
 import { Sun } from './Sun';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
+import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
 
-/** The 3D scene: starfield, sun, planets/moons, orbit lines, and camera rig. */
+/** The 3D scene rendered with a WebGPU renderer (auto WebGL2 fallback). */
 export function SolarSystem() {
+  // R3F (v8) can't await an async renderer, and WebGPURenderer must finish
+  // init() before it can render. So we start with the loop paused and flip it
+  // to "always" once init resolves.
+  const [frameloop, setFrameloop] = useState<'never' | 'always'>('never');
+
+  const createRenderer = useCallback((canvas: HTMLCanvasElement) => {
+    const renderer = new WebGPURenderer({ canvas, antialias: true });
+    // R3F instantiates lights from the classic three build; register those
+    // classes with the WebGPU node library (it keys handlers by light class)
+    // so the renderer lights the scene instead of warning "Light node not found".
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const library = (renderer as any).nodes.library;
+    library.addLight(AmbientLightNode, AmbientLight);
+    library.addLight(PointLightNode, PointLight);
+    renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    renderer
+      .init()
+      .then(() => setFrameloop('always'))
+      .catch((err) => console.error('WebGPU init failed:', err));
+    return renderer;
+  }, []);
+
   return (
     <Canvas
+      frameloop={frameloop}
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}
       camera={{ fov: 75, near: 1, far: 20000, position: [0, 200, 500] }}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      gl={createRenderer as never}
       dpr={[1, 2]}
     >
       <Suspense fallback={null}>
-        <ambientLight color={0x404040} />
+        {/* Faint cool fill so night sides aren't pure black; the sun point
+            light is the key light and defines the day/night terminator. */}
+        <ambientLight intensity={0.05} color={0x223355} />
         <Starfield />
         <Sun />
         <Orbits />
@@ -26,6 +60,7 @@ export function SolarSystem() {
         ))}
       </Suspense>
       <CameraRig />
+      <Effects />
     </Canvas>
   );
 }
