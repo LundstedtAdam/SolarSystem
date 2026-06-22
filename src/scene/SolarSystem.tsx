@@ -11,6 +11,7 @@ import {
 import { Starfield } from './Starfield';
 import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
+import { SimClock } from './SimClock';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
@@ -64,6 +65,7 @@ export function SolarSystem() {
           <Planet key={p.name} data={p} />
         ))}
       </Suspense>
+      <SimClock />
       <CameraRig />
       <Effects />
     </Canvas>

@@ -1,7 +1,6 @@
-import { useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useMemo } from 'react';
 import { useTexture } from '@react-three/drei';
-import { RingGeometry, DoubleSide, Vector3, type Group } from 'three';
+import { RingGeometry, DoubleSide, Vector3 } from 'three';
 
 interface Props {
   /** Planet radius; ring spans 1.2x–2x this, matching the legacy build. */
@@ -9,9 +8,8 @@ interface Props {
   texture: string;
 }
 
-/** Saturn's ring: UV-remapped ring geometry with a subtle z-axis wobble. */
+/** Saturn's ring: UV-remapped ring geometry, lying in the equatorial plane. */
 export function SaturnRing({ planetSize, texture }: Props) {
-  const container = useRef<Group>(null);
   const innerRadius = planetSize * 1.2;
   const outerRadius = planetSize * 2;
 
@@ -34,14 +32,10 @@ export function SaturnRing({ planetSize, texture }: Props) {
     return geo;
   }, [innerRadius, outerRadius]);
 
-  useFrame(() => {
-    if (container.current) {
-      container.current.rotation.z = Math.sin(Date.now() * 0.0001) * 0.1;
-    }
-  });
-
+  // The ring lies in the planet's equatorial plane; the parent tilt group
+  // gives it Saturn's real ~26.7° obliquity.
   return (
-    <group ref={container} rotation={[-Math.PI / 2, Math.PI / 6, 0]}>
+    <group rotation={[-Math.PI / 2, 0, 0]}>
       <mesh geometry={geometry} castShadow receiveShadow>
         <meshBasicMaterial map={map} side={DoubleSide} transparent opacity={0.8} />
       </mesh>

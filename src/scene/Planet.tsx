@@ -3,6 +3,7 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import type { Group, Mesh, Texture } from 'three';
 import { type PlanetData } from '../systems/bodies';
+import { positionAtTime, periodDays } from '../systems/ephemeris';
 import { useStore } from '../store';
 import { Moon } from './Moon';
 import { SaturnRing } from './SaturnRing';
@@ -10,18 +11,26 @@ import { Atmosphere } from './Atmosphere';
 import { Clouds } from './Clouds';
 import { createBodyMaterial } from './materials';
 
+const DEG = Math.PI / 180;
+
 /**
- * A planet plus its moons, clouds, atmosphere and ring. The `anchor` group
- * carries the orbital position and does NOT rotate, so clouds/atmosphere/moons
- * stay independent of the planet's own spin (the spinning `mesh` is a child).
+ * A planet with its moons, clouds, atmosphere and ring.
+ * - `anchor` carries the Keplerian orbital position (no spin/tilt).
+ * - `tilt` applies the fixed axial obliquity (so the spin axis and the ring
+ *   plane are correctly tilted, e.g. Uranus on its side, Saturn's rings at 27°).
+ * - the inner mesh spins about its (tilted) axis.
  */
 export function Planet({ data }: { data: PlanetData }) {
   const anchor = useRef<Group>(null);
   const mesh = useRef<Mesh>(null);
-  const angle = useRef(data.initialAngle);
   const select = useStore((s) => s.select);
 
-  // Load the base map plus any Earth-specific maps for this body.
+  // Visual spin rate (rad per sim-day), sign preserved for retrograde bodies.
+  const spinVis = useMemo(
+    () => Math.sign(data.rotationPeriodDays) * (0.08 / Math.sqrt(Math.abs(data.rotationPeriodDays))),
+    [data.rotationPeriodDays]
+  );
+
   const urls = useMemo(() => {
     const u: Record<string, string> = { map: data.texture };
     if (data.nightTexture) u.night = data.nightTexture;
@@ -50,36 +59,41 @@ export function Planet({ data }: { data: PlanetData }) {
     const a = anchor.current;
     const m = mesh.current;
     if (!a || !m) return;
-    const speed = useStore.getState().speed;
-    angle.current += 0.0005 * data.speed * speed;
-    const theta = angle.current;
-    const r =
-      (data.distance * (1 - data.eccentricity * data.eccentricity)) /
-      (1 + data.eccentricity * Math.cos(theta));
-    a.position.set(r * Math.cos(theta), r * Math.sin(theta) * Math.sin(data.inclination), r * Math.sin(theta));
-    m.rotation.y += 0.005 * speed;
+    const t = useStore.getState().simTimeDays;
+    positionAtTime(data.elements, data.distance, t, a.position);
+    m.rotation.y = t * spinVis;
   });
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     select(
-      { name: data.name, size: data.size, distance: data.distance, speed: data.speed },
+      {
+        name: data.name,
+        radiusKm: data.realRadiusKm,
+        semiMajorAxisAU: data.elements.aAU,
+        orbitalPeriodDays: periodDays(data.elements),
+        rotationPeriodDays: data.rotationPeriodDays,
+        axialTiltDeg: data.axialTiltDeg,
+        eccentricity: data.elements.e,
+      },
       e.object
     );
   };
 
   return (
     <group ref={anchor}>
-      <mesh ref={mesh} onClick={onClick} castShadow receiveShadow>
-        <sphereGeometry args={[data.size, 64, 64]} />
-        <primitive object={material} attach="material" />
+      <group rotation={[0, 0, data.axialTiltDeg * DEG]}>
+        <mesh ref={mesh} onClick={onClick} castShadow receiveShadow>
+          <sphereGeometry args={[data.size, 64, 64]} />
+          <primitive object={material} attach="material" />
+        </mesh>
         {data.hasRing && data.ringTexture && (
           <SaturnRing planetSize={data.size} texture={data.ringTexture} />
         )}
-      </mesh>
-      {data.bodyType === 'earth' && data.cloudsTexture && (
-        <Clouds radius={data.size * 1.012} texture={data.cloudsTexture} />
-      )}
+        {data.bodyType === 'earth' && data.cloudsTexture && (
+          <Clouds radius={data.size * 1.012} texture={data.cloudsTexture} />
+        )}
+      </group>
       {data.atmosphere && <Atmosphere radius={data.size * data.atmosphere.scale} data={data.atmosphere} />}
       {data.moons.map((moon) => (
         <Moon key={moon.name} data={moon} />

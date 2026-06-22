@@ -81,6 +81,13 @@ canvas {
   align-items: center;
 }
 
+.date {
+  font-size: 16px;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 8px;
+}
+
 .slider .value {
   padding-right: 10px;
 }

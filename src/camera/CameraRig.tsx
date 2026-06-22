@@ -38,7 +38,10 @@ export function CameraRig() {
   // Begin a focus transition whenever a body is selected.
   useEffect(() => {
     if (!focusObject || !controls.current) return;
-    const size = useStore.getState().selected?.size ?? 5;
+    // Render radius of the focused body, from its geometry bounding sphere.
+    const geom = (focusObject as { geometry?: { boundingSphere?: { radius: number } | null; computeBoundingSphere?: () => void } }).geometry;
+    geom?.computeBoundingSphere?.();
+    const size = geom?.boundingSphere?.radius ?? 5;
     const dir = new Vector3();
     camera.getWorldDirection(dir);
     const planetPos = focusObject.getWorldPosition(new Vector3());
