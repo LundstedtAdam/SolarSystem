@@ -42,7 +42,7 @@ export function SaturnRing({ planetSize, texture }: Props) {
 
   return (
     <group ref={container} rotation={[-Math.PI / 2, Math.PI / 6, 0]}>
-      <mesh geometry={geometry}>
+      <mesh geometry={geometry} castShadow receiveShadow>
         <meshBasicMaterial map={map} side={DoubleSide} transparent opacity={0.8} />
       </mesh>
     </group>

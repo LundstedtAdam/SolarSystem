@@ -4,6 +4,7 @@ import { AmbientLight, PointLight } from 'three';
 import {
   WebGPURenderer,
   ACESFilmicToneMapping,
+  PCFSoftShadowMap,
   AmbientLightNode,
   PointLightNode,
 } from 'three/webgpu';
@@ -34,6 +35,8 @@ export function SolarSystem() {
     library.addLight(PointLightNode, PointLight);
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = PCFSoftShadowMap;
     renderer
       .init()
       .then(() => setFrameloop('always'))

@@ -70,7 +70,7 @@ export function Planet({ data }: { data: PlanetData }) {
 
   return (
     <group ref={anchor}>
-      <mesh ref={mesh} onClick={onClick}>
+      <mesh ref={mesh} onClick={onClick} castShadow receiveShadow>
         <sphereGeometry args={[data.size, 64, 64]} />
         <primitive object={material} attach="material" />
         {data.hasRing && data.ringTexture && (

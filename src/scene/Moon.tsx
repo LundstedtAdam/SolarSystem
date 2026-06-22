@@ -43,7 +43,7 @@ export function Moon({ data }: { data: MoonData }) {
   };
 
   return (
-    <mesh ref={ref} onClick={onClick}>
+    <mesh ref={ref} onClick={onClick} castShadow receiveShadow>
       <sphereGeometry args={[data.size, 32, 32]} />
       <meshStandardMaterial map={texture} roughness={0.95} metalness={0} />
       {data.atmosphere && (

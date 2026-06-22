@@ -42,8 +42,21 @@ export function Sun() {
       <mesh name="Sun">
         <sphereGeometry args={[20, 64, 64]} />
         <primitive object={sunMat} attach="material" />
-        {/* Single key light; decay 0 keeps compressed-scale outer planets lit. */}
-        <pointLight color={0xfff4e6} intensity={3} distance={0} decay={0} />
+        {/* Single key light; decay 0 keeps compressed-scale outer planets lit.
+            Casts shadows (ring on Saturn, planets on moons). */}
+        <pointLight
+          color={0xfff4e6}
+          intensity={3}
+          distance={0}
+          decay={0}
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-near={1}
+          shadow-camera-far={650}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.6}
+        />
       </mesh>
       <mesh scale={1.7}>
         <sphereGeometry args={[20, 48, 48]} />
