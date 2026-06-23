@@ -18,9 +18,11 @@ import { LabelProjector } from './LabelProjector';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
+import { ShipController } from '../ship/ShipController';
+import { ShipCamera } from '../ship/ShipCamera';
 import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
-import { useStore } from '../store';
+import { useStore, type SceneMode } from '../store';
 import { QUALITY } from '../systems/quality';
 
 /** The 3D scene rendered with a WebGPU renderer (auto WebGL2 fallback). */
@@ -30,6 +32,7 @@ export function SolarSystem() {
   // to "always" once init resolves.
   const [frameloop, setFrameloop] = useState<'never' | 'always'>('never');
   const dprMax = QUALITY[useStore((s) => s.quality)].dprMax;
+  const sceneMode: SceneMode = useStore((s) => s.sceneMode);
 
   const createRenderer = useCallback((canvas: HTMLCanvasElement) => {
     const renderer = new WebGPURenderer({ canvas, antialias: true });
@@ -75,7 +78,13 @@ export function SolarSystem() {
       <SimClock />
       <AudioReactor />
       <LabelProjector />
-      <CameraRig />
+      {sceneMode.type === 'solar' && <CameraRig />}
+      {sceneMode.type === 'piloting' && (
+        <>
+          <ShipController />
+          <ShipCamera />
+        </>
+      )}
       <Effects />
     </Canvas>
   );

@@ -7,6 +7,8 @@ import { Audio } from './ui/Audio';
 import { BodyPicker } from './ui/BodyPicker';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { Labels } from './ui/Labels';
+import { ShipHUD } from './ui/ShipHUD';
+import { TouchControls } from './ui/TouchControls';
 
 export default function App() {
   return (
@@ -17,6 +19,8 @@ export default function App() {
       <BodyPicker />
       <InfoPanel />
       <SettingsPanel />
+      <ShipHUD />
+      <TouchControls />
       <Loading />
       <Controls />
       <Audio />

@@ -229,3 +229,13 @@ export const PLANETS: PlanetData[] = [
     moons: [moon('Triton', TEXTURES.triton, 4.2, 35, 1353.4, -5.876854)], // retrograde
   },
 ];
+
+export function isLandable(name: string): boolean {
+  const planet = PLANETS.find((p) => p.name === name);
+  if (planet) return planet.bodyType !== 'gas';
+  return PLANETS.some((p) => p.moons.some((m) => m.name === name));
+}
+
+export function findParentPlanet(moonName: string): PlanetData | undefined {
+  return PLANETS.find((p) => p.moons.some((m) => m.name === moonName));
+}

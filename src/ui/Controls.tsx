@@ -39,6 +39,11 @@ export function Controls() {
           e.preventDefault();
           s.togglePause();
           break;
+        case 'f':
+        case 'F':
+          if (s.sceneMode.type === 'solar') s.enterShip();
+          else if (s.sceneMode.type === 'piloting') s.exitShip();
+          break;
       }
     };
     window.addEventListener('keydown', onKey);

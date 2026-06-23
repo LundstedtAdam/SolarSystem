@@ -1,9 +1,16 @@
 import { create } from 'zustand';
 import type { Object3D } from 'three';
 import { daysSinceJ2000, periodDays } from './systems/ephemeris';
-import { PLANETS, type PlanetData } from './systems/bodies';
+import { PLANETS, isLandable, type PlanetData } from './systems/bodies';
 import { detectQuality, type Quality } from './systems/quality';
 import type { Lang } from './i18n';
+
+export type SceneMode =
+  | { type: 'solar' }
+  | { type: 'piloting' }
+  | { type: 'descending'; target: string; phase: 'orbit' | 'atmosphere' | 'landing' }
+  | { type: 'surface'; planet: string }
+  | { type: 'ascending'; planet: string };
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
@@ -68,6 +75,17 @@ interface SimState {
   /** Live meshes of planets, keyed by name, for programmatic focus. */
   planetObjects: Record<string, Object3D>;
 
+  /** Phase 8: current scene mode (solar viewer, piloting, descent, surface). */
+  sceneMode: SceneMode;
+  /** Ship world position in render-space units. */
+  shipPosition: [number, number, number];
+  /** Ship velocity in render-space units/s. */
+  shipVelocity: [number, number, number];
+  /** Ship orientation as a quaternion [x, y, z, w]. */
+  shipRotation: [number, number, number, number];
+  /** Ship throttle 0..1. */
+  shipThrottle: number;
+
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
   select: (body: SelectedBody, object: Object3D) => void;
@@ -86,6 +104,18 @@ interface SimState {
   toggleSettings: () => void;
   setDate: (date: Date) => void;
   setQuality: (q: Quality) => void;
+  enterShip: () => void;
+  exitShip: () => void;
+  beginDescent: (target: string) => boolean;
+  setDescentPhase: (phase: 'orbit' | 'atmosphere' | 'landing') => void;
+  completeLanding: (planet: string) => void;
+  beginAscent: () => void;
+  completeAscent: () => void;
+  abortDescent: () => void;
+  setShipPosition: (pos: [number, number, number]) => void;
+  setShipVelocity: (vel: [number, number, number]) => void;
+  setShipRotation: (rot: [number, number, number, number]) => void;
+  setShipThrottle: (t: number) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -106,6 +136,12 @@ export const useStore = create<SimState>((set, get) => ({
   settingsOpen: false,
   quality: detectQuality(),
   planetObjects: {},
+
+  sceneMode: { type: 'solar' },
+  shipPosition: [0, 50, 300],
+  shipVelocity: [0, 0, 0],
+  shipRotation: [0, 0, 0, 1],
+  shipThrottle: 0,
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -148,4 +184,45 @@ export const useStore = create<SimState>((set, get) => ({
   toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
   setDate: (date) => set({ simTimeDays: daysSinceJ2000(date) }),
   setQuality: (quality) => set({ quality }),
+
+  enterShip: () =>
+    set((s) => {
+      if (s.sceneMode.type !== 'solar') return {};
+      return {
+        sceneMode: { type: 'piloting' },
+        tourActive: false,
+        selected: null,
+        focusObject: null,
+        focusIndex: null,
+      };
+    }),
+  exitShip: () =>
+    set((s) => {
+      if (s.sceneMode.type !== 'piloting') return {};
+      return { sceneMode: { type: 'solar' }, resetCounter: s.resetCounter + 1 };
+    }),
+  beginDescent: (target: string) => {
+    const s = get();
+    if (s.sceneMode.type !== 'piloting') return false;
+    if (!isLandable(target)) return false;
+    set({ sceneMode: { type: 'descending', target, phase: 'orbit' } });
+    return true;
+  },
+  setDescentPhase: (phase) =>
+    set((s) => {
+      if (s.sceneMode.type !== 'descending') return {};
+      return { sceneMode: { ...s.sceneMode, phase } };
+    }),
+  completeLanding: (planet: string) => set({ sceneMode: { type: 'surface', planet } }),
+  beginAscent: () =>
+    set((s) => {
+      if (s.sceneMode.type !== 'surface') return {};
+      return { sceneMode: { type: 'ascending', planet: s.sceneMode.planet } };
+    }),
+  completeAscent: () => set({ sceneMode: { type: 'piloting' } }),
+  abortDescent: () => set({ sceneMode: { type: 'piloting' } }),
+  setShipPosition: (shipPosition) => set({ shipPosition }),
+  setShipVelocity: (shipVelocity) => set({ shipVelocity }),
+  setShipRotation: (shipRotation) => set({ shipRotation }),
+  setShipThrottle: (shipThrottle) => set({ shipThrottle }),
 }));

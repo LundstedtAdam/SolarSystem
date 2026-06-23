@@ -13,6 +13,8 @@ export function HUD() {
   const tourActive = useStore((s) => s.tourActive);
   const toggleTour = useStore((s) => s.toggleTour);
   const toggleSettings = useStore((s) => s.toggleSettings);
+  const enterShip = useStore((s) => s.enterShip);
+  const sceneMode = useStore((s) => s.sceneMode);
   const dayInt = useStore((s) => Math.floor(s.simTimeDays));
   const { t, lang } = useT();
 
@@ -73,6 +75,12 @@ export function HUD() {
           &nbsp;{t('settings')}&nbsp;
         </span>
       </button>
+      {sceneMode.type === 'solar' && (
+        <button className="button" onClick={enterShip} style={{ minWidth: 44, minHeight: 44 }}>
+          <span className="actual-text">&nbsp;Fly&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;Fly&nbsp;</span>
+        </button>
+      )}
     </div>
   );
 }
