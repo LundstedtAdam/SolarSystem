@@ -13,6 +13,9 @@ export interface QualitySettings {
   asteroids: number;
   dprMax: number;
   bloomStrength: number; // 0 disables the bloom pass
+  bloomRadius: number;
+  bloomThreshold: number;
+  chromaticAberration: number;
   shadows: boolean;
   shadowMapSize: number;
 }
@@ -27,6 +30,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     asteroids: 0,
     dprMax: 1,
     bloomStrength: 0,
+    bloomRadius: 0.4,
+    bloomThreshold: 0.0,
+    chromaticAberration: 0,
     shadows: false,
     shadowMapSize: 1024,
   },
@@ -38,7 +44,10 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     solarWind: 800,
     asteroids: 2000,
     dprMax: 1.5,
-    bloomStrength: 0.6,
+    bloomStrength: 0.55,
+    bloomRadius: 0.45,
+    bloomThreshold: 0.05,
+    chromaticAberration: 0.0012,
     shadows: true,
     shadowMapSize: 1024,
   },
@@ -50,7 +59,10 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     solarWind: 1400,
     asteroids: 5000,
     dprMax: 2,
-    bloomStrength: 0.7,
+    bloomStrength: 0.65,
+    bloomRadius: 0.5,
+    bloomThreshold: 0.04,
+    chromaticAberration: 0.0015,
     shadows: true,
     shadowMapSize: 2048,
   },
@@ -62,7 +74,10 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     solarWind: 2200,
     asteroids: 9000,
     dprMax: 2,
-    bloomStrength: 0.8,
+    bloomStrength: 0.75,
+    bloomRadius: 0.55,
+    bloomThreshold: 0.03,
+    chromaticAberration: 0.002,
     shadows: true,
     shadowMapSize: 4096,
   },

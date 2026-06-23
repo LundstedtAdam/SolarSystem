@@ -33,8 +33,11 @@ class AudioManager {
     this.ctx = ctx;
 
     const compressor = ctx.createDynamicsCompressor();
-    compressor.threshold.value = -18;
-    compressor.ratio.value = 4;
+    compressor.threshold.value = -22;
+    compressor.knee.value = 8;
+    compressor.ratio.value = 3.5;
+    compressor.attack.value = 0.005;
+    compressor.release.value = 0.15;
     compressor.connect(ctx.destination);
 
     const master = ctx.createGain();
@@ -47,30 +50,29 @@ class AudioManager {
     padGain.gain.value = 0.0;
     const padFilter = ctx.createBiquadFilter();
     padFilter.type = 'lowpass';
-    padFilter.frequency.value = 500;
+    padFilter.frequency.value = 420;
+    padFilter.Q.value = 0.7;
     padGain.connect(padFilter).connect(master);
 
-    // A minor-ish stack, a couple octaves down.
     const padFreqs = [55, 82.41, 110, 164.81];
     padFreqs.forEach((f, i) => {
       const osc = ctx.createOscillator();
       osc.type = i % 2 === 0 ? 'sine' : 'triangle';
       osc.frequency.value = f;
-      osc.detune.value = (i - 1.5) * 6; // slight chorus
+      osc.detune.value = (i - 1.5) * 8;
       const g = ctx.createGain();
-      g.gain.value = 0.18 / padFreqs.length;
+      g.gain.value = 0.15 / padFreqs.length;
       osc.connect(g).connect(padGain);
       osc.start();
     });
 
-    // Slow LFO breathing the pad in and out.
     const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.05;
+    lfo.frequency.value = 0.04;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.5;
+    lfoGain.gain.value = 0.45;
     lfo.connect(lfoGain).connect(padGain.gain);
     lfo.start();
-    padGain.gain.value = 0.6; // baseline around which the LFO swings
+    padGain.gain.value = 0.55;
 
     // --- Noise bed: filtered white noise for a faint "space hiss". ---
     const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
@@ -81,9 +83,9 @@ class AudioManager {
     noise.loop = true;
     const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'lowpass';
-    noiseFilter.frequency.value = 700;
+    noiseFilter.frequency.value = 550;
     const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0.04;
+    noiseGain.gain.value = 0.025;
     noise.connect(noiseFilter).connect(noiseGain).connect(master);
     noise.start();
 
@@ -127,8 +129,8 @@ class AudioManager {
   setProximity(p: number) {
     if (this.droneGain && this.droneFilter && this.ctx) {
       const t = this.ctx.currentTime;
-      this.droneGain.gain.setTargetAtTime(p * 0.28, t, 0.25);
-      this.droneFilter.frequency.setTargetAtTime(90 + p * 200, t, 0.25);
+      this.droneGain.gain.setTargetAtTime(p * 0.22, t, 0.35);
+      this.droneFilter.frequency.setTargetAtTime(80 + p * 180, t, 0.35);
     }
   }
 
@@ -153,12 +155,12 @@ class AudioManager {
 
   /** Selecting/focusing a body: a soft upward chime. */
   playSelect() {
-    this.blip(523.25, 0.18, 'sine', 0.18, 880);
+    this.blip(523.25, 0.2, 'sine', 0.14, 880);
   }
 
   /** Toggling a control (pause, orbits, tour). */
   playToggle() {
-    this.blip(330, 0.07, 'triangle', 0.12);
+    this.blip(330, 0.08, 'triangle', 0.09);
   }
 
   /** Camera transition whoosh: a short filtered-noise sweep. */
@@ -174,12 +176,12 @@ class AudioManager {
     src.buffer = buf;
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.Q.value = 1.2;
-    filter.frequency.setValueAtTime(300, t);
-    filter.frequency.exponentialRampToValueAtTime(1800, t + dur);
+    filter.Q.value = 1.0;
+    filter.frequency.setValueAtTime(250, t);
+    filter.frequency.exponentialRampToValueAtTime(1600, t + dur);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.1, t + 0.08);
+    g.gain.exponentialRampToValueAtTime(0.08, t + 0.1);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(filter).connect(g).connect(this.master);
     src.start(t);

@@ -1,41 +1,50 @@
 import { useEffect, useMemo } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { PostProcessing } from 'three/webgpu';
-import { pass, bloom, screenUV, float, mix, smoothstep } from 'three/tsl';
+import { pass, bloom, screenUV, float, mix, smoothstep, vec4 } from 'three/tsl';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
 
-/**
- * TSL node post-processing: scene pass → additive bloom → vignette, with ACES
- * tone mapping + sRGB applied by PostProcessing on output. A priority useFrame
- * takes over the render loop (R3F stops auto-rendering when priority > 0).
- */
 export function Effects() {
   const renderer = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
-  const bloomStrength = QUALITY[useStore((s) => s.quality)].bloomStrength;
+  const q = QUALITY[useStore((s) => s.quality)];
 
   const post = useMemo(() => {
     const scenePass = pass(scene, camera);
     const color = scenePass.getTextureNode();
 
-    // Vignette: 1.0 at center → 0.4 at the corners.
     const dist = screenUV.sub(0.5).length();
-    const vignette = mix(float(1.0), float(0.4), smoothstep(0.25, 0.95, dist));
+    const vignette = mix(float(1.0), float(0.32), smoothstep(0.2, 1.0, dist));
 
-    // Additive bloom (strength, radius, threshold) — skipped on low quality.
-    const lit = bloomStrength > 0 ? color.add(bloom(color, bloomStrength, 0.5, 0.0)) : color;
-    const composed = lit.mul(vignette);
+    const lit = q.bloomStrength > 0
+      ? color.add(bloom(color, q.bloomStrength, q.bloomRadius, q.bloomThreshold))
+      : color;
+
+    let composed;
+    if (q.chromaticAberration > 0) {
+      // Chromatic aberration: sample the scene pass with offset UVs per channel.
+      const offset = screenUV.sub(0.5).mul(float(q.chromaticAberration));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const passNode = scenePass as any;
+      const rSample = passNode.getTextureNode().uv(screenUV.add(offset));
+      const bSample = passNode.getTextureNode().uv(screenUV.sub(offset));
+      const r = rSample.r;
+      const g = lit.g;
+      const b = bSample.b;
+      composed = vec4(r, g, b, float(1.0)).mul(vignette);
+    } else {
+      composed = lit.mul(vignette);
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pp = new PostProcessing(renderer as any);
     pp.outputNode = composed;
     return pp;
-  }, [renderer, scene, camera, bloomStrength]);
+  }, [renderer, scene, camera, q.bloomStrength, q.bloomRadius, q.bloomThreshold, q.chromaticAberration]);
 
-  // Rebuild the output transform when the drawing buffer size changes.
   useEffect(() => {
     post.needsUpdate = true;
   }, [post, size.width, size.height]);

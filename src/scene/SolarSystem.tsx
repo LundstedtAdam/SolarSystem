@@ -41,7 +41,7 @@ export function SolarSystem() {
     library.addLight(AmbientLightNode, AmbientLight);
     library.addLight(PointLightNode, PointLight);
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
     renderer
@@ -62,7 +62,7 @@ export function SolarSystem() {
       <Suspense fallback={null}>
         {/* Faint cool fill so night sides aren't pure black; the sun point
             light is the key light and defines the day/night terminator. */}
-        <ambientLight intensity={0.05} color={0x223355} />
+        <ambientLight intensity={0.04} color={0x2a3358} />
         <Starfield />
         <Sun />
         <SolarWind />
