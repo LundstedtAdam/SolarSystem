@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import type { Object3D } from 'three';
 import { daysSinceJ2000, periodDays } from './systems/ephemeris';
 import { PLANETS, type PlanetData } from './systems/bodies';
+import type { Lang } from './i18n';
+
+const prefersReducedMotion =
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
 /** Real physical data shown in the info panel for the selected body. */
 export interface SelectedBody {
@@ -16,6 +21,8 @@ export interface SelectedBody {
   rotationPeriodDays?: number;
   axialTiltDeg?: number;
   eccentricity?: number;
+  /** Surface texture URL, shown as a thumbnail. */
+  thumbnail?: string;
 }
 
 /** Build the info-panel payload for a planet (shared by clicks and cycling). */
@@ -28,6 +35,7 @@ export function planetSelected(p: PlanetData): SelectedBody {
     rotationPeriodDays: p.rotationPeriodDays,
     axialTiltDeg: p.axialTiltDeg,
     eccentricity: p.elements.e,
+    thumbnail: p.texture,
   };
 }
 
@@ -50,6 +58,11 @@ interface SimState {
   /** Master audio volume 0..1 and mute. */
   volume: number;
   muted: boolean;
+  /** UI / accessibility. */
+  language: Lang;
+  showLabels: boolean;
+  reducedMotion: boolean;
+  settingsOpen: boolean;
   /** Live meshes of planets, keyed by name, for programmatic focus. */
   planetObjects: Record<string, Object3D>;
 
@@ -65,6 +78,11 @@ interface SimState {
   toggleTour: () => void;
   setVolume: (v: number) => void;
   toggleMuted: () => void;
+  setLanguage: (lang: Lang) => void;
+  toggleLabels: () => void;
+  setReducedMotion: (v: boolean) => void;
+  toggleSettings: () => void;
+  setDate: (date: Date) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -79,6 +97,10 @@ export const useStore = create<SimState>((set, get) => ({
   tourActive: false,
   volume: 0.6,
   muted: false,
+  language: 'en',
+  showLabels: true,
+  reducedMotion: prefersReducedMotion,
+  settingsOpen: false,
   planetObjects: {},
 
   setSpeed: (speed) => set({ speed }),
@@ -116,4 +138,9 @@ export const useStore = create<SimState>((set, get) => ({
   toggleTour: () => set((s) => ({ tourActive: !s.tourActive })),
   setVolume: (v) => set({ volume: v }),
   toggleMuted: () => set((s) => ({ muted: !s.muted })),
+  setLanguage: (language) => set({ language }),
+  toggleLabels: () => set((s) => ({ showLabels: !s.showLabels })),
+  setReducedMotion: (reducedMotion) => set({ reducedMotion }),
+  toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
+  setDate: (date) => set({ simTimeDays: daysSinceJ2000(date) }),
 }));

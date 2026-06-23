@@ -280,3 +280,204 @@ canvas {
     transition: transform 0.2s ease;
   }
 }
+
+/* ---- Phase 6 UI ---------------------------------------------------------- */
+
+/* Accessibility: visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid #93ad88;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Loading progress bar */
+.loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: min(80vw, 360px);
+}
+.loading-title {
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+.loading-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.loading-fill {
+  height: 100%;
+  background: #93ad88;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+.loading-pct {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* In-scene labels (DOM overlay positioned by LabelProjector) */
+.labels-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  pointer-events: none;
+  overflow: hidden;
+}
+.scene-label-btn {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  transition: opacity 0.15s ease, background 0.15s ease;
+  will-change: transform, opacity;
+}
+.scene-label-btn:hover {
+  background: rgba(147, 173, 136, 0.8);
+}
+
+/* Body picker (right edge) */
+.body-picker {
+  position: fixed;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.picker-item {
+  background: var(--ui-background);
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.picker-item:hover {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.85);
+}
+.picker-item.active {
+  color: #93ad88;
+  border-color: #93ad88;
+}
+
+/* Settings modal */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.settings-panel {
+  position: relative;
+  width: min(92vw, 420px);
+  background: #16181d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+.settings-panel h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.setting-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.seg {
+  display: inline-flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.seg button {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.seg button.active {
+  background: #93ad88;
+  color: #16181d;
+}
+.settings-panel input[type='date'],
+.settings-panel .setting-row button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* Info panel redesign */
+.info-thumb {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+.info-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.info-text dl {
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 14px;
+}
+.info-text dt {
+  color: rgba(255, 255, 255, 0.55);
+}
+.info-text dd {
+  margin: 0;
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

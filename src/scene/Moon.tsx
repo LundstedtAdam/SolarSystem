@@ -42,7 +42,12 @@ export function Moon({ data }: { data: MoonData }) {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     select(
-      { name: data.name, radiusKm: data.realRadiusKm, orbitalPeriodDays: data.orbitalPeriodDays },
+      {
+        name: data.name,
+        radiusKm: data.realRadiusKm,
+        orbitalPeriodDays: data.orbitalPeriodDays,
+        thumbnail: data.texture,
+      },
       e.object
     );
   };

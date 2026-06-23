@@ -31,6 +31,10 @@ export function Controls() {
         case 'O':
           s.toggleOrbits();
           break;
+        case 'l':
+        case 'L':
+          s.toggleLabels();
+          break;
         case ' ':
           e.preventDefault();
           s.togglePause();

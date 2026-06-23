@@ -1,7 +1,8 @@
 import { useStore } from '../store';
+import { useT } from '../i18n';
 import { dateFromDays } from '../systems/ephemeris';
 
-/** Top control bar: simulated date, time-scale, pause, orbit toggle, reset. */
+/** Top control bar: simulated date, time-scale, and primary actions. */
 export function HUD() {
   const speed = useStore((s) => s.speed);
   const setSpeed = useStore((s) => s.setSpeed);
@@ -11,14 +12,11 @@ export function HUD() {
   const togglePause = useStore((s) => s.togglePause);
   const tourActive = useStore((s) => s.tourActive);
   const toggleTour = useStore((s) => s.toggleTour);
-  const volume = useStore((s) => s.volume);
-  const setVolume = useStore((s) => s.setVolume);
-  const muted = useStore((s) => s.muted);
-  const toggleMuted = useStore((s) => s.toggleMuted);
-  // Re-render only when the whole day changes, not every frame.
+  const toggleSettings = useStore((s) => s.toggleSettings);
   const dayInt = useStore((s) => Math.floor(s.simTimeDays));
+  const { t, lang } = useT();
 
-  const dateLabel = dateFromDays(dayInt).toLocaleDateString(undefined, {
+  const dateLabel = dateFromDays(dayInt).toLocaleDateString(lang === 'sv' ? 'sv-SE' : 'en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -28,7 +26,7 @@ export function HUD() {
     <div className="ui">
       <div className="control">
         <div className="date">{dateLabel}</div>
-        <label htmlFor="speed">Time scale:</label>
+        <label htmlFor="speed">{t('timeScale')}:</label>
         <label className="slider">
           <input
             type="range"
@@ -44,51 +42,35 @@ export function HUD() {
             {speed}x
           </output>
         </label>
-        <label htmlFor="volume">Volume:</label>
-        <label className="slider">
-          <input
-            type="range"
-            className="level"
-            id="volume"
-            min="0"
-            max="1"
-            step="0.01"
-            value={muted ? 0 : volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-          />
-          <output className="value" htmlFor="volume">
-            {Math.round((muted ? 0 : volume) * 100)}
-          </output>
-        </label>
       </div>
-      <button className="button" onClick={togglePause}>
-        <span className="actual-text">&nbsp;{paused ? 'Play' : 'Pause'}&nbsp;</span>
+      <button className="button" onClick={togglePause} aria-pressed={paused}>
+        <span className="actual-text">&nbsp;{paused ? t('play') : t('pause')}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">
-          &nbsp;{paused ? 'Play' : 'Pause'}&nbsp;
+          &nbsp;{paused ? t('play') : t('pause')}&nbsp;
         </span>
       </button>
-      <button className="button" onClick={toggleTour}>
-        <span className="actual-text">&nbsp;{tourActive ? 'Stop' : 'Tour'}&nbsp;</span>
+      <button className="button" onClick={toggleTour} aria-pressed={tourActive}>
+        <span className="actual-text">&nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">
-          &nbsp;{tourActive ? 'Stop' : 'Tour'}&nbsp;
+          &nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;
         </span>
       </button>
       <button className="button" onClick={toggleOrbits}>
-        <span className="actual-text">&nbsp;Orbits&nbsp;</span>
+        <span className="actual-text">&nbsp;{t('orbits')}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">
-          &nbsp;Orbits&nbsp;
+          &nbsp;{t('orbits')}&nbsp;
         </span>
       </button>
       <button className="button" onClick={reset}>
-        <span className="actual-text">&nbsp;Reset&nbsp;</span>
+        <span className="actual-text">&nbsp;{t('reset')}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">
-          &nbsp;Reset&nbsp;
+          &nbsp;{t('reset')}&nbsp;
         </span>
       </button>
-      <button className="button" onClick={toggleMuted}>
-        <span className="actual-text">&nbsp;{muted ? 'Unmute' : 'Mute'}&nbsp;</span>
+      <button className="button" onClick={toggleSettings}>
+        <span className="actual-text">&nbsp;{t('settings')}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">
-          &nbsp;{muted ? 'Unmute' : 'Mute'}&nbsp;
+          &nbsp;{t('settings')}&nbsp;
         </span>
       </button>
     </div>

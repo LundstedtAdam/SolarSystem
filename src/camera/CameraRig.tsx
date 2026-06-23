@@ -44,8 +44,14 @@ export function CameraRig() {
   const followPrev = useRef(new Vector3());
   const tmp = useRef(new Vector3());
 
-  // Cinematic intro fly-in (once, on mount).
+  // Cinematic intro fly-in (once, on mount) — skipped under reduced motion.
   useEffect(() => {
+    if (useStore.getState().reducedMotion) {
+      camera.position.copy(DEFAULT_POS);
+      camera.fov = DEFAULT_FOV;
+      camera.updateProjectionMatrix();
+      return;
+    }
     camera.position.copy(INTRO_POS);
     camera.fov = INTRO_FOV;
     camera.updateProjectionMatrix();
@@ -76,7 +82,7 @@ export function CameraRig() {
     fromTarget.current.copy(controls.current.target);
     fromFov.current = camera.fov;
     toFov.current = FOCUS_FOV;
-    duration.current = 1500;
+    duration.current = useStore.getState().reducedMotion ? 1 : 1500;
     start.current = performance.now();
     mode.current = 'focusing';
   }, [focusObject, camera]);

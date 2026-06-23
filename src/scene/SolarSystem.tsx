@@ -13,6 +13,7 @@ import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
 import { SimClock } from './SimClock';
 import { AudioReactor } from './AudioReactor';
+import { LabelProjector } from './LabelProjector';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
@@ -68,6 +69,7 @@ export function SolarSystem() {
       </Suspense>
       <SimClock />
       <AudioReactor />
+      <LabelProjector />
       <CameraRig />
       <Effects />
     </Canvas>
