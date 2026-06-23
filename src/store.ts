@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Object3D } from 'three';
 import { daysSinceJ2000, periodDays } from './systems/ephemeris';
 import { PLANETS, type PlanetData } from './systems/bodies';
+import { detectQuality, type Quality } from './systems/quality';
 import type { Lang } from './i18n';
 
 const prefersReducedMotion =
@@ -63,6 +64,7 @@ interface SimState {
   showLabels: boolean;
   reducedMotion: boolean;
   settingsOpen: boolean;
+  quality: Quality;
   /** Live meshes of planets, keyed by name, for programmatic focus. */
   planetObjects: Record<string, Object3D>;
 
@@ -83,6 +85,7 @@ interface SimState {
   setReducedMotion: (v: boolean) => void;
   toggleSettings: () => void;
   setDate: (date: Date) => void;
+  setQuality: (q: Quality) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -101,6 +104,7 @@ export const useStore = create<SimState>((set, get) => ({
   showLabels: true,
   reducedMotion: prefersReducedMotion,
   settingsOpen: false,
+  quality: detectQuality(),
   planetObjects: {},
 
   setSpeed: (speed) => set({ speed }),
@@ -143,4 +147,5 @@ export const useStore = create<SimState>((set, get) => ({
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
   toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
   setDate: (date) => set({ simTimeDays: daysSinceJ2000(date) }),
+  setQuality: (quality) => set({ quality }),
 }));

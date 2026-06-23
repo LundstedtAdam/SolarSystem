@@ -1,6 +1,7 @@
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { dateFromDays } from '../systems/ephemeris';
+import { QUALITY_ORDER } from '../systems/quality';
 
 /** Modal settings: language, labels, reduced motion, date, audio. */
 export function SettingsPanel() {
@@ -18,6 +19,8 @@ export function SettingsPanel() {
   const toggleMuted = useStore((s) => s.toggleMuted);
   const dayInt = useStore((s) => Math.floor(s.simTimeDays));
   const setDate = useStore((s) => s.setDate);
+  const quality = useStore((s) => s.quality);
+  const setQuality = useStore((s) => s.setQuality);
   const { t } = useT();
 
   if (!open) return null;
@@ -47,6 +50,21 @@ export function SettingsPanel() {
             <button className={language === 'sv' ? 'active' : ''} onClick={() => setLanguage('sv')}>
               Svenska
             </button>
+          </div>
+        </div>
+
+        <div className="setting-row">
+          <span>{t('quality')}</span>
+          <div className="seg" role="group" aria-label={t('quality')}>
+            {QUALITY_ORDER.map((q) => (
+              <button
+                key={q}
+                className={quality === q ? 'active' : ''}
+                onClick={() => setQuality(q)}
+              >
+                {q[0].toUpperCase() + q.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
 

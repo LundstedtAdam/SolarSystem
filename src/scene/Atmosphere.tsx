@@ -2,12 +2,15 @@ import { useMemo } from 'react';
 import { MeshBasicNodeMaterial, AdditiveBlending, Color } from 'three/webgpu';
 import { vec3, float, normalWorld, positionWorld, cameraPosition } from 'three/tsl';
 import type { Atmosphere as AtmosphereData } from '../systems/bodies';
+import { QUALITY } from '../systems/quality';
+import { useStore } from '../store';
 
 /**
  * Additive Fresnel shell that glows at the limb — a cheap, convincing
  * atmosphere/haze. Sized slightly larger than the body it wraps.
  */
 export function Atmosphere({ radius, data }: { radius: number; data: AtmosphereData }) {
+  const seg = QUALITY[useStore((s) => s.quality)].atmosphereSegments;
   const material = useMemo(() => {
     const m = new MeshBasicNodeMaterial();
     const c = new Color(data.color);
@@ -23,7 +26,7 @@ export function Atmosphere({ radius, data }: { radius: number; data: AtmosphereD
 
   return (
     <mesh>
-      <sphereGeometry args={[radius, 48, 48]} />
+      <sphereGeometry args={[radius, seg, seg]} />
       <primitive object={material} attach="material" />
     </mesh>
   );

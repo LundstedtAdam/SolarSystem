@@ -5,6 +5,7 @@ import type { Group, Mesh, Texture } from 'three';
 import { type PlanetData } from '../systems/bodies';
 import { positionAtTime } from '../systems/ephemeris';
 import { useStore, planetSelected } from '../store';
+import { QUALITY } from '../systems/quality';
 import { Moon } from './Moon';
 import { SaturnRing } from './SaturnRing';
 import { Atmosphere } from './Atmosphere';
@@ -25,6 +26,7 @@ export function Planet({ data }: { data: PlanetData }) {
   const mesh = useRef<Mesh | null>(null);
   const select = useStore((s) => s.select);
   const registerPlanet = useStore((s) => s.registerPlanet);
+  const segments = QUALITY[useStore((s) => s.quality)].planetSegments;
 
   // Callback ref: register the mesh for programmatic focus (keyboard cycling,
   // tour) the moment R3F attaches it.
@@ -84,7 +86,7 @@ export function Planet({ data }: { data: PlanetData }) {
     <group ref={anchor}>
       <group rotation={[0, 0, data.axialTiltDeg * DEG]}>
         <mesh ref={setMesh} onClick={onClick} castShadow receiveShadow>
-          <sphereGeometry args={[data.size, 64, 64]} />
+          <sphereGeometry args={[data.size, segments, segments]} />
           <primitive object={material} attach="material" />
         </mesh>
         {data.hasRing && data.ringTexture && (

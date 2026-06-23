@@ -11,6 +11,7 @@ import {
 import { Starfield } from './Starfield';
 import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
+import { AsteroidBelt } from './AsteroidBelt';
 import { SimClock } from './SimClock';
 import { AudioReactor } from './AudioReactor';
 import { LabelProjector } from './LabelProjector';
@@ -19,6 +20,8 @@ import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
 import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
+import { useStore } from '../store';
+import { QUALITY } from '../systems/quality';
 
 /** The 3D scene rendered with a WebGPU renderer (auto WebGL2 fallback). */
 export function SolarSystem() {
@@ -26,6 +29,7 @@ export function SolarSystem() {
   // init() before it can render. So we start with the loop paused and flip it
   // to "always" once init resolves.
   const [frameloop, setFrameloop] = useState<'never' | 'always'>('never');
+  const dprMax = QUALITY[useStore((s) => s.quality)].dprMax;
 
   const createRenderer = useCallback((canvas: HTMLCanvasElement) => {
     const renderer = new WebGPURenderer({ canvas, antialias: true });
@@ -53,7 +57,7 @@ export function SolarSystem() {
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}
       camera={{ fov: 75, near: 1, far: 20000, position: [0, 200, 500] }}
       gl={createRenderer as never}
-      dpr={[1, 2]}
+      dpr={[1, dprMax]}
     >
       <Suspense fallback={null}>
         {/* Faint cool fill so night sides aren't pure black; the sun point
@@ -62,6 +66,7 @@ export function SolarSystem() {
         <Starfield />
         <Sun />
         <SolarWind />
+        <AsteroidBelt />
         <Orbits />
         {PLANETS.map((p) => (
           <Planet key={p.name} data={p} />

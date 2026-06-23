@@ -10,6 +10,8 @@ import {
   cameraPosition,
 } from 'three/tsl';
 import { TEXTURES } from '../systems/bodies';
+import { QUALITY } from '../systems/quality';
+import { useStore } from '../store';
 
 /**
  * Sun: an HDR-bright textured sphere (values >1 so the bloom pass makes it
@@ -17,6 +19,7 @@ import { TEXTURES } from '../systems/bodies';
  */
 export function Sun() {
   const map = useTexture(TEXTURES.sun);
+  const q = QUALITY[useStore((s) => s.quality)];
 
   const sunMat = useMemo(() => {
     const m = new MeshBasicNodeMaterial();
@@ -49,9 +52,9 @@ export function Sun() {
           intensity={3}
           distance={0}
           decay={0}
-          castShadow
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
+          castShadow={q.shadows}
+          shadow-mapSize-width={q.shadowMapSize}
+          shadow-mapSize-height={q.shadowMapSize}
           shadow-camera-near={1}
           shadow-camera-far={650}
           shadow-bias={-0.0004}

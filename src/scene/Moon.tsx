@@ -4,6 +4,7 @@ import { useTexture } from '@react-three/drei';
 import type { Mesh } from 'three';
 import { type MoonData } from '../systems/bodies';
 import { useStore } from '../store';
+import { QUALITY } from '../systems/quality';
 import { Atmosphere } from './Atmosphere';
 
 const MOON_INCLINATION = Math.sin(0.1); // gentle constant tilt for all moons
@@ -17,6 +18,7 @@ const MOON_INCLINATION = Math.sin(0.1); // gentle constant tilt for all moons
 export function Moon({ data }: { data: MoonData }) {
   const ref = useRef<Mesh>(null);
   const select = useStore((s) => s.select);
+  const segments = QUALITY[useStore((s) => s.quality)].moonSegments;
 
   // rad per sim-day, sign preserved for retrograde moons.
   const angularVis = useMemo(
@@ -54,7 +56,7 @@ export function Moon({ data }: { data: MoonData }) {
 
   return (
     <mesh ref={ref} onClick={onClick} castShadow receiveShadow>
-      <sphereGeometry args={[data.size, 32, 32]} />
+      <sphereGeometry args={[data.size, segments, segments]} />
       <meshStandardMaterial map={texture} roughness={0.95} metalness={0} />
       {data.atmosphere && (
         <Atmosphere radius={data.size * data.atmosphere.scale} data={data.atmosphere} />

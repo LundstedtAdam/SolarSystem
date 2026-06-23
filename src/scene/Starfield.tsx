@@ -10,14 +10,14 @@ import {
   PointsMaterial,
 } from 'three/webgpu';
 import { TEXTURES } from '../systems/bodies';
-
-const STAR_COUNT = 2500;
+import { QUALITY } from '../systems/quality';
+import { useStore } from '../store';
 
 /** A field of additive points distributed on a thick shell, for parallax depth. */
-function makeStars(): Points {
-  const positions = new Float32Array(STAR_COUNT * 3);
-  const colors = new Float32Array(STAR_COUNT * 3);
-  for (let i = 0; i < STAR_COUNT; i++) {
+function makeStars(count: number): Points {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
     // Random direction on a sphere, radius in a far shell (inside the skybox,
     // well outside the planets).
     const u = Math.random();
@@ -57,7 +57,8 @@ export function Starfield() {
     tex.wrapT = RepeatWrapping;
   });
 
-  const stars = useMemo(() => makeStars(), []);
+  const starCount = QUALITY[useStore((s) => s.quality)].stars;
+  const stars = useMemo(() => makeStars(starCount), [starCount]);
 
   return (
     <group>

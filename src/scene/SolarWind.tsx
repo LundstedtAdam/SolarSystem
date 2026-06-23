@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
   BufferGeometry,
@@ -7,10 +7,11 @@ import {
   PointsMaterial,
   AdditiveBlending,
   Color,
+  type Material,
 } from 'three/webgpu';
 import { useStore } from '../store';
+import { QUALITY } from '../systems/quality';
 
-const COUNT = 1400;
 const START = 24; // just outside the sun
 const END = 520; // past Neptune's orbit
 
@@ -19,12 +20,13 @@ const END = 520; // past Neptune's orbit
  * recycling. Foundation for asteroid dust / comet tails in later phases.
  */
 export function SolarWind() {
+  const count = QUALITY[useStore((s) => s.quality)].solarWind;
   const { points, dirs, offs, speeds } = useMemo(() => {
-    const dirs = new Float32Array(COUNT * 3);
-    const offs = new Float32Array(COUNT);
-    const speeds = new Float32Array(COUNT);
-    const positions = new Float32Array(COUNT * 3);
-    for (let i = 0; i < COUNT; i++) {
+    const dirs = new Float32Array(count * 3);
+    const offs = new Float32Array(count);
+    const speeds = new Float32Array(count);
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
       // Random unit direction.
       const u = Math.random();
       const v = Math.random();
@@ -55,17 +57,26 @@ export function SolarWind() {
       blending: AdditiveBlending,
     });
     return { points: new Points(geometry, material), dirs, offs, speeds };
-  }, []);
+  }, [count]);
+
+  // Free GPU resources when the point cloud is rebuilt (quality change) / unmount.
+  useEffect(() => {
+    return () => {
+      points.geometry.dispose();
+      (points.material as Material).dispose();
+    };
+  }, [points]);
 
   const elapsed = useRef(0);
 
   useFrame((_, delta) => {
+    if (useStore.getState().paused) return;
     elapsed.current += delta * useStore.getState().speed;
     const span = END - START;
     const pos = points.geometry.attributes.position as BufferAttribute;
     const arr = pos.array as Float32Array;
     const t = elapsed.current;
-    for (let i = 0; i < COUNT; i++) {
+    for (let i = 0; i < offs.length; i++) {
       const r = START + ((offs[i] + t * speeds[i]) % span);
       arr[i * 3] = dirs[i * 3] * r;
       arr[i * 3 + 1] = dirs[i * 3 + 1] * r;
