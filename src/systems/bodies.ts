@@ -228,6 +228,19 @@ export const PLANETS: PlanetData[] = [
     elements: { aAU: 30.06992276, e: 0.00859048, iDeg: 1.77004347, omegaDeg: 131.78422574, wDeg: -86.81946347, m0Deg: -100.08479196 },
     moons: [moon('Triton', TEXTURES.triton, 4.2, 35, 1353.4, -5.876854)], // retrograde
   },
+  {
+    name: 'Pluto',
+    texture: '/texture/pluto.png',
+    size: 2.0,
+    distance: 450,
+    color: 0xc4b4aa,
+    bodyType: 'rocky',
+    realRadiusKm: 1188.3,
+    axialTiltDeg: 122.53,
+    rotationPeriodDays: -6.387230, // retrograde
+    elements: { aAU: 39.482, e: 0.2488, iDeg: 17.16, omegaDeg: 110.299, wDeg: 113.834, m0Deg: 14.53 },
+    moons: [moon('Charon', '/texture/charon.png', 1.2, 12, 606.0, 6.387230)],
+  },
 ];
 
 export function isLandable(name: string): boolean {

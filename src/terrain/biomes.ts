@@ -191,6 +191,30 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.02, 0.02, 0.04], skyHorizon: [0.01, 0.01, 0.02],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
   },
+  Pluto: {
+    continentFreq: 0.002, continentAmp: 10,
+    mountainFreq: 0.015, mountainAmp: 12,
+    detailFreq: 0.06, detailAmp: 1.5,
+    octaves: 3, lacunarity: 2.0, diminish: 0.5,
+    craterStrength: 0.15,
+    colorLow: [0.70, 0.62, 0.58], colorMid: [0.80, 0.75, 0.72],
+    colorHigh: [0.88, 0.85, 0.82], colorPolar: [0.90, 0.88, 0.85],
+    roughnessLow: 0.3, roughnessHigh: 0.5,
+    skyZenith: [0.03, 0.03, 0.04], skyHorizon: [0.02, 0.02, 0.03],
+    skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
+  },
+  Charon: {
+    continentFreq: 0.003, continentAmp: 12,
+    mountainFreq: 0.012, mountainAmp: 18,
+    detailFreq: 0.05, detailAmp: 1.0,
+    octaves: 3, lacunarity: 2.0, diminish: 0.5,
+    craterStrength: 0.25,
+    colorLow: [0.35, 0.35, 0.37], colorMid: [0.48, 0.48, 0.50],
+    colorHigh: [0.58, 0.58, 0.60], colorPolar: [0.50, 0.50, 0.52],
+    roughnessLow: 0.5, roughnessHigh: 0.8,
+    skyZenith: [0.03, 0.03, 0.04], skyHorizon: [0.02, 0.02, 0.03],
+    skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
+  },
 };
 
 const DEFAULT_BIOME: BiomeProfile = {
