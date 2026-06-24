@@ -16,9 +16,10 @@ const GLTF_PATH = '/models/spaceship.glb';
 const THRUSTER_NAMES = ['thruster', 'engine', 'exhaust', 'nozzle', 'jet'];
 
 // Longest dimension the ship should occupy in render units. The raw GLB is
-// ~24 units long (planet-sized); normalize it to a human-piloted craft that
-// reads correctly in space, during descent, and on the surface alike.
-const TARGET_LENGTH = 4.5;
+// ~24 units long (planet-sized). Planets render at radius 2-28, so the ship
+// must be a fraction of that to read as a tiny craft dwarfed by the bodies it
+// flies between. The chase/surface cameras sit proportionally close.
+const TARGET_LENGTH = 1.2;
 
 function isThrusterMaterial(name: string): boolean {
   const n = name.toLowerCase();

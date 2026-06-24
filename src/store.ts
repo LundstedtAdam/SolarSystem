@@ -60,11 +60,13 @@ export function planetSelected(p: PlanetData): SelectedBody {
 }
 
 /**
- * Time-scale applied automatically while piloting so planets drift gently
- * rather than streaking past faster than the ship. The player can still adjust
+ * Time-scale applied automatically while piloting. SimClock advances 6 sim-days
+ * per real second at speed 1, so this value yields roughly real-time motion
+ * (6 * 2e-6 days/s ~= 1 sec/s) — planets read as effectively stationary while
+ * you fly between them, instead of streaking past. The player can still adjust
  * the speed slider manually; the pre-flight value is restored on exit.
  */
-const PILOT_TIME_SCALE = 0.02;
+const PILOT_TIME_SCALE = 0.000002;
 
 interface SimState {
   /** Time-scale multiplier driven by the speed slider. */

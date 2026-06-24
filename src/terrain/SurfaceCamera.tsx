@@ -4,8 +4,9 @@ import { Vector3, type PerspectiveCamera } from 'three';
 import { useStore } from '../store';
 
 const _target = new Vector3();
-const SURFACE_HEIGHT = 5;
-const CAM_DISTANCE = 20;
+// Close in on the ~1.2-unit ship so it reads as a vehicle on textured ground.
+const SURFACE_HEIGHT = 1.5;
+const CAM_DISTANCE = 6;
 
 export function SurfaceCamera() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
@@ -29,7 +30,7 @@ export function SurfaceCamera() {
     _target.set(px, py + SURFACE_HEIGHT, pz);
 
     if (!initialized.current) {
-      camera.position.set(px + CAM_DISTANCE * 0.5, py + SURFACE_HEIGHT + 8, pz + CAM_DISTANCE);
+      camera.position.set(px + CAM_DISTANCE * 0.5, py + SURFACE_HEIGHT + 3, pz + CAM_DISTANCE);
       initialized.current = true;
     }
 

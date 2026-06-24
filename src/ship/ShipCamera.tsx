@@ -10,8 +10,10 @@ import {
   resetCameraLook,
 } from './cameraLook';
 
-const CHASE_OFFSET = new Vector3(0, 3, 10);
-const LOOK_AHEAD = new Vector3(0, 1, -15);
+// Scaled to the ~1.2-unit ship: close enough that the craft reads clearly while
+// planets (radius 2-28) loom massive behind it and grow as you approach.
+const CHASE_OFFSET = new Vector3(0, 0.7, 2.8);
+const LOOK_AHEAD = new Vector3(0, 0.25, -6);
 const FOLLOW_FACTOR = 0.04;
 const DEFAULT_FOV = 75;
 const MIN_FOV = 62;
