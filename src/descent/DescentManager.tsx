@@ -11,6 +11,7 @@ import {
   type DescentTarget,
 } from './descentHelpers';
 import { setHeatIntensity } from './descentUniforms';
+import { audio } from '../audio/AudioManager';
 
 const easeCubicInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -25,6 +26,7 @@ export function DescentManager() {
   const target = useRef<DescentTarget | null>(null);
   const startPos = useRef(new Vector3());
   const gasGiantAbortTimer = useRef(0);
+  const warningPlayed = useRef(false);
 
   useFrame((_, delta) => {
     const store = useStore.getState();
@@ -32,6 +34,7 @@ export function DescentManager() {
       phaseTimer.current = 0;
       target.current = null;
       gasGiantAbortTimer.current = 0;
+      warningPlayed.current = false;
       setHeatIntensity(0);
       return;
     }
@@ -48,6 +51,7 @@ export function DescentManager() {
       startPos.current.set(...store.shipPosition);
       phaseTimer.current = 0;
       gasGiantAbortTimer.current = 0;
+      warningPlayed.current = false;
     }
 
     const resolved = resolveDescentTarget(mode.target, store.simTimeDays);
@@ -81,6 +85,11 @@ export function DescentManager() {
   ) {
     gasGiantAbortTimer.current += dt;
     const t = target.current!;
+
+    if (!warningPlayed.current) {
+      audio.playGasGiantWarning();
+      warningPlayed.current = true;
+    }
 
     const progress = Math.min(phaseTimer.current / GAS_GIANT_ABORT_DELAY, 1);
     const eased = easeCubicInOut(progress);
@@ -126,6 +135,7 @@ export function DescentManager() {
     if (progress >= 1) {
       phaseTimer.current = 0;
       startPos.current.copy(_shipPos);
+      audio.playReentry();
       store.setDescentPhase('atmosphere');
     }
   }
@@ -182,6 +192,7 @@ export function DescentManager() {
     store.setShipVelocity([0, 0, 0]);
 
     if (progress >= 1) {
+      audio.playLandingThud();
       store.completeLanding(mode.target);
     }
   }
