@@ -7,29 +7,12 @@ import {
   smoothstep,
   normalLocal,
   normalize,
-  transformNormalToView,
   mx_fractal_noise_float,
   mx_worley_noise_float,
   uniform,
 } from 'three/tsl';
 import type { BiomeProfile } from './biomes';
 
-/**
- * Procedural terrain material.
- *
- * Colour: `mx_fractal_noise_float` is a sum of Perlin octaves, so its output
- * clusters near 0 (std ~0.35x amplitude) and almost never reaches +/-amplitude.
- * Normalizing height by the full amplitude therefore parks every vertex around
- * the cLow<->cMid midpoint (which made Io olive instead of sulphur). We instead
- * normalize by the noise's REALISTIC spread so the body's `colorMid` is the
- * dominant colour, with `colorLow` only in genuine valleys and
- * `colorHigh`/`colorPolar` only on real peaks.
- *
- * Normals: vertex displacement does not update geometry normals, so the surface
- * would shade dead flat. We derive a per-pixel normal analytically from the
- * height-field gradient (finite differences) — resolution-independent detail
- * that keeps even the mobile mesh looking three-dimensional.
- */
 export function createTerrainMaterial(
   biome: BiomeProfile,
   octaves = 4,
@@ -39,7 +22,6 @@ export function createTerrainMaterial(
   const oct = Math.max(2, Math.min(octaves, 5));
   const detailOct = Math.max(2, Math.min(oct, 4));
 
-  // Height as a function of a point in the plane's local XY (displacement is +z).
   const heightAt = (P: typeof positionLocal) => {
     const continent = mx_fractal_noise_float(
       P.mul(biome.continentFreq),
@@ -62,17 +44,27 @@ export function createTerrainMaterial(
       float(0.5),
       float(biome.detailAmp),
     );
-    // High-frequency micro relief — reads as surface texture up close. Kept at
-    // 2 octaves because the normal is evaluated per-pixel three times.
     const micro = mx_fractal_noise_float(
-      P.mul(biome.detailFreq * 4.5),
+      P.mul(biome.microFreq),
       float(2),
       float(2.0),
       float(0.5),
-      float(biome.detailAmp * 0.35),
+      float(biome.microAmp),
+    );
+    const grain = mx_fractal_noise_float(
+      P.mul(biome.grainFreq),
+      float(1),
+      float(2.0),
+      float(0.5),
+      float(biome.grainAmp),
     );
 
-    let h = continent.add(mountain).add(detail).add(micro);
+    let h = continent.add(mountain).add(detail).add(micro).add(grain);
+
+    if (biome.cellNoiseAmp > 0.01) {
+      const cells = mx_worley_noise_float(P.mul(biome.cellNoiseFreq), float(1.0));
+      h = h.sub(cells.mul(biome.cellNoiseAmp));
+    }
 
     if (biome.craterStrength > 0.05) {
       const craters = mx_worley_noise_float(P.mul(0.008), float(1.0));
@@ -86,19 +78,16 @@ export function createTerrainMaterial(
 
   m.positionNode = P.add(normalLocal.mul(h));
 
-  // Per-pixel analytic normal from the height gradient. The displaced surface is
-  // (x, y, h(x,y)) in local space, so the normal is normalize(-dh/dx, -dh/dy, 1),
-  // transformed into view space for lighting.
-  const eps = 0.6;
+  // Per-pixel analytic normal from height gradient via finite differences.
+  // normalNode expects LOCAL-space normals — the material transforms to view
+  // space internally.
+  const eps = 0.12;
   const hX = heightAt(P.add(vec3(eps, 0, 0)));
   const hY = heightAt(P.add(vec3(0, eps, 0)));
   const dHdx = hX.sub(h).div(eps);
   const dHdy = hY.sub(h).div(eps);
-  const nLocal = normalize(vec3(dHdx.negate(), dHdy.negate(), float(1.0)));
-  m.normalNode = transformNormalToView(nLocal);
+  m.normalNode = normalize(vec3(dHdx.negate(), dHdy.negate(), float(1.0)));
 
-  // Colour: normalize height by the noise's realistic spread (not full amplitude)
-  // so colorMid dominates, colorLow shows in valleys, colorHigh/Polar on peaks.
   const spread = Math.max(biome.continentAmp * 0.55 + biome.mountainAmp * 0.3, 3);
   const t = smoothstep(float(-spread), float(spread), h);
 

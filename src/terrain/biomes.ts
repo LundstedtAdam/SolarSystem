@@ -20,16 +20,18 @@ export interface BiomeProfile {
   skyHasSun: boolean;
   fogDensity: number;
   fogColor: [number, number, number];
-  /** Ambient (shadow-fill) light colour — matches the body's atmosphere. */
   ambientColor: [number, number, number];
-  /** Ambient intensity: high for hazy worlds (Venus/Titan), low for airless rock. */
   ambientIntensity: number;
-  /** Key (sun) light intensity: high+low-ambient = harsh contrast (Moon/Io). */
   sunIntensity: number;
+  microFreq: number;
+  microAmp: number;
+  grainFreq: number;
+  grainAmp: number;
+  cellNoiseFreq: number;
+  cellNoiseAmp: number;
 }
 
 const BIOMES: Record<string, BiomeProfile> = {
-  // Mercury: stark grey, heavily cratered, airless — extreme light/shadow contrast
   Merkurius: {
     continentFreq: 0.003, continentAmp: 25,
     mountainFreq: 0.015, mountainAmp: 8,
@@ -42,8 +44,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0, 0, 0],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.60, 0.60, 0.62], ambientIntensity: 0.28, sunIntensity: 1.6,
+    microFreq: 0.35, microAmp: 0.6,
+    grainFreq: 2.0, grainAmp: 0.08,
+    cellNoiseFreq: 0.25, cellNoiseAmp: 0.3,
   },
-  // Venus: orange-brown volcanic plains; dense haze makes it almost shadowless
   Venus: {
     continentFreq: 0.002, continentAmp: 15,
     mountainFreq: 0.012, mountainAmp: 18,
@@ -56,8 +60,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.90, 0.72, 0.36], skyHorizon: [0.85, 0.55, 0.18],
     skyHasSun: false, fogDensity: 0.65, fogColor: [0.85, 0.62, 0.26],
     ambientColor: [1.0, 0.75, 0.35], ambientIntensity: 1.1, sunIntensity: 0.4,
+    microFreq: 0.3, microAmp: 0.7,
+    grainFreq: 2.5, grainAmp: 0.1,
+    cellNoiseFreq: 0.12, cellNoiseAmp: 0.4,
   },
-  // Earth: blue water (low), green/brown land (mid), white peaks
   Jorden: {
     continentFreq: 0.002, continentAmp: 30,
     mountainFreq: 0.01, mountainAmp: 15,
@@ -70,8 +76,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.40, 0.65, 0.92], skyHorizon: [0.70, 0.85, 0.95],
     skyHasSun: true, fogDensity: 0.08, fogColor: [0.7, 0.8, 0.9],
     ambientColor: [0.70, 0.80, 0.95], ambientIntensity: 0.6, sunIntensity: 1.2,
+    microFreq: 0.25, microAmp: 0.5,
+    grainFreq: 1.5, grainAmp: 0.06,
+    cellNoiseFreq: 0, cellNoiseAmp: 0,
   },
-  // Mars: rust-red iron oxide, canyon variation, thin dusty pink-orange sky
   Mars: {
     continentFreq: 0.002, continentAmp: 35,
     mountainFreq: 0.008, mountainAmp: 20,
@@ -84,8 +92,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.72, 0.42, 0.32], skyHorizon: [0.82, 0.56, 0.44],
     skyHasSun: true, fogDensity: 0.15, fogColor: [0.78, 0.48, 0.32],
     ambientColor: [1.0, 0.55, 0.35], ambientIntensity: 0.55, sunIntensity: 1.1,
+    microFreq: 0.35, microAmp: 0.45,
+    grainFreq: 1.8, grainAmp: 0.05,
+    cellNoiseFreq: 0.1, cellNoiseAmp: 0.15,
   },
-  // Moon: medium grey regolith, cratered, pure black airless sky
   'Månen': {
     continentFreq: 0.004, continentAmp: 15,
     mountainFreq: 0.02, mountainAmp: 6,
@@ -98,8 +108,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0, 0, 0],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.62, 0.62, 0.66], ambientIntensity: 0.32, sunIntensity: 1.45,
+    microFreq: 0.4, microAmp: 0.5,
+    grainFreq: 2.2, grainAmp: 0.07,
+    cellNoiseFreq: 0.2, cellNoiseAmp: 0.25,
   },
-  // Phobos: very dark grey-brown rock, Stickney-like depression, black sky
   Phobos: {
     continentFreq: 0.008, continentAmp: 8,
     mountainFreq: 0.03, mountainAmp: 3,
@@ -112,8 +124,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0, 0, 0],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.55, 0.52, 0.50], ambientIntensity: 0.3, sunIntensity: 1.2,
+    microFreq: 0.5, microAmp: 0.4,
+    grainFreq: 2.5, grainAmp: 0.06,
+    cellNoiseFreq: 0.3, cellNoiseAmp: 0.2,
   },
-  // Deimos: very dark grey-brown, smooth regolith, black sky
   Deimos: {
     continentFreq: 0.006, continentAmp: 3,
     mountainFreq: 0.025, mountainAmp: 1.0,
@@ -126,8 +140,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0, 0, 0],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.55, 0.52, 0.50], ambientIntensity: 0.3, sunIntensity: 1.2,
+    microFreq: 0.3, microAmp: 0.15,
+    grainFreq: 1.5, grainAmp: 0.03,
+    cellNoiseFreq: 0, cellNoiseAmp: 0,
   },
-  // Io: bright sulphur yellow/orange, black lava at lowest elevations, harsh light
   Io: {
     continentFreq: 0.003, continentAmp: 8,
     mountainFreq: 0.015, mountainAmp: 4,
@@ -140,8 +156,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.02, 0.01, 0.0], skyHorizon: [0.10, 0.07, 0.02],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [1.0, 0.92, 0.55], ambientIntensity: 0.45, sunIntensity: 1.35,
+    microFreq: 0.3, microAmp: 0.8,
+    grainFreq: 2.0, grainAmp: 0.12,
+    cellNoiseFreq: 0.1, cellNoiseAmp: 0.5,
   },
-  // Europa: blue-white cracked ice, reddish-brown lineae in low cracks
   Europa: {
     continentFreq: 0.002, continentAmp: 3,
     mountainFreq: 0.025, mountainAmp: 2,
@@ -154,8 +172,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.01, 0.02, 0.05], skyHorizon: [0.03, 0.05, 0.10],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.55, 0.65, 0.85], ambientIntensity: 0.5, sunIntensity: 1.1,
+    microFreq: 0.3, microAmp: 0.35,
+    grainFreq: 1.5, grainAmp: 0.04,
+    cellNoiseFreq: 0.15, cellNoiseAmp: 0.6,
   },
-  // Ganymede: grey-brown grooved ice, cratered, dark sky
   Ganymede: {
     continentFreq: 0.003, continentAmp: 12,
     mountainFreq: 0.018, mountainAmp: 5,
@@ -168,8 +188,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0.01, 0.01, 0.02],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.60, 0.60, 0.60], ambientIntensity: 0.45, sunIntensity: 1.1,
+    microFreq: 0.35, microAmp: 0.5,
+    grainFreq: 1.8, grainAmp: 0.06,
+    cellNoiseFreq: 0.18, cellNoiseAmp: 0.35,
   },
-  // Callisto: very dark grey, extremely densely cratered, dark sky
   Callisto: {
     continentFreq: 0.004, continentAmp: 8,
     mountainFreq: 0.02, mountainAmp: 3,
@@ -182,8 +204,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0, 0, 0],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.55, 0.55, 0.55], ambientIntensity: 0.4, sunIntensity: 1.0,
+    microFreq: 0.4, microAmp: 0.4,
+    grainFreq: 2.0, grainAmp: 0.05,
+    cellNoiseFreq: 0.25, cellNoiseAmp: 0.3,
   },
-  // Titan: deep orange-brown dunes, thick orange haze sky, warm shadowless fill
   Titan: {
     continentFreq: 0.002, continentAmp: 10,
     mountainFreq: 0.01, mountainAmp: 4,
@@ -196,8 +220,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.78, 0.50, 0.22], skyHorizon: [0.85, 0.58, 0.20],
     skyHasSun: false, fogDensity: 0.55, fogColor: [0.80, 0.54, 0.20],
     ambientColor: [1.0, 0.60, 0.25], ambientIntensity: 0.95, sunIntensity: 0.45,
+    microFreq: 0.4, microAmp: 0.35,
+    grainFreq: 1.5, grainAmp: 0.04,
+    cellNoiseFreq: 0.08, cellNoiseAmp: 0.2,
   },
-  // Miranda: grey ice, dramatic elevation variation / chevron cliffs, dark sky
   Miranda: {
     continentFreq: 0.005, continentAmp: 30,
     mountainFreq: 0.02, mountainAmp: 20,
@@ -210,8 +236,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0, 0, 0], skyHorizon: [0.01, 0.01, 0.02],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.58, 0.62, 0.72], ambientIntensity: 0.45, sunIntensity: 1.0,
+    microFreq: 0.4, microAmp: 0.7,
+    grainFreq: 2.0, grainAmp: 0.1,
+    cellNoiseFreq: 0.2, cellNoiseAmp: 0.5,
   },
-  // Triton: pale pink-grey nitrogen ice, dark geyser streaks low, near-black sky
   Triton: {
     continentFreq: 0.003, continentAmp: 12,
     mountainFreq: 0.02, mountainAmp: 6,
@@ -224,8 +252,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.02, 0.02, 0.04], skyHorizon: [0.02, 0.02, 0.03],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.50, 0.58, 0.80], ambientIntensity: 0.45, sunIntensity: 0.9,
+    microFreq: 0.35, microAmp: 0.5,
+    grainFreq: 1.8, grainAmp: 0.06,
+    cellNoiseFreq: 0.15, cellNoiseAmp: 0.55,
   },
-  // Pluto: pale pink/grey nitrogen plains, light grey ice peaks, very dark sky
   Pluto: {
     continentFreq: 0.002, continentAmp: 8,
     mountainFreq: 0.015, mountainAmp: 14,
@@ -238,8 +268,10 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.02, 0.02, 0.03], skyHorizon: [0.02, 0.02, 0.03],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.60, 0.62, 0.78], ambientIntensity: 0.45, sunIntensity: 0.8,
+    microFreq: 0.25, microAmp: 0.3,
+    grainFreq: 1.2, grainAmp: 0.04,
+    cellNoiseFreq: 0.1, cellNoiseAmp: 0.2,
   },
-  // Charon: grey ice, darker low areas, very dark sky
   Charon: {
     continentFreq: 0.003, continentAmp: 12,
     mountainFreq: 0.012, mountainAmp: 18,
@@ -252,6 +284,9 @@ const BIOMES: Record<string, BiomeProfile> = {
     skyZenith: [0.02, 0.02, 0.03], skyHorizon: [0.02, 0.02, 0.03],
     skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
     ambientColor: [0.55, 0.58, 0.72], ambientIntensity: 0.42, sunIntensity: 0.8,
+    microFreq: 0.3, microAmp: 0.45,
+    grainFreq: 1.5, grainAmp: 0.05,
+    cellNoiseFreq: 0.15, cellNoiseAmp: 0.35,
   },
 };
 
@@ -267,6 +302,9 @@ const DEFAULT_BIOME: BiomeProfile = {
   skyZenith: [0, 0, 0], skyHorizon: [0, 0, 0],
   skyHasSun: true, fogDensity: 0, fogColor: [0, 0, 0],
   ambientColor: [0.6, 0.6, 0.6], ambientIntensity: 0.4, sunIntensity: 1.1,
+  microFreq: 0.3, microAmp: 0.4,
+  grainFreq: 1.5, grainAmp: 0.05,
+  cellNoiseFreq: 0.1, cellNoiseAmp: 0.2,
 };
 
 export function getBiome(bodyName: string): BiomeProfile {

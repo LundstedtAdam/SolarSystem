@@ -37,7 +37,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0,
     shadows: false,
     shadowMapSize: 1024,
-    terrainResolution: 192,
+    terrainResolution: 256,
     terrainNoiseOctaves: 3,
   },
   medium: {
@@ -54,7 +54,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0.0012,
     shadows: true,
     shadowMapSize: 1024,
-    terrainResolution: 384,
+    terrainResolution: 512,
     terrainNoiseOctaves: 4,
   },
   high: {
@@ -71,7 +71,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0.0015,
     shadows: true,
     shadowMapSize: 2048,
-    terrainResolution: 768,
+    terrainResolution: 1024,
     terrainNoiseOctaves: 5,
   },
   ultra: {
@@ -88,7 +88,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0.002,
     shadows: true,
     shadowMapSize: 4096,
-    terrainResolution: 1024,
+    terrainResolution: 1280,
     terrainNoiseOctaves: 5,
   },
 };
