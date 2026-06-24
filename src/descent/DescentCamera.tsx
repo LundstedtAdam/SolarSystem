@@ -133,7 +133,7 @@ export function DescentCamera() {
 
     camera.fov = 75 - eased * 5;
     camera.near = 1 - eased * 0.9;
-    camera.far = 20000 - eased * 18000;
+    camera.far = 50000 - eased * 48000;
     camera.updateProjectionMatrix();
   }
 

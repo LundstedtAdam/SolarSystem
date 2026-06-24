@@ -64,7 +64,7 @@ export function SolarSystem() {
     <Canvas
       frameloop={frameloop}
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}
-      camera={{ fov: 75, near: 1, far: 20000, position: [0, 200, 500] }}
+      camera={{ fov: 75, near: 0.5, far: 50000, position: [0, 300, 800] }}
       gl={createRenderer as never}
       dpr={[1, dprMax]}
     >

@@ -1,12 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 
-export const MAX_THRUST = 120;
+export const MAX_THRUST = 350;
 /** Per-frame velocity retention (@60fps) when flight assist is ON — bleeds off
  *  momentum so the ship coasts to a stop when the throttle is released. */
 export const ASSIST_DAMPING = 0.97;
 /** Near-frictionless Newtonian drift when flight assist is OFF. */
 export const DRIFT_DAMPING = 0.9995;
-export const GRAVITY_RANGE = 80;
+export const GRAVITY_RANGE = 200;
 export const GRAVITY_STRENGTH = 500;
 
 /** Max angular rate per axis (rad/s), scaled by sensitivity. Capped so the

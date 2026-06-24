@@ -52,14 +52,14 @@ export function resolveDescentTarget(name: string, simTimeDays: number): Descent
 export function findNearestLandable(
   shipPos: Vector3,
   simTimeDays: number,
-): { name: string; distance: number } | null {
-  let best: { name: string; distance: number } | null = null;
+): { name: string; distance: number; size: number } | null {
+  let best: { name: string; distance: number; size: number } | null = null;
 
   for (const p of PLANETS) {
     positionAtTime(p.elements, p.distance, simTimeDays, _pos);
     const dist = shipPos.distanceTo(_pos);
     if (!best || dist < best.distance) {
-      best = { name: p.name, distance: dist };
+      best = { name: p.name, distance: dist, size: p.size };
     }
     for (const m of p.moons) {
       const angle = m.initialAngle + (simTimeDays / m.orbitalPeriodDays) * Math.PI * 2;
@@ -69,7 +69,7 @@ export function findNearestLandable(
         (shipPos.x - mx) ** 2 + shipPos.y ** 2 + (shipPos.z - mz) ** 2,
       );
       if (!best || md < best.distance) {
-        best = { name: m.name, distance: md };
+        best = { name: m.name, distance: md, size: m.size };
       }
     }
   }

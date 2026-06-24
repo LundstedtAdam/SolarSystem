@@ -4,7 +4,9 @@ import { useT } from '../i18n';
 import { findNearestLandable } from '../descent/descentHelpers';
 import { isLandable } from '../systems/bodies';
 
-const LAND_RANGE = 80;
+function landRange(bodySize: number): number {
+  return bodySize * 3.5 + 15;
+}
 
 export function ShipHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
@@ -24,7 +26,7 @@ export function ShipHUD() {
 
   const _shipPos = new Vector3(...shipPosition);
   const nearest = findNearestLandable(_shipPos, simTimeDays);
-  const canLand = nearest && nearest.distance < LAND_RANGE;
+  const canLand = nearest && nearest.distance < landRange(nearest.size);
   const landable = canLand ? isLandable(nearest.name) : false;
   const thrPct = (shipThrottle * 100).toFixed(0);
 

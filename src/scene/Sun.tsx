@@ -58,7 +58,7 @@ export function Sun() {
           shadow-mapSize-width={q.shadowMapSize}
           shadow-mapSize-height={q.shadowMapSize}
           shadow-camera-near={0.5}
-          shadow-camera-far={800}
+          shadow-camera-far={3000}
           shadow-bias={-0.0003}
           shadow-normalBias={0.45}
         />

@@ -15,7 +15,7 @@ const LOOK_AHEAD = new Vector3(0, 1, -15);
 const FOLLOW_FACTOR = 0.04;
 const DEFAULT_FOV = 75;
 const MIN_FOV = 62;
-const MAX_SPEED_FOR_FOV = 200;
+const MAX_SPEED_FOR_FOV = 500;
 
 const _desired = new Vector3();
 const _lookAt = new Vector3();

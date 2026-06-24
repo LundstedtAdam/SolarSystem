@@ -153,7 +153,7 @@ export const useStore = create<SimState>((set, get) => ({
   planetObjects: {},
 
   sceneMode: { type: 'solar' },
-  shipPosition: [0, 50, 300],
+  shipPosition: [0, 50, 500],
   shipVelocity: [0, 0, 0],
   shipRotation: [0, 0, 0, 1],
   shipThrottle: 0,
