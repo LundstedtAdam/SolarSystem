@@ -26,7 +26,10 @@ export function Planet({ data }: { data: PlanetData }) {
   const mesh = useRef<Mesh | null>(null);
   const select = useStore((s) => s.select);
   const registerPlanet = useStore((s) => s.registerPlanet);
-  const segments = QUALITY[useStore((s) => s.quality)].planetSegments;
+  const quality = QUALITY[useStore((s) => s.quality)];
+  // Landable bodies (those with a terrain profile) get the much denser terrain
+  // mesh so procedurally displaced relief reads as smooth up close.
+  const segments = data.terrain ? quality.terrainSegments : quality.planetSegments;
 
   // Callback ref: register the mesh for programmatic focus (keyboard cycling,
   // tour) the moment R3F attaches it.
@@ -45,7 +48,8 @@ export function Planet({ data }: { data: PlanetData }) {
   );
 
   const urls = useMemo(() => {
-    const u: Record<string, string> = { map: data.texture };
+    const u: Record<string, string> = {};
+    if (data.texture) u.map = data.texture; // omitted for procedural bodies (Pluto)
     if (data.nightTexture) u.night = data.nightTexture;
     if (data.normalTexture) u.normal = data.normalTexture;
     if (data.specularTexture) u.specular = data.specularTexture;

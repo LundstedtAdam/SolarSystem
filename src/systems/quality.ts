@@ -7,6 +7,12 @@ export type Quality = 'low' | 'medium' | 'high' | 'ultra';
 export interface QualitySettings {
   planetSegments: number;
   moonSegments: number;
+  /**
+   * Sphere segments for landable bodies (those with a terrain profile). Far
+   * higher than planet/moonSegments so procedurally displaced relief reads as
+   * smooth and continuous up close. Sphere triangles ≈ 2·N². See terrain.ts.
+   */
+  terrainSegments: number;
   atmosphereSegments: number;
   stars: number;
   solarWind: number;
@@ -21,6 +27,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
   low: {
     planetSegments: 24,
     moonSegments: 16,
+    terrainSegments: 96,
     atmosphereSegments: 24,
     stars: 600,
     solarWind: 300,
@@ -33,6 +40,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
   medium: {
     planetSegments: 40,
     moonSegments: 24,
+    terrainSegments: 160,
     atmosphereSegments: 32,
     stars: 1500,
     solarWind: 800,
@@ -45,6 +53,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
   high: {
     planetSegments: 64,
     moonSegments: 32,
+    terrainSegments: 224,
     atmosphereSegments: 48,
     stars: 2500,
     solarWind: 1400,
@@ -57,6 +66,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
   ultra: {
     planetSegments: 96,
     moonSegments: 48,
+    terrainSegments: 320,
     atmosphereSegments: 64,
     stars: 4000,
     solarWind: 2200,
