@@ -18,6 +18,8 @@ export interface QualitySettings {
   chromaticAberration: number;
   shadows: boolean;
   shadowMapSize: number;
+  terrainResolution: number;
+  terrainNoiseOctaves: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -35,6 +37,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0,
     shadows: false,
     shadowMapSize: 1024,
+    terrainResolution: 128,
+    terrainNoiseOctaves: 2,
   },
   medium: {
     planetSegments: 40,
@@ -50,6 +54,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0.0012,
     shadows: true,
     shadowMapSize: 1024,
+    terrainResolution: 256,
+    terrainNoiseOctaves: 3,
   },
   high: {
     planetSegments: 64,
@@ -65,6 +71,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0.0015,
     shadows: true,
     shadowMapSize: 2048,
+    terrainResolution: 512,
+    terrainNoiseOctaves: 4,
   },
   ultra: {
     planetSegments: 96,
@@ -80,6 +88,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     chromaticAberration: 0.002,
     shadows: true,
     shadowMapSize: 4096,
+    terrainResolution: 1024,
+    terrainNoiseOctaves: 4,
   },
 };
 

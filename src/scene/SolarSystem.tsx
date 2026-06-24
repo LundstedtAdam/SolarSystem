@@ -24,6 +24,7 @@ import { DescentManager } from '../descent/DescentManager';
 import { DescentCamera } from '../descent/DescentCamera';
 import { AscentManager } from '../descent/AscentManager';
 import { AscentCamera } from '../descent/AscentCamera';
+import { SurfaceScene } from '../terrain/SurfaceScene';
 import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
 import { useStore, type SceneMode } from '../store';
@@ -37,6 +38,7 @@ export function SolarSystem() {
   const [frameloop, setFrameloop] = useState<'never' | 'always'>('never');
   const dprMax = QUALITY[useStore((s) => s.quality)].dprMax;
   const sceneMode: SceneMode = useStore((s) => s.sceneMode);
+  const onSurface = sceneMode.type === 'surface';
 
   const createRenderer = useCallback((canvas: HTMLCanvasElement) => {
     const renderer = new WebGPURenderer({ canvas, antialias: true });
@@ -66,22 +68,22 @@ export function SolarSystem() {
       gl={createRenderer as never}
       dpr={[1, dprMax]}
     >
-      <Suspense fallback={null}>
-        {/* Faint cool fill so night sides aren't pure black; the sun point
-            light is the key light and defines the day/night terminator. */}
-        <ambientLight intensity={0.04} color={0x2a3358} />
-        <Starfield />
-        <Sun />
-        <SolarWind />
-        <AsteroidBelt />
-        <Orbits />
-        {PLANETS.map((p) => (
-          <Planet key={p.name} data={p} />
-        ))}
-      </Suspense>
+      {!onSurface && (
+        <Suspense fallback={null}>
+          <ambientLight intensity={0.04} color={0x2a3358} />
+          <Starfield />
+          <Sun />
+          <SolarWind />
+          <AsteroidBelt />
+          <Orbits />
+          {PLANETS.map((p) => (
+            <Planet key={p.name} data={p} />
+          ))}
+        </Suspense>
+      )}
       <SimClock />
       <AudioReactor />
-      <LabelProjector />
+      {!onSurface && <LabelProjector />}
       {sceneMode.type === 'solar' && <CameraRig />}
       {sceneMode.type === 'piloting' && (
         <>
@@ -103,6 +105,7 @@ export function SolarSystem() {
           <AscentCamera />
         </>
       )}
+      {onSurface && <SurfaceScene />}
       <Effects />
     </Canvas>
   );
