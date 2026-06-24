@@ -20,6 +20,10 @@ import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
 import { ShipController } from '../ship/ShipController';
 import { ShipCamera } from '../ship/ShipCamera';
+import { DescentManager } from '../descent/DescentManager';
+import { DescentCamera } from '../descent/DescentCamera';
+import { AscentManager } from '../descent/AscentManager';
+import { AscentCamera } from '../descent/AscentCamera';
 import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
 import { useStore, type SceneMode } from '../store';
@@ -83,6 +87,20 @@ export function SolarSystem() {
         <>
           <ShipController />
           <ShipCamera />
+        </>
+      )}
+      {sceneMode.type === 'descending' && (
+        <>
+          <ShipController />
+          <DescentManager />
+          <DescentCamera />
+        </>
+      )}
+      {sceneMode.type === 'ascending' && (
+        <>
+          <ShipController />
+          <AscentManager />
+          <AscentCamera />
         </>
       )}
       <Effects />

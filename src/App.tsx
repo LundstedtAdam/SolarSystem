@@ -8,6 +8,8 @@ import { BodyPicker } from './ui/BodyPicker';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { Labels } from './ui/Labels';
 import { ShipHUD } from './ui/ShipHUD';
+import { DescentOverlay } from './ui/DescentOverlay';
+import { SurfaceHUD } from './ui/SurfaceHUD';
 import { TouchControls } from './ui/TouchControls';
 
 export default function App() {
@@ -20,6 +22,8 @@ export default function App() {
       <InfoPanel />
       <SettingsPanel />
       <ShipHUD />
+      <DescentOverlay />
+      <SurfaceHUD />
       <TouchControls />
       <Loading />
       <Controls />
