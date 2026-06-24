@@ -59,9 +59,18 @@ export function planetSelected(p: PlanetData): SelectedBody {
   };
 }
 
+/**
+ * Time-scale applied automatically while piloting so planets drift gently
+ * rather than streaking past faster than the ship. The player can still adjust
+ * the speed slider manually; the pre-flight value is restored on exit.
+ */
+const PILOT_TIME_SCALE = 0.02;
+
 interface SimState {
   /** Time-scale multiplier driven by the speed slider. */
   speed: number;
+  /** Speed captured when entering the ship, restored on exit (null = none saved). */
+  prevSpeed: number | null;
   showOrbits: boolean;
   /** Body data for the info panel, or null when nothing is selected. */
   selected: SelectedBody | null;
@@ -135,6 +144,7 @@ interface SimState {
 
 export const useStore = create<SimState>((set, get) => ({
   speed: 1,
+  prevSpeed: null,
   showOrbits: true,
   selected: null,
   focusObject: null,
@@ -210,12 +220,21 @@ export const useStore = create<SimState>((set, get) => ({
         selected: null,
         focusObject: null,
         focusIndex: null,
+        // Drop to near-real-time so planet motion feels natural while flying.
+        prevSpeed: s.speed,
+        speed: PILOT_TIME_SCALE,
       };
     }),
   exitShip: () =>
     set((s) => {
       if (s.sceneMode.type !== 'piloting') return {};
-      return { sceneMode: { type: 'solar' }, resetCounter: s.resetCounter + 1 };
+      return {
+        sceneMode: { type: 'solar' },
+        resetCounter: s.resetCounter + 1,
+        // Restore the time-scale the player had before flying.
+        speed: s.prevSpeed ?? s.speed,
+        prevSpeed: null,
+      };
     }),
   beginDescent: (target: string) => {
     const s = get();

@@ -3,6 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import {
   ConeGeometry,
   MeshStandardMaterial,
+  Box3,
+  Vector3,
   type Mesh,
   type Group,
   Color,
@@ -12,6 +14,11 @@ import { useGLTF } from '@react-three/drei';
 
 const GLTF_PATH = '/models/spaceship.glb';
 const THRUSTER_NAMES = ['thruster', 'engine', 'exhaust', 'nozzle', 'jet'];
+
+// Longest dimension the ship should occupy in render units. The raw GLB is
+// ~24 units long (planet-sized); normalize it to a human-piloted craft that
+// reads correctly in space, during descent, and on the surface alike.
+const TARGET_LENGTH = 4.5;
 
 function isThrusterMaterial(name: string): boolean {
   const n = name.toLowerCase();
@@ -79,7 +86,11 @@ function GLTFShip() {
   const groupRef = useRef<Group>(null);
   const thrusterMeshes = useRef<Mesh[]>([]);
 
-  const cloned = useMemo(() => {
+  // Clone, normalize size, recenter, and fix materials. The raw GLB ships every
+  // material with emissiveFactor [1,1,1] driving an emissive texture, so the
+  // entire hull glows (the green cast) and bloom amplifies it. We zero emissive
+  // on everything except the real thrusters.
+  const { cloned, fitScale } = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((child) => {
       if ((child as Mesh).isMesh) {
@@ -87,7 +98,17 @@ function GLTFShip() {
         child.receiveShadow = true;
       }
     });
-    return clone;
+
+    // Normalize to a fixed length and recenter on the origin so the ship sits
+    // correctly wherever it is placed.
+    const box = new Box3().setFromObject(clone);
+    const size = box.getSize(new Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const scale = TARGET_LENGTH / maxDim;
+    const center = box.getCenter(new Vector3());
+    clone.position.sub(center);
+
+    return { cloned: clone, fitScale: scale };
   }, [scene]);
 
   useEffect(() => {
@@ -95,18 +116,24 @@ function GLTFShip() {
     cloned.traverse((child) => {
       if (!(child as Mesh).isMesh) return;
       const mesh = child as Mesh;
-      const matName = Array.isArray(mesh.material)
-        ? mesh.material[0]?.name ?? ''
-        : mesh.material?.name ?? '';
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const matName = mats[0]?.name ?? '';
       const meshName = mesh.name.toLowerCase();
-      if (isThrusterMaterial(matName) || isThrusterMaterial(meshName)) {
-        thrusterMeshes.current.push(mesh);
-        const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as MeshStandardMaterial;
-        if (mat && 'emissive' in mat) {
+      const isThruster = isThrusterMaterial(matName) || isThrusterMaterial(meshName);
+
+      for (const m of mats) {
+        const mat = m as MeshStandardMaterial;
+        if (!mat || !('emissive' in mat)) continue;
+        if (isThruster) {
           mat.emissive = new Color(0.3, 0.5, 1.8);
           mat.emissiveIntensity = 1.2;
+        } else {
+          // Kill the full-white hull glow that produced the green cast.
+          mat.emissive = new Color(0, 0, 0);
+          mat.emissiveIntensity = 0;
         }
       }
+      if (isThruster) thrusterMeshes.current.push(mesh);
     });
   }, [cloned]);
 
@@ -121,7 +148,7 @@ function GLTFShip() {
   });
 
   return (
-    <group ref={groupRef} scale={0.5} rotation={[0, Math.PI, 0]}>
+    <group ref={groupRef} scale={fitScale} rotation={[0, Math.PI, 0]}>
       <primitive object={cloned} />
     </group>
   );

@@ -53,17 +53,25 @@ export function createTerrainMaterial(biome: BiomeProfile): MeshStandardNodeMate
 
   m.positionNode = pos.add(normalLocal.mul(height));
 
-  const heightNorm = smoothstep(-15, 25, height);
-  const polarFactor = smoothstep(0.3, 0.9, positionLocal.z.abs().div(200));
+  // Normalize the elevation to [0,1] against THIS biome's own relief so the full
+  // colour ramp is exercised on every body — a fixed window would clamp
+  // low-relief worlds (Europa, Deimos) to a single colour and let only
+  // high-relief worlds (Mars) show their ramp.
+  const relief = Math.max(biome.continentAmp + biome.mountainAmp * 0.5, 6);
+  const heightNorm = smoothstep(float(-relief * 0.7), float(relief * 0.9), height);
 
   const cLow = vec3(...biome.colorLow);
   const cMid = vec3(...biome.colorMid);
   const cHigh = vec3(...biome.colorHigh);
   const cPolar = vec3(...biome.colorPolar);
 
-  const baseColor = mix(mix(cLow, cMid, smoothstep(0.0, 0.4, heightNorm)),
-    cHigh, smoothstep(0.5, 1.0, heightNorm));
-  const finalColor = mix(baseColor, cPolar, polarFactor);
+  // Low ground -> mid terrain -> high terrain, then the polar/cap colour blends
+  // in only at the highest elevations (ice peaks, bright deposits). The old
+  // latitude term read positionLocal.z, which on the unrotated plane is the
+  // displacement axis (~0), so colorPolar never appeared.
+  const lowMid = mix(cLow, cMid, smoothstep(0.0, 0.45, heightNorm));
+  const baseColor = mix(lowMid, cHigh, smoothstep(0.55, 0.92, heightNorm));
+  const finalColor = mix(baseColor, cPolar, smoothstep(0.9, 1.0, heightNorm));
 
   m.colorNode = finalColor;
   m.metalnessNode = float(0);
