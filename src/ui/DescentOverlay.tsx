@@ -34,30 +34,10 @@ export function DescentOverlay() {
         : 'LANDING';
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        pointerEvents: 'none',
-        zIndex: 20,
-        padding: '24px 16px',
-      }}
-    >
-      <div
-        style={{
-          background: 'rgba(0,0,0,0.6)',
-          borderRadius: 8,
-          padding: '8px 20px',
-          color: isGasGiant ? '#ff4444' : 'rgba(255,255,255,0.9)',
-          fontSize: 14,
-          fontFamily: 'monospace',
-          textAlign: 'center',
-        }}
-      >
+    <div className="descent-overlay">
+      <div className="descent-overlay-info" style={{
+        color: isGasGiant ? '#ff4444' : 'rgba(255,255,255,0.9)',
+      }}>
         <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 2 }}>
           {sceneMode.target.toUpperCase()}
         </div>
@@ -74,33 +54,12 @@ export function DescentOverlay() {
       </div>
 
       {sceneMode.phase === 'atmosphere' && !isGasGiant && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            pointerEvents: 'none',
-            background: `radial-gradient(ellipse at center, transparent 30%, rgba(255, 120, 30, ${
-              0.15
-            }) 100%)`,
-            mixBlendMode: 'screen',
-          }}
-        />
+        <div className="descent-overlay-heat" />
       )}
 
-      <button
-        className="button"
-        onClick={abortDescent}
-        style={{
-          pointerEvents: 'auto',
-          minWidth: 80,
-          minHeight: 54,
-          fontSize: 16,
-        }}
-      >
+      <button className="button descent-overlay-abort" onClick={abortDescent}>
         <span className="actual-text">&nbsp;Abort&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">
-          &nbsp;Abort&nbsp;
-        </span>
+        <span aria-hidden="true" className="hover-text">&nbsp;Abort&nbsp;</span>
       </button>
     </div>
   );

@@ -1,16 +1,16 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { setTouchJoystick, clearTouchJoystick, setTouchThrottle } from '../ship/shipInput';
 
 const JOYSTICK_SIZE = 120;
 const DEAD_ZONE = 0.12;
-const THROTTLE_HEIGHT = 160;
+const AUTO_HIDE_MS = 3000;
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
-function Joystick() {
+function Joystick({ onActivity }: { onActivity: () => void }) {
   const baseRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
   const touchId = useRef<number | null>(null);
@@ -38,16 +38,18 @@ function Joystick() {
     const rect = baseRef.current!.getBoundingClientRect();
     center.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     handleMove(touch.clientX, touch.clientY);
-  }, [handleMove]);
+    onActivity();
+  }, [handleMove, onActivity]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       if (e.changedTouches[i].identifier === touchId.current) {
         handleMove(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+        onActivity();
         break;
       }
     }
-  }, [handleMove]);
+  }, [handleMove, onActivity]);
 
   const onTouchEnd = useCallback((e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
@@ -63,49 +65,27 @@ function Joystick() {
   return (
     <div
       ref={baseRef}
+      className="touch-joystick"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
-      style={{
-        position: 'absolute',
-        bottom: 40,
-        left: 30,
-        width: JOYSTICK_SIZE,
-        height: JOYSTICK_SIZE,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.08)',
-        border: '2px solid rgba(255,255,255,0.2)',
-        touchAction: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
     >
-      <div
-        ref={knobRef}
-        style={{
-          width: JOYSTICK_SIZE * 0.4,
-          height: JOYSTICK_SIZE * 0.4,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.25)',
-          border: '2px solid rgba(255,255,255,0.4)',
-          pointerEvents: 'none',
-          transition: 'none',
-        }}
-      />
+      <div ref={knobRef} className="touch-joystick-knob" />
     </div>
   );
 }
 
-function ThrottleSlider() {
+function ThrottleSlider({ onActivity }: { onActivity: () => void }) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
   const touchId = useRef<number | null>(null);
 
   const update = useCallback((clientY: number) => {
     const rect = trackRef.current!.getBoundingClientRect();
     const normalized = 1 - clamp((clientY - rect.top) / rect.height, 0, 1);
     setTouchThrottle(normalized);
+    if (fillRef.current) fillRef.current.style.height = `${normalized * 100}%`;
   }, []);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -113,22 +93,25 @@ function ThrottleSlider() {
     const touch = e.changedTouches[0];
     touchId.current = touch.identifier;
     update(touch.clientY);
-  }, [update]);
+    onActivity();
+  }, [update, onActivity]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       if (e.changedTouches[i].identifier === touchId.current) {
         update(e.changedTouches[i].clientY);
+        onActivity();
         break;
       }
     }
-  }, [update]);
+  }, [update, onActivity]);
 
   const onTouchEnd = useCallback((e: React.TouchEvent) => {
     for (let i = 0; i < e.changedTouches.length; i++) {
       if (e.changedTouches[i].identifier === touchId.current) {
         touchId.current = null;
         setTouchThrottle(0);
+        if (fillRef.current) fillRef.current.style.height = '0%';
         break;
       }
     }
@@ -137,44 +120,33 @@ function ThrottleSlider() {
   return (
     <div
       ref={trackRef}
+      className="touch-throttle"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
-      style={{
-        position: 'absolute',
-        bottom: 40,
-        right: 30,
-        width: 44,
-        height: THROTTLE_HEIGHT,
-        borderRadius: 22,
-        background: 'rgba(255,255,255,0.08)',
-        border: '2px solid rgba(255,255,255,0.2)',
-        touchAction: 'none',
-      }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          fontSize: 10,
-          color: 'rgba(255,255,255,0.5)',
-          padding: 4,
-        }}
-      >
-        THR
-      </div>
+      <div ref={fillRef} className="touch-throttle-fill" />
+      <div className="touch-throttle-label">THR</div>
     </div>
   );
 }
 
 export function TouchControls() {
   const sceneMode = useStore((s) => s.sceneMode);
+  const [visible, setVisible] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const onActivity = useCallback(() => {
+    setVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setVisible(false), AUTO_HIDE_MS);
+  }, []);
 
   useEffect(() => {
+    hideTimer.current = setTimeout(() => setVisible(false), AUTO_HIDE_MS);
     return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
       clearTouchJoystick();
       setTouchThrottle(0);
     };
@@ -186,9 +158,9 @@ export function TouchControls() {
   if (!isTouch) return null;
 
   return (
-    <>
-      <Joystick />
-      <ThrottleSlider />
-    </>
+    <div className="touch-controls" style={{ opacity: visible ? 1 : 0.15 }}>
+      <Joystick onActivity={onActivity} />
+      <ThrottleSlider onActivity={onActivity} />
+    </div>
   );
 }

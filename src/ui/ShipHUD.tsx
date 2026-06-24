@@ -26,68 +26,54 @@ export function ShipHUD() {
   const nearest = findNearestLandable(_shipPos, simTimeDays);
   const canLand = nearest && nearest.distance < LAND_RANGE;
   const landable = canLand ? isLandable(nearest.name) : false;
+  const thrPct = (shipThrottle * 100).toFixed(0);
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 12,
-        right: 12,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        alignItems: 'flex-end',
-        pointerEvents: 'none',
-        zIndex: 10,
-      }}
-    >
+    <>
+      {/* Exit button — top right */}
       <button
-        className="button"
+        className="button ship-hud-exit"
         onClick={exitShip}
-        style={{ pointerEvents: 'auto', minWidth: 44, minHeight: 44 }}
+        style={{
+          position: 'fixed',
+          top: 12,
+          right: 12,
+          zIndex: 10,
+          minWidth: 44,
+          minHeight: 44,
+        }}
       >
         <span className="actual-text">&nbsp;{t('reset')}&nbsp;</span>
         <span aria-hidden="true" className="hover-text">&nbsp;{t('reset')}&nbsp;</span>
       </button>
-      <div
-        style={{
-          background: 'rgba(0,0,0,0.5)',
-          borderRadius: 6,
-          padding: '6px 12px',
-          color: 'rgba(255,255,255,0.8)',
-          fontSize: 12,
-          fontFamily: 'monospace',
-          pointerEvents: 'none',
-        }}
-      >
+
+      {/* Telemetry — bottom left, above touch joystick zone */}
+      <div className="ship-hud-telemetry">
         <div>SPD {speed}</div>
-        <div>THR {(shipThrottle * 100).toFixed(0)}%</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>THR {thrPct}%</span>
+          <div className="ship-hud-thr-track">
+            <div className="ship-hud-thr-fill" style={{ width: `${shipThrottle * 100}%` }} />
+          </div>
+        </div>
         {nearest && (
           <div style={{ marginTop: 4, opacity: 0.7 }}>
             {nearest.name} {nearest.distance.toFixed(0)}u
           </div>
         )}
       </div>
+
+      {/* Land button — bottom center */}
       {canLand && (
         <button
-          className="button"
+          className="button ship-hud-land"
           onClick={() => beginDescent(nearest.name)}
-          style={{
-            pointerEvents: 'auto',
-            minWidth: 80,
-            minHeight: 54,
-            fontSize: 16,
-            color: landable ? undefined : '#ff6666',
-          }}
+          style={{ color: landable ? undefined : '#ff6666' }}
         >
-          <span className="actual-text">
-            &nbsp;{landable ? 'Land' : 'Land'}&nbsp;
-          </span>
-          <span aria-hidden="true" className="hover-text">
-            &nbsp;{landable ? 'Land' : 'Land'}&nbsp;
-          </span>
+          <span className="actual-text">&nbsp;Land&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;Land&nbsp;</span>
         </button>
       )}
-    </div>
+    </>
   );
 }

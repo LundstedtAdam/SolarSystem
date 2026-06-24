@@ -9,10 +9,11 @@ import { labelEls } from '../scene/labelRegistry';
  */
 export function Labels() {
   const showLabels = useStore((s) => s.showLabels);
+  const sceneMode = useStore((s) => s.sceneMode);
   const focusPlanetByIndex = useStore((s) => s.focusPlanetByIndex);
   const { name } = useT();
 
-  if (!showLabels) return null;
+  if (!showLabels || sceneMode.type !== 'solar') return null;
 
   return (
     <div className="labels-overlay" aria-hidden="true">
