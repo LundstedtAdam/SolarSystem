@@ -5,11 +5,14 @@ import { useStore } from '../store';
 import { PLANETS } from '../systems/bodies';
 import { positionAtTime } from '../systems/ephemeris';
 import {
-  applyRotation,
+  updateRotation,
   computeThrust,
   computeGravity,
   integrate,
+  ASSIST_DAMPING,
+  DRIFT_DAMPING,
   type GravityBody,
+  type AngularVelocity,
 } from './shipPhysics';
 import { readInput, installKeyboardListeners, removeKeyboardListeners } from './shipInput';
 import { ShipModel } from './ShipModel';
@@ -23,6 +26,7 @@ const _bodyPos = new Vector3();
 export function ShipController() {
   const groupRef = useRef<Group>(null);
   const bodies = useRef<GravityBody[]>([]);
+  const angVel = useRef<AngularVelocity>({ pitch: 0, yaw: 0, roll: 0 });
 
   useEffect(() => {
     installKeyboardListeners();
@@ -33,7 +37,13 @@ export function ShipController() {
     const group = groupRef.current;
     if (!group) return;
     const store = useStore.getState();
-    if (store.sceneMode.type !== 'piloting') return;
+    if (store.sceneMode.type !== 'piloting') {
+      // Shed any residual spin so re-entering the ship starts settled.
+      angVel.current.pitch = 0;
+      angVel.current.yaw = 0;
+      angVel.current.roll = 0;
+      return;
+    }
 
     const dt = Math.min(delta, 0.05);
 
@@ -45,8 +55,9 @@ export function ShipController() {
     _vel.set(vx, vy, vz);
     _quat.set(qx, qy, qz, qw);
 
+    const cfg = store.controls;
     const input = readInput();
-    applyRotation(_quat, input, dt);
+    updateRotation(_quat, angVel.current, input, cfg.sensitivity, dt);
 
     _accel.set(0, 0, 0);
     const thrust = computeThrust(_quat, input.thrust);
@@ -61,7 +72,8 @@ export function ShipController() {
     const grav = computeGravity(_pos, bodies.current);
     _accel.add(grav);
 
-    integrate(_pos, _vel, _accel, dt);
+    const damping = cfg.flightAssist ? ASSIST_DAMPING : DRIFT_DAMPING;
+    integrate(_pos, _vel, _accel, damping, dt);
 
     group.position.copy(_pos);
     group.quaternion.copy(_quat);

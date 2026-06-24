@@ -593,11 +593,28 @@ canvas {
   font-size: 18px;
 }
 
-/* Touch controls container */
+/* Touch controls container — kept below the ShipHUD buttons (z-index 10) so the
+   full-screen camera-drag catcher never blocks Land / Exit taps. */
 .touch-controls {
   position: fixed;
   inset: 0;
-  z-index: 15;
+  z-index: 9;
+  pointer-events: none;
+}
+/* Full-screen drag catcher for camera orbit; sits behind the control pads. */
+.camera-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+/* Holds the joystick + throttle above the drag layer; only this fades on idle. */
+.touch-controls-pads {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
   transition: opacity 0.4s ease;
 }

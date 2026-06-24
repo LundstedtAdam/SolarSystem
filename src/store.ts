@@ -12,6 +12,18 @@ export type SceneMode =
   | { type: 'surface'; planet: string }
   | { type: 'ascending'; planet: string };
 
+/** Player-tunable flight control feel. */
+export interface ControlConfig {
+  /** Global rotation-rate multiplier (scales max turn speed). */
+  sensitivity: number;
+  /** Normalized dead zone for the touch joystick (gamepad uses a fraction of this). */
+  deadzone: number;
+  /** Flip the pitch axis. */
+  invertPitch: boolean;
+  /** When on, the ship stabilizes and decelerates as inputs are released. */
+  flightAssist: boolean;
+}
+
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -85,6 +97,8 @@ interface SimState {
   shipRotation: [number, number, number, number];
   /** Ship throttle 0..1. */
   shipThrottle: number;
+  /** Player-tunable flight control feel. */
+  controls: ControlConfig;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -116,6 +130,7 @@ interface SimState {
   setShipVelocity: (vel: [number, number, number]) => void;
   setShipRotation: (rot: [number, number, number, number]) => void;
   setShipThrottle: (t: number) => void;
+  setControls: (partial: Partial<ControlConfig>) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -142,6 +157,7 @@ export const useStore = create<SimState>((set, get) => ({
   shipVelocity: [0, 0, 0],
   shipRotation: [0, 0, 0, 1],
   shipThrottle: 0,
+  controls: { sensitivity: 1, deadzone: 0.12, invertPitch: false, flightAssist: true },
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -225,4 +241,5 @@ export const useStore = create<SimState>((set, get) => ({
   setShipVelocity: (shipVelocity) => set({ shipVelocity }),
   setShipRotation: (shipRotation) => set({ shipRotation }),
   setShipThrottle: (shipThrottle) => set({ shipThrottle }),
+  setControls: (partial) => set((s) => ({ controls: { ...s.controls, ...partial } })),
 }));

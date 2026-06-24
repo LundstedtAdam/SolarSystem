@@ -1,7 +1,14 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Quaternion, type PerspectiveCamera } from 'three';
 import { useStore } from '../store';
+import {
+  decayCameraLook,
+  getCameraLook,
+  addCameraLook,
+  endCameraLook,
+  resetCameraLook,
+} from './cameraLook';
 
 const CHASE_OFFSET = new Vector3(0, 3, 10);
 const LOOK_AHEAD = new Vector3(0, 1, -15);
@@ -15,12 +22,64 @@ const _lookAt = new Vector3();
 const _shipPos = new Vector3();
 const _quat = new Quaternion();
 const _offset = new Vector3();
+const _ahead = new Vector3();
+const _orbit = new Quaternion();
+const _qYaw = new Quaternion();
+const _qPitch = new Quaternion();
+const _up = new Vector3(0, 1, 0);
+const _right = new Vector3(1, 0, 0);
 
 export function ShipCamera() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
+  const gl = useThree((s) => s.gl);
   const initialized = useRef(false);
 
-  useFrame(() => {
+  // Desktop: Pointer Lock mouse-look orbits the chase camera with raw,
+  // un-accelerated deltas. Touch devices use the drag layer instead.
+  useEffect(() => {
+    resetCameraLook();
+    initialized.current = false;
+
+    const canvas = gl.domElement;
+    const isCoarse =
+      typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (isCoarse) return () => resetCameraLook();
+
+    const onClick = () => {
+      if (
+        useStore.getState().sceneMode.type === 'piloting' &&
+        document.pointerLockElement !== canvas
+      ) {
+        // unadjustedMovement skips OS pointer acceleration where supported.
+        try {
+          (canvas.requestPointerLock as (opts?: { unadjustedMovement: boolean }) => void)({
+            unadjustedMovement: true,
+          });
+        } catch {
+          canvas.requestPointerLock();
+        }
+      }
+    };
+    const onMove = (e: MouseEvent) => {
+      if (document.pointerLockElement === canvas) addCameraLook(e.movementX, e.movementY);
+    };
+    const onLockChange = () => {
+      if (document.pointerLockElement !== canvas) endCameraLook();
+    };
+
+    canvas.addEventListener('click', onClick);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('pointerlockchange', onLockChange);
+    return () => {
+      canvas.removeEventListener('click', onClick);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('pointerlockchange', onLockChange);
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+      resetCameraLook();
+    };
+  }, [gl]);
+
+  useFrame((_, delta) => {
     const store = useStore.getState();
     if (store.sceneMode.type !== 'piloting') return;
 
@@ -31,11 +90,22 @@ export function ShipCamera() {
     _shipPos.set(px, py, pz);
     _quat.set(qx, qy, qz, qw);
 
-    _offset.copy(CHASE_OFFSET).applyQuaternion(_quat);
+    decayCameraLook(delta);
+    const look = getCameraLook();
+
+    // Orbit the chase offset around the ship in its local frame (yaw about the
+    // ship's up, pitch about its right), then bring it into world space.
+    _qYaw.setFromAxisAngle(_up, look.yaw);
+    _qPitch.setFromAxisAngle(_right, look.pitch);
+    _orbit.copy(_qYaw).multiply(_qPitch);
+
+    _offset.copy(CHASE_OFFSET).applyQuaternion(_orbit).applyQuaternion(_quat);
     _desired.copy(_shipPos).add(_offset);
 
-    _offset.copy(LOOK_AHEAD).applyQuaternion(_quat);
-    _lookAt.copy(_shipPos).add(_offset);
+    // When orbiting, frame the ship itself; when centered, lead slightly ahead.
+    const orbitMag = Math.min(1, (Math.abs(look.yaw) + Math.abs(look.pitch)) / 1.2);
+    _ahead.copy(LOOK_AHEAD).applyQuaternion(_quat).multiplyScalar(1 - orbitMag);
+    _lookAt.copy(_shipPos).add(_ahead);
 
     if (!initialized.current) {
       camera.position.copy(_desired);

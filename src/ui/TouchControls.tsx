@@ -1,9 +1,9 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { setTouchJoystick, clearTouchJoystick, setTouchThrottle } from '../ship/shipInput';
+import { addCameraLook, endCameraLook } from '../ship/cameraLook';
 
 const JOYSTICK_SIZE = 120;
-const DEAD_ZONE = 0.12;
 const AUTO_HIDE_MS = 3000;
 
 function clamp(v: number, min: number, max: number) {
@@ -22,12 +22,11 @@ function Joystick({ onActivity }: { onActivity: () => void }) {
     let dy = (clientY - center.current.y) / r;
     const mag = Math.sqrt(dx * dx + dy * dy);
     if (mag > 1) { dx /= mag; dy /= mag; }
-    if (Math.abs(dx) < DEAD_ZONE) dx = 0;
-    if (Math.abs(dy) < DEAD_ZONE) dy = 0;
 
     if (knobRef.current) {
       knobRef.current.style.transform = `translate(${dx * r * 0.6}px, ${dy * r * 0.6}px)`;
     }
+    // Send the raw vector; dead zone + curve are applied centrally in shipInput.
     setTouchJoystick(dx, dy);
   }, []);
 
@@ -132,6 +131,56 @@ function ThrottleSlider({ onActivity }: { onActivity: () => void }) {
   );
 }
 
+/**
+ * Full-screen catcher behind the joystick/throttle. A drag that starts on empty
+ * space orbits the chase camera; touches that land on the controls target those
+ * elements directly (they sit above this layer) so the two never conflict.
+ */
+function CameraDragLayer({ onActivity }: { onActivity: () => void }) {
+  const touchId = useRef<number | null>(null);
+  const last = useRef({ x: 0, y: 0 });
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (touchId.current !== null) return;
+    const t = e.changedTouches[0];
+    touchId.current = t.identifier;
+    last.current = { x: t.clientX, y: t.clientY };
+    onActivity();
+  }, [onActivity]);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      if (t.identifier === touchId.current) {
+        addCameraLook(t.clientX - last.current.x, t.clientY - last.current.y);
+        last.current = { x: t.clientX, y: t.clientY };
+        onActivity();
+        break;
+      }
+    }
+  }, [onActivity]);
+
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchId.current) {
+        touchId.current = null;
+        endCameraLook();
+        break;
+      }
+    }
+  }, []);
+
+  return (
+    <div
+      className="camera-drag-layer"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    />
+  );
+}
+
 export function TouchControls() {
   const sceneMode = useStore((s) => s.sceneMode);
   const [visible, setVisible] = useState(true);
@@ -158,9 +207,12 @@ export function TouchControls() {
   if (!isTouch) return null;
 
   return (
-    <div className="touch-controls" style={{ opacity: visible ? 1 : 0.15 }}>
-      <Joystick onActivity={onActivity} />
-      <ThrottleSlider onActivity={onActivity} />
+    <div className="touch-controls">
+      <CameraDragLayer onActivity={onActivity} />
+      <div className="touch-controls-pads" style={{ opacity: visible ? 1 : 0.15 }}>
+        <Joystick onActivity={onActivity} />
+        <ThrottleSlider onActivity={onActivity} />
+      </div>
     </div>
   );
 }
