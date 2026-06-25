@@ -58,7 +58,7 @@ export function Planet({ data }: { data: PlanetData }) {
 
   const textures = useTexture(urls, (t) => {
     const tex = Array.isArray(t) ? t[0] : t;
-    tex.anisotropy = 8;
+    if (tex) tex.anisotropy = 8; // procedural bodies (Pluto) load no textures
   }) as Record<string, Texture>;
 
   const material = useMemo(
