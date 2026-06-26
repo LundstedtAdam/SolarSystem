@@ -9,13 +9,14 @@ import { useThree, useFrame } from '@react-three/fiber';
 import {
   Group,
   Mesh,
-  MeshStandardMaterial,
   Raycaster,
   Vector2,
   Vector3,
   type PerspectiveCamera,
 } from 'three';
 import { useStore } from '../store';
+import { getBiome } from '../terrain/biomes';
+import { createVoxelMaterial } from './voxelMaterial';
 import { QUALITY } from '../systems/quality';
 import {
   CHUNK_SIZE,
@@ -43,10 +44,7 @@ export function ChunkManager({ planet }: { planet: string }) {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
 
   const group = useMemo(() => new Group(), []);
-  const material = useMemo(
-    () => new MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 }),
-    [],
-  );
+  const material = useMemo(() => createVoxelMaterial(getBiome(planet)), [planet]);
 
   const params = useMemo(() => getVoxelTerrain(planet), [planet]);
   const seed = useMemo(() => seedFromName(planet), [planet]);
