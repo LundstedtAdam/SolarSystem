@@ -5,9 +5,9 @@ import { Vector3, type PerspectiveCamera } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useStore } from '../store';
 
-const DEFAULT_POS = new Vector3(0, 200, 500);
+const DEFAULT_POS = new Vector3(0, 400, 1200);
 const DEFAULT_TARGET = new Vector3(0, 0, 0);
-const INTRO_POS = new Vector3(0, 1100, 2600);
+const INTRO_POS = new Vector3(0, 2000, 4500);
 
 const DEFAULT_FOV = 75;
 const FOCUS_FOV = 62; // subtle dolly-in when framing a body

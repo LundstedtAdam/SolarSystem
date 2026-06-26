@@ -6,7 +6,10 @@ import { PLANETS } from '../systems/bodies';
 export function BodyPicker() {
   const focusIndex = useStore((s) => s.focusIndex);
   const focusPlanetByIndex = useStore((s) => s.focusPlanetByIndex);
+  const sceneMode = useStore((s) => s.sceneMode);
   const { t, name } = useT();
+
+  if (sceneMode.type !== 'solar') return null;
 
   return (
     <nav className="body-picker" aria-label={t('bodies')}>

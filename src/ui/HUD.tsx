@@ -3,11 +3,7 @@ import { useStore } from '../store';
 import { useT } from '../i18n';
 import { dateFromDays } from '../systems/ephemeris';
 
-/**
- * Top control bar: simulated date, time-scale, and primary actions.
- * Desktop shows the full bar; touch devices get a compact top bar with a
- * hamburger that opens a slide-in drawer holding the same controls.
- */
+/** Top control bar: simulated date, time-scale, and primary actions. */
 export function HUD() {
   const speed = useStore((s) => s.speed);
   const setSpeed = useStore((s) => s.setSpeed);
@@ -18,6 +14,8 @@ export function HUD() {
   const tourActive = useStore((s) => s.tourActive);
   const toggleTour = useStore((s) => s.toggleTour);
   const toggleSettings = useStore((s) => s.toggleSettings);
+  const enterShip = useStore((s) => s.enterShip);
+  const sceneMode = useStore((s) => s.sceneMode);
   const dayInt = useStore((s) => Math.floor(s.simTimeDays));
   const { t, lang } = useT();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -28,9 +26,52 @@ export function HUD() {
     day: 'numeric',
   });
 
+  const isSolar = sceneMode.type === 'solar';
+
+  if (!isSolar) return null;
+
+  const actionButtons = (
+    <>
+      <button className="button" onClick={togglePause} aria-pressed={paused}>
+        <span className="actual-text">&nbsp;{paused ? t('play') : t('pause')}&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">
+          &nbsp;{paused ? t('play') : t('pause')}&nbsp;
+        </span>
+      </button>
+      <button className="button" onClick={toggleTour} aria-pressed={tourActive}>
+        <span className="actual-text">&nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">
+          &nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;
+        </span>
+      </button>
+      <button className="button" onClick={toggleOrbits}>
+        <span className="actual-text">&nbsp;{t('orbits')}&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">
+          &nbsp;{t('orbits')}&nbsp;
+        </span>
+      </button>
+      <button className="button" onClick={reset}>
+        <span className="actual-text">&nbsp;{t('reset')}&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">
+          &nbsp;{t('reset')}&nbsp;
+        </span>
+      </button>
+      <button className="button" onClick={toggleSettings}>
+        <span className="actual-text">&nbsp;{t('settings')}&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">
+          &nbsp;{t('settings')}&nbsp;
+        </span>
+      </button>
+      <button className="button" onClick={enterShip} style={{ minWidth: 44, minHeight: 44 }}>
+        <span className="actual-text">&nbsp;Fly&nbsp;</span>
+        <span aria-hidden="true" className="hover-text">&nbsp;Fly&nbsp;</span>
+      </button>
+    </>
+  );
+
   return (
     <>
-      {/* Desktop layout */}
+      {/* Desktop layout — unchanged */}
       <div className="ui ui-desktop">
         <div className="control">
           <div className="date">{dateLabel}</div>
@@ -51,36 +92,7 @@ export function HUD() {
             </output>
           </label>
         </div>
-        <button className="button" onClick={togglePause} aria-pressed={paused}>
-          <span className="actual-text">&nbsp;{paused ? t('play') : t('pause')}&nbsp;</span>
-          <span aria-hidden="true" className="hover-text">
-            &nbsp;{paused ? t('play') : t('pause')}&nbsp;
-          </span>
-        </button>
-        <button className="button" onClick={toggleTour} aria-pressed={tourActive}>
-          <span className="actual-text">&nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;</span>
-          <span aria-hidden="true" className="hover-text">
-            &nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;
-          </span>
-        </button>
-        <button className="button" onClick={toggleOrbits}>
-          <span className="actual-text">&nbsp;{t('orbits')}&nbsp;</span>
-          <span aria-hidden="true" className="hover-text">
-            &nbsp;{t('orbits')}&nbsp;
-          </span>
-        </button>
-        <button className="button" onClick={reset}>
-          <span className="actual-text">&nbsp;{t('reset')}&nbsp;</span>
-          <span aria-hidden="true" className="hover-text">
-            &nbsp;{t('reset')}&nbsp;
-          </span>
-        </button>
-        <button className="button" onClick={toggleSettings}>
-          <span className="actual-text">&nbsp;{t('settings')}&nbsp;</span>
-          <span aria-hidden="true" className="hover-text">
-            &nbsp;{t('settings')}&nbsp;
-          </span>
-        </button>
+        {actionButtons}
       </div>
 
       {/* Mobile layout — hamburger + drawer */}
@@ -102,7 +114,11 @@ export function HUD() {
 
       {drawerOpen && (
         <div className="mobile-drawer-backdrop" onClick={() => setDrawerOpen(false)}>
-          <nav className="mobile-drawer" onClick={(e) => e.stopPropagation()} role="navigation">
+          <nav
+            className="mobile-drawer"
+            onClick={(e) => e.stopPropagation()}
+            role="navigation"
+          >
             <div className="drawer-section">
               <label htmlFor="speed-mobile">{t('timeScale')}:</label>
               <label className="slider">
@@ -136,6 +152,9 @@ export function HUD() {
               </button>
               <button className="drawer-btn" onClick={() => { toggleSettings(); setDrawerOpen(false); }}>
                 {t('settings')}
+              </button>
+              <button className="drawer-btn drawer-btn-fly" onClick={() => { enterShip(); setDrawerOpen(false); }}>
+                Fly
               </button>
             </div>
           </nav>

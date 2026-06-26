@@ -180,6 +180,11 @@ canvas {
     background: rgba(147, 173, 136, 0.2);
     color: #93ad88;
   }
+  .drawer-btn-fly {
+    margin-top: 8px;
+    color: #93ad88;
+    border: 1px solid rgba(147, 173, 136, 0.3);
+  }
 }
 
 .control {
@@ -602,6 +607,231 @@ canvas {
 .info-text dd {
   margin: 0;
   text-align: right;
+}
+
+/* ---- Phase 8 Ship / Descent / Surface HUD -------------------------------- */
+
+/* Ship HUD — telemetry (bottom-left, above touch zone) */
+.ship-hud-telemetry {
+  position: fixed;
+  bottom: 180px;
+  left: 16px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-family: monospace;
+  pointer-events: none;
+}
+.ship-hud-thr-track {
+  width: 48px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ship-hud-thr-fill {
+  height: 100%;
+  background: #93ad88;
+  border-radius: 3px;
+  transition: width 0.1s ease;
+}
+.ship-hud-land {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  min-width: 100px;
+  min-height: 54px;
+  font-size: 18px;
+}
+
+/* Descent overlay */
+.descent-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 20;
+  padding: 24px 16px;
+}
+.descent-overlay-info {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-family: monospace;
+  text-align: center;
+}
+.descent-overlay-heat {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(255, 120, 30, 0.15) 100%);
+  mix-blend-mode: screen;
+}
+.descent-overlay-abort {
+  pointer-events: auto;
+  min-width: 100px;
+  min-height: 54px;
+  font-size: 18px;
+}
+
+/* Surface HUD */
+.surface-hud {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+  padding: 24px 16px;
+}
+.surface-hud-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.surface-hud-name {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  padding: 6px 16px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-family: monospace;
+}
+.surface-hud-compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.surface-hud-cardinal {
+  font-family: monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.surface-hud-launch {
+  pointer-events: auto;
+  min-width: 100px;
+  min-height: 54px;
+  font-size: 18px;
+}
+
+/* Touch controls container — kept below the ShipHUD buttons (z-index 10) so the
+   full-screen camera-drag catcher never blocks Land / Exit taps. */
+.touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+/* Full-screen drag catcher for camera orbit; sits behind the control pads. */
+.camera-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+/* Holds the joystick + throttle above the drag layer; only this fades on idle. */
+.touch-controls-pads {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.touch-joystick {
+  position: absolute;
+  bottom: 40px;
+  left: 30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  touch-action: none;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.touch-joystick-knob {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+.touch-throttle {
+  position: absolute;
+  bottom: 40px;
+  right: 30px;
+  width: 48px;
+  height: 160px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  touch-action: none;
+  pointer-events: auto;
+  overflow: hidden;
+}
+.touch-throttle-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  background: rgba(147, 173, 136, 0.35);
+  border-radius: 0 0 22px 22px;
+  pointer-events: none;
+  transition: height 0.05s ease;
+}
+.touch-throttle-label {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+/* Landscape: push touch controls to bottom edges */
+@media (orientation: landscape) and (pointer: coarse) {
+  .touch-joystick {
+    bottom: 20px;
+    left: 20px;
+  }
+  .touch-throttle {
+    bottom: 20px;
+    right: 20px;
+  }
+  .ship-hud-telemetry {
+    bottom: 150px;
+    left: 12px;
+  }
+  .ship-hud-land {
+    bottom: 16px;
+  }
+  .descent-overlay {
+    padding: 16px 12px;
+  }
+  .surface-hud {
+    padding: 16px 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

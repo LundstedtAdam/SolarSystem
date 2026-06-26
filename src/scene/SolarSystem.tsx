@@ -18,9 +18,16 @@ import { LabelProjector } from './LabelProjector';
 import { Orbits } from './Orbits';
 import { Planet } from './Planet';
 import { CameraRig } from '../camera/CameraRig';
+import { ShipController } from '../ship/ShipController';
+import { ShipCamera } from '../ship/ShipCamera';
+import { DescentManager } from '../descent/DescentManager';
+import { DescentCamera } from '../descent/DescentCamera';
+import { AscentManager } from '../descent/AscentManager';
+import { AscentCamera } from '../descent/AscentCamera';
+import { SurfaceScene } from '../terrain/SurfaceScene';
 import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
-import { useStore } from '../store';
+import { useStore, type SceneMode } from '../store';
 import { QUALITY } from '../systems/quality';
 
 /** The 3D scene rendered with a WebGPU renderer (auto WebGL2 fallback). */
@@ -30,6 +37,8 @@ export function SolarSystem() {
   // to "always" once init resolves.
   const [frameloop, setFrameloop] = useState<'never' | 'always'>('never');
   const dprMax = QUALITY[useStore((s) => s.quality)].dprMax;
+  const sceneMode: SceneMode = useStore((s) => s.sceneMode);
+  const onSurface = sceneMode.type === 'surface';
 
   const createRenderer = useCallback((canvas: HTMLCanvasElement) => {
     const renderer = new WebGPURenderer({ canvas, antialias: true });
@@ -41,7 +50,7 @@ export function SolarSystem() {
     library.addLight(AmbientLightNode, AmbientLight);
     library.addLight(PointLightNode, PointLight);
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
     renderer
@@ -55,27 +64,48 @@ export function SolarSystem() {
     <Canvas
       frameloop={frameloop}
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}
-      camera={{ fov: 75, near: 1, far: 20000, position: [0, 200, 500] }}
+      camera={{ fov: 75, near: 0.5, far: 50000, position: [0, 300, 800] }}
       gl={createRenderer as never}
       dpr={[1, dprMax]}
     >
-      <Suspense fallback={null}>
-        {/* Faint cool fill so night sides aren't pure black; the sun point
-            light is the key light and defines the day/night terminator. */}
-        <ambientLight intensity={0.05} color={0x223355} />
-        <Starfield />
-        <Sun />
-        <SolarWind />
-        <AsteroidBelt />
-        <Orbits />
-        {PLANETS.map((p) => (
-          <Planet key={p.name} data={p} />
-        ))}
-      </Suspense>
+      {!onSurface && (
+        <Suspense fallback={null}>
+          <ambientLight intensity={0.04} color={0x2a3358} />
+          <Starfield />
+          <Sun />
+          <SolarWind />
+          <AsteroidBelt />
+          <Orbits />
+          {PLANETS.map((p) => (
+            <Planet key={p.name} data={p} />
+          ))}
+        </Suspense>
+      )}
       <SimClock />
       <AudioReactor />
-      <LabelProjector />
-      <CameraRig />
+      {!onSurface && <LabelProjector />}
+      {sceneMode.type === 'solar' && <CameraRig />}
+      {sceneMode.type === 'piloting' && (
+        <>
+          <ShipController />
+          <ShipCamera />
+        </>
+      )}
+      {sceneMode.type === 'descending' && (
+        <>
+          <ShipController />
+          <DescentManager />
+          <DescentCamera />
+        </>
+      )}
+      {sceneMode.type === 'ascending' && (
+        <>
+          <ShipController />
+          <AscentManager />
+          <AscentCamera />
+        </>
+      )}
+      {onSurface && <SurfaceScene />}
       <Effects />
     </Canvas>
   );

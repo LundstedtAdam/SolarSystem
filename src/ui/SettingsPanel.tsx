@@ -21,6 +21,8 @@ export function SettingsPanel() {
   const setDate = useStore((s) => s.setDate);
   const quality = useStore((s) => s.quality);
   const setQuality = useStore((s) => s.setQuality);
+  const controls = useStore((s) => s.controls);
+  const setControls = useStore((s) => s.setControls);
   const { t } = useT();
 
   if (!open) return null;
@@ -110,6 +112,58 @@ export function SettingsPanel() {
             onChange={(e) => setVolume(parseFloat(e.target.value))}
           />
           <button onClick={toggleMuted}>{muted ? t('unmute') : t('mute')}</button>
+        </div>
+
+        <div className="setting-row">
+          <span style={{ fontWeight: 600 }}>{t('flightControls')}</span>
+        </div>
+
+        <div className="setting-row">
+          <label htmlFor="ctrl-sensitivity">{t('sensitivity')}</label>
+          <input
+            id="ctrl-sensitivity"
+            type="range"
+            min="0.3"
+            max="2"
+            step="0.05"
+            value={controls.sensitivity}
+            onChange={(e) => setControls({ sensitivity: parseFloat(e.target.value) })}
+          />
+        </div>
+
+        <div className="setting-row">
+          <label htmlFor="ctrl-deadzone">{t('deadzone')}</label>
+          <input
+            id="ctrl-deadzone"
+            type="range"
+            min="0"
+            max="0.3"
+            step="0.01"
+            value={controls.deadzone}
+            onChange={(e) => setControls({ deadzone: parseFloat(e.target.value) })}
+          />
+        </div>
+
+        <div className="setting-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={controls.invertPitch}
+              onChange={(e) => setControls({ invertPitch: e.target.checked })}
+            />{' '}
+            {t('invertPitch')}
+          </label>
+        </div>
+
+        <div className="setting-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={controls.flightAssist}
+              onChange={(e) => setControls({ flightAssist: e.target.checked })}
+            />{' '}
+            {t('flightAssist')}
+          </label>
         </div>
       </div>
     </div>

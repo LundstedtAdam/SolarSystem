@@ -149,7 +149,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Merkurius',
     texture: TEXTURES.mercury,
     size: 3.8,
-    distance: 60,
+    distance: 200,
     color: 0x888888,
     bodyType: 'rocky',
     realRadiusKm: 2439.7,
@@ -163,7 +163,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Venus',
     texture: TEXTURES.venusAtmosphere,
     size: 9.5,
-    distance: 90,
+    distance: 320,
     color: 0xe8e1d1,
     bodyType: 'rocky',
     realRadiusKm: 6051.8,
@@ -178,7 +178,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Jorden',
     texture: TEXTURES.earth,
     size: 10,
-    distance: 130,
+    distance: 450,
     color: 0x3a5fcd,
     bodyType: 'earth',
     realRadiusKm: 6371.0,
@@ -201,7 +201,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Mars',
     texture: TEXTURES.mars,
     size: 5.3,
-    distance: 170,
+    distance: 620,
     color: 0x993d07,
     bodyType: 'rocky',
     realRadiusKm: 3389.5,
@@ -223,7 +223,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Jupiter',
     texture: TEXTURES.jupiter,
     size: 28,
-    distance: 230,
+    distance: 950,
     color: 0xb07f35,
     bodyType: 'gas',
     realRadiusKm: 69911,
@@ -250,7 +250,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Saturnus',
     texture: TEXTURES.saturn,
     size: 24,
-    distance: 300,
+    distance: 1350,
     color: 0xf4e395,
     bodyType: 'gas',
     realRadiusKm: 58232,
@@ -277,7 +277,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Uranus',
     texture: TEXTURES.uranus,
     size: 10,
-    distance: 350,
+    distance: 1800,
     color: 0x87ceeb,
     bodyType: 'gas',
     realRadiusKm: 25362,
@@ -295,7 +295,7 @@ export const PLANETS: PlanetData[] = [
     name: 'Neptunus',
     texture: TEXTURES.neptune,
     size: 9.5,
-    distance: 400,
+    distance: 2300,
     color: 0x4169e1,
     bodyType: 'gas',
     realRadiusKm: 24622,
@@ -314,7 +314,7 @@ export const PLANETS: PlanetData[] = [
     // its terrain palette (nitrogen-ice plains, reddish tholin highlands).
     name: 'Pluto',
     size: 4.4,
-    distance: 460,
+    distance: 2800,
     color: 0xc9a884,
     bodyType: 'rocky',
     realRadiusKm: 1188.3,
@@ -329,3 +329,13 @@ export const PLANETS: PlanetData[] = [
     ],
   },
 ];
+
+export function isLandable(name: string): boolean {
+  const planet = PLANETS.find((p) => p.name === name);
+  if (planet) return planet.bodyType !== 'gas';
+  return PLANETS.some((p) => p.moons.some((m) => m.name === name));
+}
+
+export function findParentPlanet(moonName: string): PlanetData | undefined {
+  return PLANETS.find((p) => p.moons.some((m) => m.name === moonName));
+}
