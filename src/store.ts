@@ -10,6 +10,8 @@ export type SceneMode =
   | { type: 'piloting' }
   | { type: 'descending'; target: string; phase: 'orbit' | 'atmosphere' | 'landing' }
   | { type: 'surface'; planet: string }
+  // Phase 9: on-foot voxel exploration, entered by disembarking on the surface.
+  | { type: 'voxel'; planet: string }
   | { type: 'ascending'; planet: string };
 
 /** Player-tunable flight control feel. */
@@ -134,6 +136,8 @@ interface SimState {
   beginDescent: (target: string) => boolean;
   setDescentPhase: (phase: 'orbit' | 'atmosphere' | 'landing') => void;
   completeLanding: (planet: string) => void;
+  disembark: () => void;
+  boardShip: () => void;
   beginAscent: () => void;
   completeAscent: () => void;
   abortDescent: () => void;
@@ -251,6 +255,17 @@ export const useStore = create<SimState>((set, get) => ({
       return { sceneMode: { ...s.sceneMode, phase } };
     }),
   completeLanding: (planet: string) => set({ sceneMode: { type: 'surface', planet } }),
+  // Step off the ship into the on-foot voxel world (and back).
+  disembark: () =>
+    set((s) => {
+      if (s.sceneMode.type !== 'surface') return {};
+      return { sceneMode: { type: 'voxel', planet: s.sceneMode.planet } };
+    }),
+  boardShip: () =>
+    set((s) => {
+      if (s.sceneMode.type !== 'voxel') return {};
+      return { sceneMode: { type: 'surface', planet: s.sceneMode.planet } };
+    }),
   beginAscent: () =>
     set((s) => {
       if (s.sceneMode.type !== 'surface') return {};

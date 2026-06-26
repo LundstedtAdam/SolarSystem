@@ -803,7 +803,12 @@ canvas {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.6);
 }
-.surface-hud-launch {
+.surface-hud-actions {
+  display: flex;
+  gap: 12px;
+  pointer-events: none;
+}
+.surface-hud-action {
   pointer-events: auto;
   min-width: 100px;
   min-height: 54px;

@@ -4,6 +4,7 @@ import { useStore } from '../store';
 export function SurfaceHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
   const beginAscent = useStore((s) => s.beginAscent);
+  const disembark = useStore((s) => s.disembark);
   const [heading, setHeading] = useState(0);
   const frameRef = useRef(0);
 
@@ -53,11 +54,17 @@ export function SurfaceHUD() {
         </div>
       </div>
 
-      {/* Bottom: launch button */}
-      <button className="button surface-hud-launch" onClick={beginAscent}>
-        <span className="actual-text">&nbsp;Launch&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">&nbsp;Launch&nbsp;</span>
-      </button>
+      {/* Bottom: disembark to explore on foot, or launch back to orbit. */}
+      <div className="surface-hud-actions">
+        <button className="button surface-hud-action" onClick={disembark}>
+          <span className="actual-text">&nbsp;Disembark&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;Disembark&nbsp;</span>
+        </button>
+        <button className="button surface-hud-action" onClick={beginAscent}>
+          <span className="actual-text">&nbsp;Launch&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;Launch&nbsp;</span>
+        </button>
+      </div>
     </div>
   );
 }

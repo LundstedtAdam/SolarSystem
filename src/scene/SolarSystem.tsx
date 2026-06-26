@@ -25,6 +25,7 @@ import { DescentCamera } from '../descent/DescentCamera';
 import { AscentManager } from '../descent/AscentManager';
 import { AscentCamera } from '../descent/AscentCamera';
 import { SurfaceScene } from '../terrain/SurfaceScene';
+import { VoxelScene } from '../voxel/VoxelScene';
 import { Effects } from '../postfx/Effects';
 import { PLANETS } from '../systems/bodies';
 import { useStore, type SceneMode } from '../store';
@@ -39,6 +40,9 @@ export function SolarSystem() {
   const dprMax = QUALITY[useStore((s) => s.quality)].dprMax;
   const sceneMode: SceneMode = useStore((s) => s.sceneMode);
   const onSurface = sceneMode.type === 'surface';
+  const onVoxel = sceneMode.type === 'voxel';
+  // Both on-foot modes hide the space scene (planets, stars, sun, belts).
+  const onGround = onSurface || onVoxel;
 
   const createRenderer = useCallback((canvas: HTMLCanvasElement) => {
     const renderer = new WebGPURenderer({ canvas, antialias: true });
@@ -68,7 +72,7 @@ export function SolarSystem() {
       gl={createRenderer as never}
       dpr={[1, dprMax]}
     >
-      {!onSurface && (
+      {!onGround && (
         <Suspense fallback={null}>
           <ambientLight intensity={0.04} color={0x2a3358} />
           <Starfield />
@@ -83,7 +87,7 @@ export function SolarSystem() {
       )}
       <SimClock />
       <AudioReactor />
-      {!onSurface && <LabelProjector />}
+      {!onGround && <LabelProjector />}
       {sceneMode.type === 'solar' && <CameraRig />}
       {sceneMode.type === 'piloting' && (
         <>
@@ -106,6 +110,7 @@ export function SolarSystem() {
         </>
       )}
       {onSurface && <SurfaceScene />}
+      {onVoxel && <VoxelScene />}
       <Effects />
     </Canvas>
   );

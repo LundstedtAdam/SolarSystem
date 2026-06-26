@@ -11,6 +11,7 @@ import { Labels } from './ui/Labels';
 import { ShipHUD } from './ui/ShipHUD';
 import { DescentOverlay } from './ui/DescentOverlay';
 import { SurfaceHUD } from './ui/SurfaceHUD';
+import { VoxelHUD } from './ui/VoxelHUD';
 import { TouchControls } from './ui/TouchControls';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
       <ShipHUD />
       <DescentOverlay />
       <SurfaceHUD />
+      <VoxelHUD />
       <TouchControls />
       <Loading />
       <Controls />
