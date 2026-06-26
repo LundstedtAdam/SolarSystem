@@ -1,106 +1,101 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import {
-  Color,
-  InstancedMesh,
-  BoxGeometry,
-  MeshStandardMaterial,
-  Object3D,
-  Vector3,
-  type PerspectiveCamera,
-} from 'three';
+import { Color, Euler, Vector3, type PerspectiveCamera } from 'three';
 import { useStore } from '../store';
 import { getBiome } from '../terrain/biomes';
+import { ChunkManager } from './ChunkManager';
+import { voxelSpawn } from './worldGen';
 
-// Placeholder voxel world for sub-phase 9.0: a flat grid of cubes lit by the
-// body's biome so disembarking lands in a recognisably "voxel" version of the
-// same surface. The real chunked engine (worldgen + greedy mesher) replaces the
-// ground in 9.1; sky/material/AAA look land in 9.2.
-const GRID = 32; // cubes per side
-const CUBE = 2; // world units per voxel
+// Sub-phase 9.1: the voxel world is a streamed chunk field at the world origin
+// (kept near 0 to avoid float precision loss far from the ship). Lighting and
+// backdrop come from the shared biome so it reads as the same body. A debug
+// fly camera (left-drag look + WASD) exercises streaming until the real
+// first-person controller and mobile touch input land in 9.3.
 
-/** Deterministic 0..1 hash so the placeholder relief is stable per cell. */
-function hash2(x: number, z: number): number {
-  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
-  return s - Math.floor(s);
-}
-
-function VoxelGround({ planet, origin }: { planet: string; origin: Vector3 }) {
-  const biome = useMemo(() => getBiome(planet), [planet]);
-
-  const { geometry, material } = useMemo(() => {
-    const geometry = new BoxGeometry(CUBE, CUBE, CUBE);
-    const material = new MeshStandardMaterial({
-      vertexColors: true,
-      roughness: biome.roughnessHigh,
-      metalness: 0,
-    });
-    return { geometry, material };
-  }, [biome]);
-
-  const mesh = useMemo(
-    () => new InstancedMesh(geometry, material, GRID * GRID),
-    [geometry, material],
-  );
-
-  useEffect(() => {
-    const dummy = new Object3D();
-    const low = new Color(...biome.colorLow);
-    const mid = new Color(...biome.colorMid);
-    const high = new Color(...biome.colorHigh);
-    const c = new Color();
-    let i = 0;
-    for (let gx = 0; gx < GRID; gx++) {
-      for (let gz = 0; gz < GRID; gz++) {
-        const wx = origin.x + (gx - GRID / 2) * CUBE;
-        const wz = origin.z + (gz - GRID / 2) * CUBE;
-        const h = hash2(gx, gz);
-        const lift = Math.floor(h * 3) * CUBE; // 0..2 blocks of relief
-        // Cube centre sits one block below ground so its top aligns to y=origin.y.
-        dummy.position.set(wx, origin.y - CUBE / 2 + lift, wz);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-        // Blend the biome palette by relief height for a hint of variation.
-        c.copy(low).lerp(mid, Math.min(h * 1.5, 1)).lerp(high, lift / (CUBE * 2));
-        mesh.setColorAt(i, c);
-        i++;
-      }
-    }
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [mesh, biome, origin]);
-
-  useEffect(() => () => {
-    geometry.dispose();
-    material.dispose();
-    mesh.dispose();
-  }, [geometry, material, mesh]);
-
-  return <primitive object={mesh} />;
-}
-
-/** First-person placeholder camera: stands at the ship and looks out over the grid. */
-function VoxelCamera({ origin }: { origin: Vector3 }) {
+/** Temporary keyboard/drag fly camera for verifying chunk streaming on desktop. */
+function DebugFlyCamera({ planet }: { planet: string }) {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
-  const initialized = useRef(false);
-  const _look = useMemo(() => new Vector3(), []);
+  const gl = useThree((s) => s.gl);
+  const keys = useRef<Record<string, boolean>>({});
+  const yaw = useRef(0);
+  const pitch = useRef(0);
+  const pos = useRef(new Vector3());
+  const dragging = useRef(false);
+  const ready = useRef(false);
+  const euler = useMemo(() => new Euler(0, 0, 0, 'YXZ'), []);
+  const forward = useMemo(() => new Vector3(), []);
+  const right = useMemo(() => new Vector3(), []);
 
   useEffect(() => {
     camera.near = 0.1;
     camera.far = 2000;
     camera.fov = 75;
     camera.updateProjectionMatrix();
-    initialized.current = false;
-  }, [camera]);
+    ready.current = false;
+  }, [camera, planet]);
 
-  useFrame(() => {
+  useEffect(() => {
+    const dom = gl.domElement;
+    const onKey = (down: boolean) => (e: KeyboardEvent) => {
+      keys.current[e.code] = down;
+    };
+    const kd = onKey(true);
+    const ku = onKey(false);
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button === 0) dragging.current = true;
+    };
+    const onPointerUp = () => {
+      dragging.current = false;
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      yaw.current -= e.movementX * 0.0025;
+      pitch.current -= e.movementY * 0.0025;
+      const lim = Math.PI / 2 - 0.05;
+      pitch.current = Math.max(-lim, Math.min(lim, pitch.current));
+    };
+    window.addEventListener('keydown', kd);
+    window.addEventListener('keyup', ku);
+    dom.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointermove', onPointerMove);
+    return () => {
+      window.removeEventListener('keydown', kd);
+      window.removeEventListener('keyup', ku);
+      dom.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointermove', onPointerMove);
+    };
+  }, [gl]);
+
+  useFrame((_, dt) => {
     if (useStore.getState().sceneMode.type !== 'voxel') return;
-    if (!initialized.current) {
-      camera.position.set(origin.x, origin.y + 1.7, origin.z);
-      initialized.current = true;
+    if (!ready.current) {
+      pos.current.copy(voxelSpawn(planet));
+      yaw.current = 0;
+      pitch.current = 0;
+      ready.current = true;
     }
-    _look.set(origin.x, origin.y + 1.4, origin.z + 10);
-    camera.lookAt(_look);
+    euler.set(pitch.current, yaw.current, 0);
+    camera.quaternion.setFromEuler(euler);
+
+    forward.set(0, 0, -1).applyEuler(euler);
+    forward.y = 0;
+    forward.normalize();
+    right.set(1, 0, 0).applyEuler(euler);
+    right.y = 0;
+    right.normalize();
+
+    const speed = (keys.current['ShiftLeft'] ? 48 : 20) * Math.min(dt, 0.05);
+    const k = keys.current;
+    if (k['KeyW']) pos.current.addScaledVector(forward, speed);
+    if (k['KeyS']) pos.current.addScaledVector(forward, -speed);
+    if (k['KeyD']) pos.current.addScaledVector(right, speed);
+    if (k['KeyA']) pos.current.addScaledVector(right, -speed);
+    if (k['Space']) pos.current.y += speed;
+    if (k['ControlLeft']) pos.current.y -= speed;
+
+    camera.position.copy(pos.current);
   });
 
   return null;
@@ -109,10 +104,7 @@ function VoxelCamera({ origin }: { origin: Vector3 }) {
 export function VoxelScene() {
   const sceneMode = useStore((s) => s.sceneMode);
   const planet = sceneMode.type === 'voxel' ? sceneMode.planet : '';
-  const [px, py, pz] = useStore((s) => s.shipPosition);
   const scene = useThree((s) => s.scene);
-
-  const origin = useMemo(() => new Vector3(px, py, pz), [px, py, pz]);
 
   const { ambientColor, ambientIntensity, sunIntensity, horizon } = useMemo(() => {
     const b = getBiome(planet);
@@ -137,10 +129,10 @@ export function VoxelScene() {
 
   return (
     <>
-      <VoxelGround planet={planet} origin={origin} />
+      <ChunkManager planet={planet} />
       <ambientLight intensity={ambientIntensity} color={ambientColor} />
       <directionalLight position={[120, 220, 160]} intensity={sunIntensity} color={0xfff8f0} />
-      <VoxelCamera origin={origin} />
+      <DebugFlyCamera planet={planet} />
     </>
   );
 }

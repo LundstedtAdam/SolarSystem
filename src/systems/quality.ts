@@ -26,6 +26,12 @@ export interface QualitySettings {
   shadowMapSize: number;
   terrainResolution: number;
   terrainNoiseOctaves: number;
+  /** Phase 9 voxel world: horizontal chunk radius loaded around the player. */
+  voxelViewRadius: number;
+  /** Number of mesher worker threads. */
+  voxelWorkers: number;
+  /** Max chunk (re)mesh requests dispatched per frame, to spread load. */
+  voxelMeshBudget: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -46,6 +52,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     shadowMapSize: 1024,
     terrainResolution: 256,
     terrainNoiseOctaves: 3,
+    voxelViewRadius: 2,
+    voxelWorkers: 1,
+    voxelMeshBudget: 2,
   },
   medium: {
     planetSegments: 40,
@@ -64,6 +73,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     shadowMapSize: 1024,
     terrainResolution: 512,
     terrainNoiseOctaves: 4,
+    voxelViewRadius: 3,
+    voxelWorkers: 2,
+    voxelMeshBudget: 3,
   },
   high: {
     planetSegments: 64,
@@ -82,6 +94,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     shadowMapSize: 2048,
     terrainResolution: 1024,
     terrainNoiseOctaves: 5,
+    voxelViewRadius: 4,
+    voxelWorkers: 3,
+    voxelMeshBudget: 4,
   },
   ultra: {
     planetSegments: 96,
@@ -100,6 +115,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     shadowMapSize: 4096,
     terrainResolution: 1280,
     terrainNoiseOctaves: 5,
+    voxelViewRadius: 5,
+    voxelWorkers: 4,
+    voxelMeshBudget: 6,
   },
 };
 
