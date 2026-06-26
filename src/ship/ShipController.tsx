@@ -81,7 +81,9 @@ export function ShipController() {
     store.setShipPosition([_pos.x, _pos.y, _pos.z]);
     store.setShipVelocity([_vel.x, _vel.y, _vel.z]);
     store.setShipRotation([_quat.x, _quat.y, _quat.z, _quat.w]);
-    store.setShipThrottle(Math.abs(input.thrust));
+    // Store the raw lever position (0..1) so the HUD zones and last-quarter
+    // effects key off the slider, not the post-curve thrust.
+    store.setShipThrottle(input.throttleRaw ?? Math.abs(input.thrust));
   });
 
   const [px, py, pz] = useStore((s) => s.shipPosition);

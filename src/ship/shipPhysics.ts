@@ -23,6 +23,9 @@ export interface ShipInput {
   yaw: number;
   pitch: number;
   roll: number;
+  /** Raw throttle lever position (0..1 magnitude), before the response curve —
+   *  drives the UI zones and the last-quarter flight effects. */
+  throttleRaw?: number;
 }
 
 /** Persisted per-axis angular velocity (rad/s) so rotation has inertia. */

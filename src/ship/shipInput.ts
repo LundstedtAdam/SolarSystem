@@ -51,9 +51,24 @@ function shapeAxis(raw: number, deadzone: number, invert = false): number {
   return Math.sign(v) * Math.pow(t, EXPO);
 }
 
-/** Throttle keeps near-linear feel with a touch of low-end precision. */
-function shapeThrottle(raw: number): number {
-  return Math.sign(raw) * Math.pow(Math.abs(raw), 1.3);
+/**
+ * Four-zone throttle response. The slider's first three quarters each cover only
+ * 10% of max thrust (fine, precise low-end control); the final quarter ramps from
+ * 30% to 100% (the aggressive power band). Linear within each zone and continuous
+ * at the boundaries, so there is no stepping — only a change of slope.
+ *   slider 0–25%   -> 0–10%
+ *   slider 25–50%  -> 10–20%
+ *   slider 50–75%  -> 20–30%
+ *   slider 75–100% -> 30–100%
+ */
+export function throttleCurve(raw: number): number {
+  const s = Math.min(Math.abs(raw), 1);
+  let out: number;
+  if (s < 0.25) out = (s / 0.25) * 0.1;
+  else if (s < 0.5) out = 0.1 + ((s - 0.25) / 0.25) * 0.1;
+  else if (s < 0.75) out = 0.2 + ((s - 0.5) / 0.25) * 0.1;
+  else out = 0.3 + ((s - 0.75) / 0.25) * 0.7;
+  return Math.sign(raw) * out;
 }
 
 export function readKeyboard(): ShipInput {
@@ -122,7 +137,8 @@ export function readInput(): ShipInput {
     // Gamepads sit at the tighter end of the dead-zone range (5–10%).
     const gdz = Math.min(cfg.deadzone * 0.6, 0.1);
     return {
-      thrust: shapeThrottle(gp.thrust),
+      thrust: throttleCurve(gp.thrust),
+      throttleRaw: Math.min(Math.abs(gp.thrust), 1),
       yaw: shapeAxis(gp.yaw, gdz),
       pitch: shapeAxis(gp.pitch, gdz, cfg.invertPitch),
       roll: shapeAxis(gp.roll, gdz),
@@ -131,7 +147,8 @@ export function readInput(): ShipInput {
 
   if (joystickActive || Math.abs(touchThrust) > 0.01) {
     return {
-      thrust: shapeThrottle(touchThrust),
+      thrust: throttleCurve(touchThrust),
+      throttleRaw: Math.min(Math.abs(touchThrust), 1),
       yaw: shapeAxis(touchYaw, cfg.deadzone),
       pitch: shapeAxis(touchPitch, cfg.deadzone, cfg.invertPitch),
       roll: 0,
@@ -142,6 +159,7 @@ export function readInput(): ShipInput {
   const kb = readKeyboard();
   return {
     thrust: kb.thrust,
+    throttleRaw: Math.min(Math.abs(kb.thrust), 1),
     yaw: kb.yaw,
     pitch: cfg.invertPitch ? -kb.pitch : kb.pitch,
     roll: kb.roll,

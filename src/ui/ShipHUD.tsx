@@ -29,9 +29,34 @@ export function ShipHUD() {
   const canLand = nearest && nearest.distance < landRange(nearest.size);
   const landable = canLand ? isLandable(nearest.name) : false;
   const thrPct = (shipThrottle * 100).toFixed(0);
+  // Final-quarter (75–100%) intensity, smooth 0 -> 1, drives the heat glow.
+  const lastQ = Math.min(Math.max((shipThrottle - 0.75) / 0.25, 0), 1);
+  const heatGlow = lastQ * lastQ * (3 - 2 * lastQ);
+  const inPowerBand = shipThrottle >= 0.75;
 
   return (
     <>
+      {/* Heat glow at the screen edges — intensifies through the final quarter */}
+      {heatGlow > 0 && (
+        <div className="ship-heat-glow" style={{ opacity: heatGlow }} aria-hidden="true">
+          <div className="ship-heat-glow-inner" />
+        </div>
+      )}
+
+      {/* Throttle indicator — upper center; four zones of the response curve */}
+      <div className="throttle-indicator" aria-hidden="true">
+        <div className="ti-track">
+          <div
+            className={`ti-fill${inPowerBand ? ' ti-fill--power' : ''}`}
+            style={{ width: `${shipThrottle * 100}%` }}
+          />
+          <span className="ti-div" style={{ left: '25%' }} />
+          <span className="ti-div" style={{ left: '50%' }} />
+          <span className="ti-div" style={{ left: '75%' }} />
+        </div>
+        <div className="ti-readout">THR {thrPct}%</div>
+      </div>
+
       {/* Exit button — top right */}
       <button
         className="button ship-hud-exit"
