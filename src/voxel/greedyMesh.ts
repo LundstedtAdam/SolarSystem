@@ -6,7 +6,7 @@
 // Vertex pooling: scratch buffers are module-scoped and reused across calls, so
 // steady-state meshing does no per-quad allocation (only one copy-out per mesh).
 
-import { CHUNK_SIZE, paddedIndex, voxelId, BLOCK } from './voxelTypes';
+import { CHUNK_SIZE, PALETTE_STRIDE, paddedIndex, voxelId, BLOCK } from './voxelTypes';
 
 const N = CHUNK_SIZE;
 
@@ -30,13 +30,15 @@ let vCount = 0;
 let iCount = 0;
 
 function ensureVertexCapacity(extraVerts: number) {
-  const need = (vCount + extraVerts) * 3;
-  if (need <= posPool.length) return;
+  const need3 = (vCount + extraVerts) * 3;
+  if (need3 <= posPool.length) return;
   let cap = Math.max(posPool.length * 2, 1024 * 3);
-  while (cap < need) cap *= 2;
+  while (cap < need3) cap *= 2;
   const np = new Float32Array(cap); np.set(posPool.subarray(0, vCount * 3)); posPool = np;
   const nn = new Float32Array(cap); nn.set(normPool.subarray(0, vCount * 3)); normPool = nn;
-  const nc = new Float32Array(cap); nc.set(colPool.subarray(0, vCount * 3)); colPool = nc;
+  // Colours are RGBA (rgb = albedo*AO, a = emissive), so 4 floats per vertex.
+  const cap4 = (cap / 3) * 4;
+  const nc = new Float32Array(cap4); nc.set(colPool.subarray(0, vCount * 4)); colPool = nc;
 }
 
 function ensureIndexCapacity(extra: number) {
@@ -82,12 +84,13 @@ function packFaceAO(
 function pushVertex(
   px: number, py: number, pz: number,
   nx: number, ny: number, nz: number,
-  cr: number, cg: number, cb: number,
+  cr: number, cg: number, cb: number, ce: number,
 ) {
   const o = vCount * 3;
   posPool[o] = px; posPool[o + 1] = py; posPool[o + 2] = pz;
   normPool[o] = nx; normPool[o + 1] = ny; normPool[o + 2] = nz;
-  colPool[o] = cr; colPool[o + 1] = cg; colPool[o + 2] = cb;
+  const c = vCount * 4;
+  colPool[c] = cr; colPool[c + 1] = cg; colPool[c + 2] = cb; colPool[c + 3] = ce;
   vCount++;
 }
 
@@ -123,18 +126,19 @@ function emitQuad(
   const nx = d === 0 ? dir : 0;
   const ny = d === 1 ? dir : 0;
   const nz = d === 2 ? dir : 0;
-  const r = palette[id * 3];
-  const g = palette[id * 3 + 1];
-  const b = palette[id * 3 + 2];
+  const r = palette[id * PALETTE_STRIDE];
+  const g = palette[id * PALETTE_STRIDE + 1];
+  const b = palette[id * PALETTE_STRIDE + 2];
+  const em = palette[id * PALETTE_STRIDE + 3]; // emissive (not AO-darkened)
 
   const v0 = vCount;
-  pushVertex(p[0], p[1], p[2], nx, ny, nz, r * c00, g * c00, b * c00);
-  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10);
+  pushVertex(p[0], p[1], p[2], nx, ny, nz, r * c00, g * c00, b * c00, em);
+  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10, em);
   pushVertex(
     p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2],
-    nx, ny, nz, r * c11, g * c11, b * c11,
+    nx, ny, nz, r * c11, g * c11, b * c11, em,
   );
-  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01);
+  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01, em);
 
   const a00 = ao & 3;
   const a10 = (ao >> 2) & 3;
@@ -222,7 +226,7 @@ export function greedyMesh(voxels: Uint32Array, palette: Float32Array): MeshArra
   return {
     positions: new Float32Array(posPool.subarray(0, vCount * 3)),
     normals: new Float32Array(normPool.subarray(0, vCount * 3)),
-    colors: new Float32Array(colPool.subarray(0, vCount * 3)),
+    colors: new Float32Array(colPool.subarray(0, vCount * 4)),
     indices: new Uint32Array(idxPool.subarray(0, iCount)),
     indexCount: iCount,
   };

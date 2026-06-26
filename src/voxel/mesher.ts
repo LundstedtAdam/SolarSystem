@@ -78,7 +78,7 @@ export function buildGeometry(res: MeshResult): BufferGeometry | null {
   const geo = new BufferGeometry();
   geo.setAttribute('position', new BufferAttribute(res.positions, 3));
   geo.setAttribute('normal', new BufferAttribute(res.normals, 3));
-  geo.setAttribute('color', new BufferAttribute(res.colors, 3));
+  geo.setAttribute('color', new BufferAttribute(res.colors, 4));
   geo.setIndex(new BufferAttribute(res.indices, 1));
   geo.computeBoundingSphere();
   return geo;

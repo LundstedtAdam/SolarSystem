@@ -1,52 +1,109 @@
-// Maps the shared Phase 8 BiomeProfile onto voxel-world parameters: the block
-// colour palette and the procedural terrain shape. This keeps the voxel world's
-// colour identity locked to the same source of truth as the Phase 8 surface.
-//
-// 9.1 derives reasonable values for every body from the existing biome fields.
-// 9.4 refines per-archetype block sets, geology and structures on top of this.
+// Maps the shared Phase 8 BiomeProfile onto voxel-world parameters. Each body
+// picks one of six archetypes (geometry + geology + block roles); its colours
+// still come from its own BiomeProfile, so two bodies sharing an archetype look
+// distinct. This is variation layers 1–3: same systems, per-body data.
 
 import { getBiome } from '../terrain/biomes';
-import { BLOCK_COUNT, BLOCK } from './voxelTypes';
+import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
+
+export type Archetype = 'rock' | 'regolith' | 'earth' | 'ice' | 'lava' | 'dune';
+
+// 16 landable bodies mapped onto 6 archetypes.
+const ARCHETYPE: Record<string, Archetype> = {
+  Mars: 'rock',
+  'Månen': 'regolith',
+  Jorden: 'earth',
+  Europa: 'ice',
+  Io: 'lava',
+  Titan: 'dune',
+  // Mapped bodies:
+  Merkurius: 'regolith',
+  Venus: 'lava',
+  Phobos: 'regolith',
+  Deimos: 'regolith',
+  Ganymede: 'ice',
+  Callisto: 'ice',
+  Miranda: 'rock',
+  Triton: 'ice',
+  Pluto: 'ice',
+  Charon: 'regolith',
+};
+
+export function archetypeFor(planet: string): Archetype {
+  return ARCHETYPE[planet] ?? 'rock';
+}
 
 export interface VoxelTerrainParams {
-  /** Mean surface height in voxels above the world floor (y=0). */
+  archetype: Archetype;
   baseHeight: number;
-  /** Low-frequency rolling relief. */
   rollAmp: number;
   rollFreq: number;
-  /** Higher-frequency mountain relief; `ridged` gives sharp crests. */
   mountainAmp: number;
   mountainFreq: number;
   ridged: boolean;
   octaves: number;
-  /** 3D cave carving. Higher threshold = fewer/smaller caves. */
   caveFreq: number;
   caveThreshold: number;
+  /** Impact-crater intensity 0..1 (regolith). */
+  craters: number;
+  /** Sea level in voxels for earth seas, or -1 (none). */
+  waterLevel: number;
+  /** Dune ripple amplitude (dune), or 0. */
+  duneAmp: number;
+  /** Voxels below the surface where glowing-ice veins appear (ice), or 0. */
+  glowDepth: number;
+  /** Lava-lake level in voxels (lava), or -1. */
+  lavaLevel: number;
 }
 
-/** Flat RGB palette (BLOCK_COUNT * 3, values 0..1) indexed by block id. The
- *  worker multiplies these by ambient occlusion to colour vertices. */
+function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emissive = 0) {
+  const o = id * PALETTE_STRIDE;
+  pal[o] = r;
+  pal[o + 1] = g;
+  pal[o + 2] = b;
+  pal[o + 3] = emissive;
+}
+
+/** RGBA palette (rgb + emissive) per block id, coloured from the body's biome. */
 export function getVoxelPalette(planet: string): Float32Array {
   const b = getBiome(planet);
-  const pal = new Float32Array(BLOCK_COUNT * 3);
-  // AIR (id 0) stays black/unused.
-  const set = (id: number, rgb: [number, number, number], scale = 1) => {
-    pal[id * 3] = rgb[0] * scale;
-    pal[id * 3 + 1] = rgb[1] * scale;
-    pal[id * 3 + 2] = rgb[2] * scale;
-  };
-  set(BLOCK.SURFACE, b.colorMid);
-  set(BLOCK.SUBSOIL, b.colorLow);
-  set(BLOCK.ROCK, b.colorLow, 0.55);
+  const arche = archetypeFor(planet);
+  const pal = new Float32Array(BLOCK_COUNT * PALETTE_STRIDE);
+
+  // Generic layers from the biome elevation palette.
+  rgb(pal, BLOCK.SURFACE, ...(b.colorMid as [number, number, number]));
+  rgb(pal, BLOCK.SUBSOIL, ...(b.colorLow as [number, number, number]));
+  rgb(pal, BLOCK.ROCK, b.colorLow[0] * 0.55, b.colorLow[1] * 0.55, b.colorLow[2] * 0.55);
+
+  // Archetype-specific materials.
+  rgb(pal, BLOCK.GRASS, b.colorMid[0] * 0.75, b.colorMid[1], b.colorMid[2] * 0.5);
+  rgb(pal, BLOCK.SAND, ...(b.colorMid as [number, number, number]));
+  rgb(pal, BLOCK.WATER, 0.08, 0.26, 0.5);
+  rgb(pal, BLOCK.ICE, ...(b.colorMid as [number, number, number]));
+  // Glowing ice: blue-shifted toward the biome, self-lit.
+  rgb(
+    pal,
+    BLOCK.ICE_GLOW,
+    b.colorMid[0] * 0.4 + 0.15,
+    b.colorMid[1] * 0.5 + 0.35,
+    b.colorMid[2] * 0.5 + 0.55,
+    0.7,
+  );
+  rgb(pal, BLOCK.LAVA, 1.0, 0.42, 0.08, 1.0);
+  rgb(pal, BLOCK.SULPHUR, 0.85, 0.72, 0.16);
+
+  // Let the surface block adopt the archetype's signature where it differs.
+  if (arche === 'ice') rgb(pal, BLOCK.SURFACE, ...(b.colorHigh as [number, number, number]));
   return pal;
 }
 
 export function getVoxelTerrain(planet: string): VoxelTerrainParams {
   const b = getBiome(planet);
-  // Relief scales with the body's macro amplitude so Mars reads as rugged,
-  // the Moon flatter, etc. — all from the same biome numbers.
+  const arche = archetypeFor(planet);
   const relief = b.continentAmp + b.mountainAmp;
-  return {
+
+  const p: VoxelTerrainParams = {
+    archetype: arche,
     baseHeight: 40,
     rollAmp: Math.min(6 + relief * 0.35, 26),
     rollFreq: 1 / 80,
@@ -55,7 +112,35 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     ridged: b.mountainAmp >= 12,
     octaves: Math.max(3, b.octaves),
     caveFreq: 0.07,
-    // Airless/rocky bodies get slightly more open caverns than icy/sandy ones.
     caveThreshold: 0.8,
+    craters: 0,
+    waterLevel: -1,
+    duneAmp: 0,
+    glowDepth: 0,
+    lavaLevel: -1,
   };
+
+  switch (arche) {
+    case 'earth':
+      p.waterLevel = p.baseHeight; // seas fill the lowlands
+      break;
+    case 'regolith':
+      p.craters = Math.max(b.craterStrength, 0.55);
+      break;
+    case 'dune':
+      p.duneAmp = 3.5;
+      p.caveThreshold = 0.85; // fewer caves in dunes
+      break;
+    case 'ice':
+      p.glowDepth = 7;
+      p.caveThreshold = 0.72; // larger ice caverns
+      break;
+    case 'lava':
+      p.lavaLevel = p.baseHeight - 9; // lava lakes in the lowlands
+      p.caveThreshold = 0.78;
+      break;
+    default:
+      break; // 'rock'
+  }
+  return p;
 }

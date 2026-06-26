@@ -25,16 +25,27 @@ const ID_MASK = 0x3ff;
 
 export type BlockId = number;
 
-/** Air is always id 0 and is the only non-solid block in 9.1. */
+/** Block ids. Air is 0 and is the only non-solid block. The rest are archetype
+ *  materials; per-body colours come from the palette (voxelBiomes). */
 export const BLOCK = {
   AIR: 0,
-  SURFACE: 1,
-  SUBSOIL: 2,
-  ROCK: 3,
+  SURFACE: 1, // generic top (rock/regolith dust)
+  SUBSOIL: 2, // generic mid layer
+  ROCK: 3, // generic deep stone
+  GRASS: 4, // earth vegetation top
+  SAND: 5, // dune / desert top
+  WATER: 6, // earth seas (opaque for now)
+  ICE: 7, // ice archetype
+  ICE_GLOW: 8, // luminous subsurface ice (emissive)
+  LAVA: 9, // molten rock (emissive)
+  SULPHUR: 10, // io sulphur deposits
 } as const;
 
-/** Number of block ids, including AIR — sizes the per-request colour palette. */
-export const BLOCK_COUNT = 4;
+/** Number of block ids, including AIR. */
+export const BLOCK_COUNT = 11;
+
+/** Floats per palette entry: r, g, b, emissive. */
+export const PALETTE_STRIDE = 4;
 
 export function packVoxel(id: BlockId): number {
   return id & ID_MASK;

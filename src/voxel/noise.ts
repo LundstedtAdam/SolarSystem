@@ -70,6 +70,13 @@ export function fbm2(
   return sum / norm;
 }
 
+/** Deterministic 0..1 hash for integer cell coordinates (craters, veins). */
+export function cellHash(x: number, z: number, seed: number): number {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(z | 0, 668265263) ^ Math.imul(seed | 0, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
+}
+
 /** Stable integer seed from a body name (so each body generates consistently). */
 export function seedFromName(name: string): number {
   let h = 2166136261;

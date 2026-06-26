@@ -24,8 +24,10 @@ import type { BiomeProfile } from '../terrain/biomes';
 export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial();
 
-  // Baked-AO vertex colour from the greedy mesher.
-  const albedo = attribute('color', 'vec3');
+  // Vertex colour is RGBA: rgb = albedo with baked AO, a = emissive strength
+  // (lava, glowing ice). Emissive isn't AO-darkened so it reads in shadow/caves.
+  const vcol = attribute('color', 'vec4');
+  const albedo = vcol.xyz;
 
   // Break up flat faces: a low-amplitude world-space normal perturbation. Kept
   // small so lighting stays clean but faces no longer read as mirror-flat.
@@ -48,6 +50,9 @@ export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMateri
   } else {
     m.colorNode = albedo;
   }
+
+  // Self-illumination for lava / glowing ice, scaled by the per-vertex flag.
+  m.emissiveNode = albedo.mul(vcol.w).mul(1.6);
 
   m.metalnessNode = float(0);
   m.roughnessNode = float(biome.roughnessHigh);
