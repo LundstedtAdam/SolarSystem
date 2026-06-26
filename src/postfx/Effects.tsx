@@ -27,22 +27,22 @@ export function Effects() {
       ? color.add(bloom(color, q.bloomStrength, q.bloomRadius, q.bloomThreshold))
       : color;
 
-    const heatTinted = mix(lit, vec4(reentryTint, float(1.0)), heatUniform.mul(0.3));
-
-    let composed;
+    // Build the base image (with chromatic aberration if enabled), THEN apply
+    // the re-entry heat tint to all channels. Previously the tint was applied
+    // only to the green channel in the aberration path, so the heat read green
+    // instead of warm orange.
+    let base = lit;
     if (q.chromaticAberration > 0) {
       const offset = screenUV.sub(0.5).mul(float(q.chromaticAberration).add(heatUniform.mul(0.003)));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const passNode = scenePass as any;
       const rSample = passNode.getTextureNode().uv(screenUV.add(offset));
       const bSample = passNode.getTextureNode().uv(screenUV.sub(offset));
-      const r = rSample.r;
-      const g = heatTinted.g;
-      const b = bSample.b;
-      composed = vec4(r, g, b, float(1.0)).mul(vignette);
-    } else {
-      composed = heatTinted.mul(vignette);
+      base = vec4(rSample.r, lit.g, bSample.b, float(1.0));
     }
+
+    const heatTinted = mix(base, vec4(reentryTint, float(1.0)), heatUniform.mul(0.3));
+    const composed = heatTinted.mul(vignette);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pp = new PostProcessing(renderer as any);
