@@ -4,7 +4,7 @@
 // re-meshes only the affected chunk + touched neighbours — proving the dynamic
 // engine end to end, which the 9.3b dig/build UX then builds on.
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import {
   Group,
@@ -23,6 +23,7 @@ import {
   PADDED_VOLUME,
   PADDED_SIZE,
   paddedIndex,
+  voxelId,
   BLOCK,
   type MeshRequest,
   type MeshResult,
@@ -32,12 +33,19 @@ import { MesherPool, buildGeometry } from './mesher';
 import { generateChunk } from './worldGen';
 import { getVoxelPalette, getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
+import type { VoxelApi } from './player';
 
 function floorDiv(a: number, b: number): number {
   return Math.floor(a / b);
 }
 
-export function ChunkManager({ planet }: { planet: string }) {
+export function ChunkManager({
+  planet,
+  apiRef,
+}: {
+  planet: string;
+  apiRef: MutableRefObject<VoxelApi | null>;
+}) {
   const quality = useStore((s) => s.quality);
   const q = QUALITY[quality];
   const gl = useThree((s) => s.gl);
@@ -187,6 +195,30 @@ export function ChunkManager({ planet }: { planet: string }) {
     if (lz === CHUNK_SIZE - 1) forceNeighbourRemesh(cx, cy, cz + 1);
   };
 
+  /** Solidity query for player collision (world voxel coords). Below the floor
+   *  reads solid so the player can't fall out; generates on demand so collision
+   *  is always against real data. */
+  const isSolidApi = (wx: number, wy: number, wz: number): boolean => {
+    const cy = floorDiv(wy, CHUNK_SIZE);
+    if (cy < 0) return true;
+    if (cy > vertMax) return false;
+    const cx = floorDiv(wx, CHUNK_SIZE);
+    const cz = floorDiv(wz, CHUNK_SIZE);
+    const c = ensureGenerated(cx, cy, cz);
+    if (!c) return false;
+    return voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE)) !== BLOCK.AIR;
+  };
+
+  // Publish the surface API for the player controller.
+  useEffect(() => {
+    apiRef.current = { isSolid: isSolidApi, edit: editVoxel };
+    return () => {
+      apiRef.current = null;
+    };
+    // Rebound when the body (params/seed) changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiRef, params, seed, vertMax]);
+
   // --- click-to-dig (debug interaction; full tap/tool UX lands in 9.3b) ---
   useEffect(() => {
     const dom = gl.domElement;
@@ -197,9 +229,13 @@ export function ChunkManager({ planet }: { planet: string }) {
       // Right-button digs; left drag is reserved for the debug look camera.
       if (ev.button !== 2) return;
       if (useStore.getState().sceneMode.type !== 'voxel') return;
-      const rect = dom.getBoundingClientRect();
-      ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-      ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      if (document.pointerLockElement === dom) {
+        ndc.set(0, 0); // aim from screen centre in first-person
+      } else {
+        const rect = dom.getBoundingClientRect();
+        ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      }
       ray.setFromCamera(ndc, camera);
       const hits = ray.intersectObjects([...meshes.current.values()], false);
       if (hits.length === 0) return;

@@ -88,3 +88,11 @@ export function voxelSpawn(planet: string): Vector3 {
   const seed = seedFromName(planet);
   return new Vector3(0.5, surfaceHeightAt(0, 0, params, seed) + 2.2, 0.5);
 }
+
+/** Player box-centre spawn: feet just above the surface voxel top, small drop. */
+export function voxelSpawnCenter(planet: string): Vector3 {
+  const params = getVoxelTerrain(planet);
+  const seed = seedFromName(planet);
+  const top = surfaceHeightAt(0, 0, params, seed) + 1; // surface voxel top
+  return new Vector3(0.5, top + 0.9 + 0.4, 0.5); // + half-height + settle gap
+}

@@ -815,6 +815,46 @@ canvas {
   font-size: 18px;
 }
 
+/* Voxel (on-foot) touch controls */
+.voxel-touch {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+.voxel-look-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+.voxel-touch .touch-joystick {
+  z-index: 1;
+}
+.voxel-pad {
+  pointer-events: auto;
+  touch-action: none;
+}
+.voxel-jump-btn {
+  position: absolute;
+  bottom: 44px;
+  right: 36px;
+  z-index: 1;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 1px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
 /* Touch controls container — kept below the ShipHUD buttons (z-index 10) so the
    full-screen camera-drag catcher never blocks Land / Exit taps. */
 .touch-controls {
