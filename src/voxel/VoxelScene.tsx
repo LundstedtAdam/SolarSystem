@@ -8,6 +8,7 @@ import { ChunkManager } from './ChunkManager';
 import { VoxelSky } from './VoxelSky';
 import { VoxelWeather } from './VoxelWeather';
 import { VoxelScatter } from './VoxelScatter';
+import { Emitters } from './Emitters';
 import { PlayerController } from './PlayerController';
 import type { VoxelApi } from './player';
 
@@ -85,6 +86,7 @@ export function VoxelScene() {
       <ChunkManager planet={planet} apiRef={apiRef} />
       <VoxelSky planet={planet} />
       <VoxelScatter planet={planet} />
+      <Emitters planet={planet} />
       <VoxelWeather planet={planet} />
       <ambientLight intensity={ambientIntensity} color={ambientColor} />
       <SunLight planet={planet} />

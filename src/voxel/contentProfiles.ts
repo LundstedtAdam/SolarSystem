@@ -130,7 +130,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     pois: [],
-    emitters: [],
+    emitters: [{ kind: 'dust_devil', density: 0.12, cell: 40 }],
   },
 
   Io: {
@@ -146,7 +146,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     pois: [],
-    emitters: [],
+    emitters: [{ kind: 'fumarole', density: 0.18, cell: 24 }],
   },
 
   Pluto: {
@@ -171,6 +171,29 @@ const CONTENT: Record<string, ContentProfile> = {
     ],
     pois: [],
     emitters: [],
+  },
+
+  Triton: {
+    props: [],
+    landmarks: [],
+    pois: [],
+    emitters: [{ kind: 'geyser', density: 0.1, cell: 50 }], // nitrogen cryo-plumes
+  },
+
+  Titan: {
+    props: [],
+    landmarks: [],
+    pois: [],
+    emitters: [{ kind: 'methane_bubble', density: 0.3, cell: 14 }],
+  },
+
+  // Airless Moon: dust kicked up by the player's footsteps falls in a perfect
+  // parabolic arc (vacuum). Player-anchored, so density/cell are unused.
+  'Månen': {
+    props: [],
+    landmarks: [],
+    pois: [],
+    emitters: [{ kind: 'vacuum_dust', density: 0, cell: 0 }],
   },
 };
 
