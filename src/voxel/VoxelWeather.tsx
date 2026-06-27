@@ -12,7 +12,7 @@ import {
 } from 'three/webgpu';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
-import { getWeather } from './voxelWeather';
+import { getWeather } from './weatherProfiles';
 
 // Particles live in a box centred on the camera; each frame they fall + drift
 // and wrap within the box, so a modest count fills the visible area. The whole

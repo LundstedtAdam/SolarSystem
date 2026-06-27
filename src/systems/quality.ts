@@ -34,6 +34,8 @@ export interface QualitySettings {
   voxelMeshBudget: number;
   /** Atmosphere/weather particle count in the voxel world. */
   voxelParticles: number;
+  /** Max instanced surface-scatter props in the voxel world. */
+  voxelScatter: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -58,6 +60,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelWorkers: 1,
     voxelMeshBudget: 2,
     voxelParticles: 180,
+    voxelScatter: 120,
   },
   medium: {
     planetSegments: 40,
@@ -80,6 +83,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelWorkers: 2,
     voxelMeshBudget: 3,
     voxelParticles: 450,
+    voxelScatter: 340,
   },
   high: {
     planetSegments: 64,
@@ -102,6 +106,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelWorkers: 3,
     voxelMeshBudget: 4,
     voxelParticles: 900,
+    voxelScatter: 680,
   },
   ultra: {
     planetSegments: 96,
@@ -124,6 +129,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelWorkers: 4,
     voxelMeshBudget: 6,
     voxelParticles: 1500,
+    voxelScatter: 1100,
   },
 };
 

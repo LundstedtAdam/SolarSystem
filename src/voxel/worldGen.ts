@@ -147,6 +147,17 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
   chunk.generated = true;
 }
 
+/** Solid-land height at a world column (excludes sea/lava fill) — for placing
+ *  surface scatter on real ground and skipping liquid. */
+export function landHeightAt(
+  wx: number,
+  wz: number,
+  params: VoxelTerrainParams,
+  seed: number,
+): number {
+  return columnHeight(wx, wz, params, seed);
+}
+
 /** Surface height at a world column (for spawning). */
 export function surfaceHeightAt(
   wx: number,
