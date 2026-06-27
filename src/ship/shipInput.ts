@@ -1,5 +1,6 @@
 import type { ShipInput } from './shipPhysics';
 import { useStore } from '../store';
+import { getStick, stickActive } from './virtualStick';
 
 const keys = new Set<string>();
 
@@ -35,20 +36,36 @@ function axis(neg: string, pos: string): number {
 }
 
 /** S-curve exponent: soft, precise around center, full authority at the edges. */
-const EXPO = 1.7;
+const EXPO = 1.5;
 
 /**
- * Dead zone + S-curve response shaping for an analog axis. Below the dead zone
- * the output is exactly zero; beyond it the remaining travel is rescaled to the
- * full 0..1 range and passed through an expo curve so small stick movements are
- * gentle and large ones reach full deflection.
+ * Dead zone + S-curve response shaping for a single analog axis (used for roll).
+ * Below the dead zone the output is exactly zero; beyond it the remaining travel
+ * is rescaled to the full 0..1 range and passed through an expo curve so small
+ * stick movements are gentle and large ones reach full deflection.
  */
 function shapeAxis(raw: number, deadzone: number, invert = false): number {
-  let v = invert ? -raw : raw;
+  const v = invert ? -raw : raw;
   const a = Math.abs(v);
   if (a <= deadzone) return 0;
   const t = (a - deadzone) / (1 - deadzone);
   return Math.sign(v) * Math.pow(t, EXPO);
+}
+
+/**
+ * Normalized RADIAL dead zone + S-curve for a 2D stick (x, y together). Using the
+ * Euclidean magnitude — never per-axis (axial) dead zones — avoids cardinal-axis
+ * snapping where diagonal input collapses onto the nearest axis. Below the dead
+ * zone the output is zero; beyond it the magnitude is rescaled to [0,1], shaped by
+ * the expo curve, and the original direction is preserved.
+ */
+function shapeRadial(x: number, y: number, deadzone: number): { x: number; y: number } {
+  const m = Math.hypot(x, y);
+  if (m < deadzone) return { x: 0, y: 0 };
+  const scaled = (m - deadzone) / (1 - deadzone);
+  const shaped = Math.pow(scaled, EXPO);
+  const k = shaped / m; // rescale factor keeping direction (x/m, y/m)
+  return { x: x * k, y: y * k };
 }
 
 /**
@@ -73,11 +90,17 @@ export function throttleCurve(raw: number): number {
 
 export function readKeyboard(): ShipInput {
   return {
-    thrust: keys.has('shift') ? 1 : keys.has('control') ? -0.3 : (keys.has('w') ? 1 : keys.has('s') ? -0.3 : 0),
+    // Throttle on W (forward) / S (reverse). Shift is the fine-control modifier.
+    thrust: keys.has('w') ? 1 : keys.has('s') ? -0.3 : 0,
     yaw: axis('a', 'd'),
     pitch: axis('arrowup', 'arrowdown'),
     roll: axis('q', 'e'),
   };
+}
+
+/** True while Shift is held — the momentary fine-control modifier. */
+export function fineControlHeld(): boolean {
+  return keys.has('shift');
 }
 
 /** Raw gamepad axes (no shaping); null when no pad is present. */
@@ -118,13 +141,33 @@ export function setTouchThrottle(t: number) {
   touchThrust = t;
 }
 
+/** Fine control softens rotation and caps thrust so close-quarters work is
+ *  precise. Applied as the last shaping step, after the source is chosen. */
+const FINE_ROTATION = 0.4;
+const FINE_THRUST_CAP = 0.25;
+
+function applyFineControl(input: ShipInput): ShipInput {
+  const t = input.thrust;
+  return {
+    thrust: Math.sign(t) * Math.min(Math.abs(t), FINE_THRUST_CAP),
+    throttleRaw: Math.min(input.throttleRaw ?? Math.abs(t), FINE_THRUST_CAP),
+    yaw: input.yaw * FINE_ROTATION,
+    pitch: input.pitch * FINE_ROTATION,
+    roll: input.roll * FINE_ROTATION,
+  };
+}
+
 /**
- * Unified input read with priority gamepad > touch > keyboard. The active source
- * is shaped per the player's control config (dead zone, expo curve, invert) so
- * every downstream consumer sees a clean, normalized {thrust, yaw, pitch, roll}.
+ * Unified input read with priority gamepad > touch > mouse stick / keyboard. The
+ * active source is shaped per the player's control config (dead zone, expo curve,
+ * invert) so every downstream consumer sees a clean, normalized
+ * {thrust, yaw, pitch, roll}. Fine control (Shift) is layered on last.
  */
 export function readInput(): ShipInput {
   const cfg = useStore.getState().controls;
+  // Effective fine control: the persistent settings toggle OR Shift held.
+  const fine = cfg.fineControl || fineControlHeld();
+  const finish = (input: ShipInput): ShipInput => (fine ? applyFineControl(input) : input);
 
   const gp = readGamepadRaw();
   if (
@@ -134,34 +177,49 @@ export function readInput(): ShipInput {
       Math.abs(gp.pitch) > 0.15 ||
       Math.abs(gp.roll) > 0.15)
   ) {
-    // Gamepads sit at the tighter end of the dead-zone range (5–10%).
-    const gdz = Math.min(cfg.deadzone * 0.6, 0.1);
-    return {
+    // Normalized radial dead zone on the (yaw, pitch) pair — no cardinal snapping.
+    const aim = shapeRadial(gp.yaw, gp.pitch, cfg.deadzone);
+    return finish({
       thrust: throttleCurve(gp.thrust),
       throttleRaw: Math.min(Math.abs(gp.thrust), 1),
-      yaw: shapeAxis(gp.yaw, gdz),
-      pitch: shapeAxis(gp.pitch, gdz, cfg.invertPitch),
-      roll: shapeAxis(gp.roll, gdz),
-    };
+      yaw: aim.x,
+      pitch: cfg.invertPitch ? -aim.y : aim.y,
+      roll: shapeAxis(gp.roll, cfg.deadzone),
+    });
   }
 
   if (joystickActive || Math.abs(touchThrust) > 0.01) {
-    return {
+    const aim = shapeRadial(touchYaw, touchPitch, cfg.deadzone);
+    return finish({
       thrust: throttleCurve(touchThrust),
       throttleRaw: Math.min(Math.abs(touchThrust), 1),
-      yaw: shapeAxis(touchYaw, cfg.deadzone),
-      pitch: shapeAxis(touchPitch, cfg.deadzone, cfg.invertPitch),
+      yaw: aim.x,
+      pitch: cfg.invertPitch ? -aim.y : aim.y,
       roll: 0,
-    };
+    });
+  }
+
+  // Mouse virtual joystick: flies the ship while the pointer is locked. Thrust
+  // still comes from the keyboard (W/S). The stick is already normalized [-1,1]
+  // and yaw-weakened, so it skips the dead-zone/expo shaping.
+  const kb = readKeyboard();
+  if (stickActive()) {
+    const s = getStick();
+    return finish({
+      thrust: kb.thrust,
+      throttleRaw: Math.min(Math.abs(kb.thrust), 1),
+      yaw: s.x,
+      pitch: cfg.invertPitch ? -s.y : s.y,
+      roll: kb.roll,
+    });
   }
 
   // Keyboard is digital (±1); only the invert preference applies.
-  const kb = readKeyboard();
-  return {
+  return finish({
     thrust: kb.thrust,
     throttleRaw: Math.min(Math.abs(kb.thrust), 1),
     yaw: kb.yaw,
     pitch: cfg.invertPitch ? -kb.pitch : kb.pitch,
     roll: kb.roll,
-  };
+  });
 }

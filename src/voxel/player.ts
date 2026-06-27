@@ -32,10 +32,30 @@ export const EYE_OFFSET = 0.7;
 const STEP_HEIGHT = 1.05;
 const EPS = 1e-3;
 
-const WALK = 5.5; // voxels/s
-const RUN = 9.0;
-const ACCEL = 60; // approach rate toward target velocity
-const AIR_CONTROL = 0.3;
+// --- Minecraft-style slipperiness movement -------------------------------
+// Velocity lives in voxels/second; physics steps on a fixed 20 ticks/s grid so
+// the multiplicative per-tick friction is frame-rate independent. Each tick:
+//   1. accelerate:  vel += dir * GROUND_ACCEL * (REF_SLIP / S)³        (ground)
+//   2. integrate:   pos += vel * TICK
+//   3. conserve:    vel *= S * SLIP_K   (ground) | AIR_DRAG (air, ignores S)
+// High-slip surfaces (ice) accelerate slowly but glide far; low-slip (rock)
+// grips hard. Vertical motion is pure ballistic (no drag) so jump arcs are
+// perfectly predictable and depend only on gravity.
+const TPS = 20;
+const TICK = 1 / TPS; // fixed timestep (s)
+const MAX_TICKS = 5; // clamp catch-up so a long frame can't spiral
+const SPRINT_MULT = 1.6;
+/** Per-tick velocity gain on a reference (rock) surface; tuned for ~5.5 vox/s. */
+const GROUND_ACCEL = 4.6;
+/** Fixed, small air acceleration (independent of surface slipperiness). */
+const AIR_ACCEL = 0.6;
+/** Minecraft's per-tick friction constant; ground friction = slip * SLIP_K. */
+const SLIP_K = 0.91;
+/** Reference slipperiness (rock) the acceleration curve is normalized to. */
+const REF_SLIP = 0.6;
+/** Fixed horizontal air drag — same on every body for predictable jump arcs. */
+const AIR_DRAG = 0.91;
+
 const G_EARTH = 22; // base gravity magnitude (voxels/s²)
 const JUMP_HEIGHT = 1.25; // apex on Earth gravity (voxels)
 // Fixed take-off speed (NOT scaled by gravity), so lower-gravity bodies jump
@@ -43,12 +63,6 @@ const JUMP_HEIGHT = 1.25; // apex on Earth gravity (voxels)
 const JUMP_SPEED = Math.sqrt(2 * G_EARTH * JUMP_HEIGHT);
 
 const AXIS = ['x', 'y', 'z'] as const;
-
-function approach(cur: number, target: number, maxDelta: number): number {
-  const d = target - cur;
-  if (Math.abs(d) <= maxDelta) return target;
-  return cur + Math.sign(d) * maxDelta;
-}
 
 /** Move `pos` by `disp` on one axis; on collision snap flush to the voxel face
  *  and return true. */
@@ -79,11 +93,14 @@ export class Player {
   onGround = false;
   yaw = 0;
   pitch = 0;
+  /** Leftover real time carried between frames so ticks stay fixed-rate. */
+  private acc = 0;
 
   spawnAt(center: Vector3): void {
     this.pos.copy(center);
     this.vel.set(0, 0, 0);
     this.onGround = false;
+    this.acc = 0;
   }
 
   /** Eye position for the camera. */
@@ -91,10 +108,25 @@ export class Player {
     return this.pos.y + EYE_OFFSET;
   }
 
+  /** Step the player by a real frame delta, draining it in fixed ticks. */
   update(dt: number, input: PlayerInput, phys: SurfacePhysics, isSolid: SolidFn): void {
-    const grounded = this.onGround;
+    this.acc += dt;
+    let steps = 0;
+    while (this.acc >= TICK && steps < MAX_TICKS) {
+      this.tick(input, phys, isSolid);
+      this.acc -= TICK;
+      steps++;
+    }
+    // Drop any backlog beyond the catch-up cap so a long stall can't fast-forward.
+    if (steps >= MAX_TICKS) this.acc = 0;
+  }
 
-    // Desired horizontal velocity from input, in world space via yaw.
+  /** One fixed-timestep tick of the Minecraft slipperiness model. */
+  private tick(input: PlayerInput, phys: SurfacePhysics, isSolid: SolidFn): void {
+    const grounded = this.onGround;
+    const S = phys.slip;
+
+    // Desired move direction in world space via yaw (unit-clamped input).
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     let wx = -sin * input.move.z + cos * input.move.x;
@@ -104,31 +136,40 @@ export class Player {
       wx /= len;
       wz /= len;
     }
-    const speed = (input.run ? RUN : WALK) * phys.speedMul;
-    const targetX = wx * speed;
-    const targetZ = wz * speed;
 
-    const accel = ACCEL * phys.grip * (grounded ? 1 : AIR_CONTROL) * dt;
-    this.vel.x = approach(this.vel.x, targetX, accel);
-    this.vel.z = approach(this.vel.z, targetZ, accel);
+    // Acceleration: on ground it scales by (REF_SLIP / S)³ so grippy surfaces
+    // accelerate fast and icy ones slowly; in air it's a small fixed value that
+    // ignores the surface entirely.
+    const sprint = input.run ? SPRINT_MULT : 1;
+    const accelMag = grounded
+      ? GROUND_ACCEL * Math.pow(REF_SLIP / S, 3) * phys.speedMul * sprint
+      : AIR_ACCEL * phys.speedMul * sprint;
+    this.vel.x += wx * accelMag;
+    this.vel.z += wz * accelMag;
 
-    // Gravity + jump.
+    // Gravity + jump (pure ballistic vertical; no drag on Y).
     const g = G_EARTH * phys.gravity;
-    this.vel.y -= g * dt;
+    this.vel.y -= g * TICK;
     if (input.jump && grounded) this.vel.y = JUMP_SPEED;
 
     // Horizontal move with auto step-up over 1-voxel lips.
-    this.moveHorizontal(0, this.vel.x * dt, isSolid, grounded);
-    this.moveHorizontal(2, this.vel.z * dt, isSolid, grounded);
+    this.moveHorizontal(0, this.vel.x * TICK, isSolid, grounded);
+    this.moveHorizontal(2, this.vel.z * TICK, isSolid, grounded);
 
     // Vertical move; detect ground.
-    const vy = this.vel.y * dt;
+    const vy = this.vel.y * TICK;
     if (vy !== 0 && collide(this.pos, 1, vy, isSolid)) {
       this.onGround = this.vel.y < 0;
       this.vel.y = 0;
     } else {
       this.onGround = false;
     }
+
+    // Conserve momentum for the next tick: ground friction folds in the surface
+    // slipperiness; air drag is fixed so jump arcs are identical everywhere.
+    const friction = this.onGround ? S * SLIP_K : AIR_DRAG;
+    this.vel.x *= friction;
+    this.vel.z *= friction;
   }
 
   private moveHorizontal(axis: 0 | 2, disp: number, isSolid: SolidFn, grounded: boolean): void {

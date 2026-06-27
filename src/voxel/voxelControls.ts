@@ -107,3 +107,32 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
 export function isTouchDevice(): boolean {
   return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
 }
+
+const DEG2RAD = Math.PI / 180;
+
+/**
+ * Minecraft-style cubic look sensitivity. For a raw pixel delta `px` and the
+ * mouse-sensitivity setting (0.3–3.0, mapped to s = sens/3 in 0..1):
+ *   Δdeg = 1.2 × px × (0.6·s + 0.2)³
+ * At the default (sens 1.5 → s 0.5) this is ~0.15°/px. Returns radians. The same
+ * curve is used for mouse and touch look (touch passes its drag delta as `px`).
+ */
+export function cubicLook(px: number, mouseSensitivity: number): number {
+  const s = Math.max(0, Math.min(1, mouseSensitivity / 3));
+  const k = 0.6 * s + 0.2;
+  return 1.2 * px * k * k * k * DEG2RAD;
+}
+
+/**
+ * Normalized RADIAL dead zone + S-curve (exponent 1.5) for a 2D joystick vector
+ * — the same math as the gamepad/ship aim shaping. Never axial, so diagonals
+ * don't snap to the cardinal axes. Mutates nothing; returns the shaped vector.
+ */
+export function radialShape(x: number, y: number, deadzone: number): { x: number; y: number } {
+  const m = Math.hypot(x, y);
+  if (m < deadzone) return { x: 0, y: 0 };
+  const scaled = (m - deadzone) / (1 - deadzone);
+  const shaped = Math.pow(scaled, 1.5);
+  const k = shaped / m;
+  return { x: x * k, y: y * k };
+}

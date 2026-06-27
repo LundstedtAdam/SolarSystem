@@ -8,8 +8,10 @@ import { PLANETS, type TerrainKind } from '../systems/bodies';
 export interface SurfacePhysics {
   /** Surface gravity as a multiple of Earth's (1.0 = Earth). */
   gravity: number;
-  /** Ground traction 0..1: low = slidey (ice), high = firm (rock). */
-  grip: number;
+  /** Minecraft slipperiness 0..1: high = slidey (ice), low = grippy (rock).
+   *  Per-tick velocity is conserved by `slip * 0.91`; acceleration scales by
+   *  `(0.6 / slip)³`, so high-slip surfaces both glide and accelerate slowly. */
+  slip: number;
   /** Walk/run top-speed multiplier (dust < rock < ice). */
   speedMul: number;
 }
@@ -28,14 +30,19 @@ const EARTH_G = 9.81;
 // the streamed area on every jump.
 const MIN_GRAVITY = 0.04;
 
-// Traction + speed by terrain archetype.
-const KIND_FEEL: Record<TerrainKind, { grip: number; speedMul: number }> = {
-  rocky: { grip: 1.0, speedMul: 1.0 },
-  sandy: { grip: 0.9, speedMul: 0.8 }, // deep dust slows you
-  icy: { grip: 0.2, speedMul: 1.05 }, // slippery, slight glide
-  volcanic: { grip: 0.85, speedMul: 0.95 },
-  earth: { grip: 1.0, speedMul: 1.0 },
+// Slipperiness + speed by terrain archetype (Minecraft slipperiness model:
+// higher slip = more glide and slower acceleration).
+const KIND_FEEL: Record<TerrainKind, { slip: number; speedMul: number }> = {
+  rocky: { slip: 0.6, speedMul: 1.0 }, // rock/dirt baseline
+  sandy: { slip: 0.7, speedMul: 0.8 }, // deep dust slows you
+  icy: { slip: 0.98, speedMul: 1.05 }, // very slippery, slight glide
+  volcanic: { slip: 0.55, speedMul: 0.95 }, // firm, rough basalt
+  earth: { slip: 0.6, speedMul: 1.0 },
 };
+
+// Methane-ice bodies (Titan) read as a distinct, slicker-than-sand surface.
+const METHANE_SLIP = 0.85;
+const METHANE_BODIES = new Set(['Titan']);
 
 function findKindAndRadius(name: string): { kind?: TerrainKind; radiusKm?: number } {
   for (const p of PLANETS) {
@@ -60,5 +67,6 @@ export function getSurfacePhysics(planet: string): SurfacePhysics {
         : 0.5;
   gravity = Math.max(gravity, MIN_GRAVITY);
   const feel = KIND_FEEL[kind ?? 'rocky'];
-  return { gravity, grip: feel.grip, speedMul: feel.speedMul };
+  const slip = METHANE_BODIES.has(planet) ? METHANE_SLIP : feel.slip;
+  return { gravity, slip, speedMul: feel.speedMul };
 }

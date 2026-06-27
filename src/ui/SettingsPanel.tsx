@@ -132,15 +132,15 @@ export function SettingsPanel() {
         </div>
 
         <div className="setting-row">
-          <label htmlFor="ctrl-looksens">Look sensitivity (on foot)</label>
+          <label htmlFor="ctrl-mousesens">{t('mouseSensitivity')}</label>
           <input
-            id="ctrl-looksens"
+            id="ctrl-mousesens"
             type="range"
             min="0.3"
             max="3"
             step="0.05"
-            value={controls.lookSensitivity}
-            onChange={(e) => setControls({ lookSensitivity: parseFloat(e.target.value) })}
+            value={controls.mouseSensitivity}
+            onChange={(e) => setControls({ mouseSensitivity: parseFloat(e.target.value) })}
           />
         </div>
 
@@ -149,8 +149,8 @@ export function SettingsPanel() {
           <input
             id="ctrl-deadzone"
             type="range"
-            min="0"
-            max="0.3"
+            min="0.05"
+            max="0.2"
             step="0.01"
             value={controls.deadzone}
             onChange={(e) => setControls({ deadzone: parseFloat(e.target.value) })}
@@ -176,6 +176,17 @@ export function SettingsPanel() {
               onChange={(e) => setControls({ flightAssist: e.target.checked })}
             />{' '}
             {t('flightAssist')}
+          </label>
+        </div>
+
+        <div className="setting-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={controls.fineControl}
+              onChange={(e) => setControls({ fineControl: e.target.checked })}
+            />{' '}
+            {t('fineControl')}
           </label>
         </div>
       </div>

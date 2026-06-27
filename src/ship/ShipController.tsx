@@ -15,6 +15,7 @@ import {
   type AngularVelocity,
 } from './shipPhysics';
 import { readInput, installKeyboardListeners, removeKeyboardListeners } from './shipInput';
+import { decayStick, resetStick } from './virtualStick';
 import { ShipModel } from './ShipModel';
 
 const _pos = new Vector3();
@@ -42,10 +43,15 @@ export function ShipController() {
       angVel.current.pitch = 0;
       angVel.current.yaw = 0;
       angVel.current.roll = 0;
+      resetStick();
       return;
     }
 
     const dt = Math.min(delta, 0.05);
+
+    // Spring the mouse virtual joystick back toward center (frame-rate
+    // independent). Fresh pointer deltas this frame skip the decay internally.
+    decayStick(dt);
 
     const [px, py, pz] = store.shipPosition;
     const [vx, vy, vz] = store.shipVelocity;

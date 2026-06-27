@@ -1,7 +1,9 @@
 import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3, Quaternion, type PerspectiveCamera } from 'three';
+import { Vector3, Quaternion, MathUtils, type PerspectiveCamera } from 'three';
 import { useStore } from '../store';
+import { PLANETS } from '../systems/bodies';
+import { positionAtTime } from '../systems/ephemeris';
 import {
   decayCameraLook,
   getCameraLook,
@@ -9,6 +11,7 @@ import {
   endCameraLook,
   resetCameraLook,
 } from './cameraLook';
+import { addStickInput } from './virtualStick';
 
 // Scaled to the ~1.2-unit ship: close enough that the craft reads clearly while
 // planets (radius 2-28) loom massive behind it and grow as you approach.
@@ -25,6 +28,10 @@ const MAX_SPEED_FOR_FOV = 500;
 const THROTTLE_ZOOM = 0.12;
 /** Peak camera jitter (world units) at 100% throttle. */
 const SHAKE_AMP = 0.14;
+/** Collision sphere radius for the chase-cam sphere-cast (world units). */
+const CAM_RADIUS = 0.4;
+/** Gap kept between the camera sphere and a body surface after a collision. */
+const CAM_MARGIN = 0.3;
 
 const _desired = new Vector3();
 const _lookAt = new Vector3();
@@ -38,6 +45,42 @@ const _qYaw = new Quaternion();
 const _qPitch = new Quaternion();
 const _up = new Vector3(0, 1, 0);
 const _right = new Vector3(1, 0, 0);
+const _camDir = new Vector3();
+const _bodyPos = new Vector3();
+
+/**
+ * Sphere-cast from the ship toward the desired camera position against the
+ * planets. A swept sphere (radius CAM_RADIUS) gives a forgiving, thick test —
+ * unlike a thin raycast it won't let the camera slip a corner into terrain.
+ * Returns the largest safe distance along `dir` (≤ maxDist).
+ */
+function sphereCastDistance(
+  origin: Vector3,
+  dir: Vector3, // unit
+  maxDist: number,
+  simTime: number,
+): number {
+  let best = maxDist;
+  for (const p of PLANETS) {
+    positionAtTime(p.elements, p.distance, simTime, _bodyPos);
+    const r = p.size + CAM_RADIUS;
+    // Ray-sphere: |origin + t*dir - center| = r, smallest positive t.
+    const ox = origin.x - _bodyPos.x;
+    const oy = origin.y - _bodyPos.y;
+    const oz = origin.z - _bodyPos.z;
+    const b = ox * dir.x + oy * dir.y + oz * dir.z;
+    const c = ox * ox + oy * oy + oz * oz - r * r;
+    if (c < 0) {
+      // Origin already inside the inflated sphere — pin the camera to the ship.
+      return 0;
+    }
+    const disc = b * b - c;
+    if (disc <= 0) continue; // misses this body
+    const t = -b - Math.sqrt(disc);
+    if (t >= 0 && t < best) best = Math.max(0, t - CAM_MARGIN);
+  }
+  return best;
+}
 
 export function ShipCamera() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
@@ -57,6 +100,10 @@ export function ShipCamera() {
       typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
     if (isCoarse) return () => resetCameraLook();
 
+    // Right mouse button held = free-look (orbit camera); otherwise the mouse
+    // flies the ship via the virtual joystick.
+    let rightDown = false;
+
     const onClick = () => {
       if (
         useStore.getState().sceneMode.type === 'piloting' &&
@@ -73,18 +120,39 @@ export function ShipCamera() {
       }
     };
     const onMove = (e: MouseEvent) => {
-      if (document.pointerLockElement === canvas) addCameraLook(e.movementX, e.movementY);
+      if (document.pointerLockElement !== canvas) return;
+      if (rightDown) addCameraLook(e.movementX, e.movementY);
+      else addStickInput(e.movementX, e.movementY);
     };
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 2) rightDown = true;
+    };
+    const onUp = (e: MouseEvent) => {
+      if (e.button === 2) {
+        rightDown = false;
+        endCameraLook();
+      }
+    };
+    const onContext = (e: Event) => e.preventDefault();
     const onLockChange = () => {
-      if (document.pointerLockElement !== canvas) endCameraLook();
+      if (document.pointerLockElement !== canvas) {
+        rightDown = false;
+        endCameraLook();
+      }
     };
 
     canvas.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMove);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('mouseup', onUp);
+    canvas.addEventListener('contextmenu', onContext);
     document.addEventListener('pointerlockchange', onLockChange);
     return () => {
       canvas.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('mouseup', onUp);
+      canvas.removeEventListener('contextmenu', onContext);
       document.removeEventListener('pointerlockchange', onLockChange);
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();
       resetCameraLook();
@@ -133,9 +201,24 @@ export function ShipCamera() {
       // Velocity compensation: rigidly translate by the ship's motion so high
       // thrust never lets the ship outrun the camera (no recede), then ease the
       // residual toward the ideal framing to absorb orbit/offset changes.
+      // MathUtils.damp is frame-rate independent (smoothing = 1 - e^(-rate*dt)).
       camBase.current.add(_shipDelta.copy(_shipPos).sub(prevShip.current));
-      camBase.current.lerp(_desired, 1 - Math.exp(-FOLLOW_RATE * delta));
+      camBase.current.x = MathUtils.damp(camBase.current.x, _desired.x, FOLLOW_RATE, delta);
+      camBase.current.y = MathUtils.damp(camBase.current.y, _desired.y, FOLLOW_RATE, delta);
+      camBase.current.z = MathUtils.damp(camBase.current.z, _desired.z, FOLLOW_RATE, delta);
       prevShip.current.copy(_shipPos);
+    }
+
+    // Sphere-cast from the ship to the camera and pull in on any planet hit so
+    // the view never punches through terrain when flying close to a surface.
+    _camDir.copy(camBase.current).sub(_shipPos);
+    const camDist = _camDir.length();
+    if (camDist > 1e-4) {
+      _camDir.multiplyScalar(1 / camDist);
+      const safe = sphereCastDistance(_shipPos, _camDir, camDist, store.simTimeDays);
+      if (safe < camDist) {
+        camBase.current.copy(_shipPos).addScaledVector(_camDir, safe);
+      }
     }
     camera.position.copy(camBase.current);
 

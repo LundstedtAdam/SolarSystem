@@ -18,14 +18,16 @@ export type SceneMode =
 export interface ControlConfig {
   /** Global rotation-rate multiplier (scales max turn speed). */
   sensitivity: number;
-  /** Normalized dead zone for the touch joystick (gamepad uses a fraction of this). */
+  /** Radial dead zone for the gamepad stick (0.05–0.20). */
   deadzone: number;
   /** Flip the pitch axis. */
   invertPitch: boolean;
   /** When on, the ship stabilizes and decelerates as inputs are released. */
   flightAssist: boolean;
-  /** First-person (on-foot) look-speed multiplier for mouse + touch. */
-  lookSensitivity: number;
+  /** Mouse/touch look sensitivity (0.3–3.0); feeds the cubic first-person look curve. */
+  mouseSensitivity: number;
+  /** Fine control: caps thrust at 25% and softens rotation (held via Shift). */
+  fineControl: boolean;
 }
 
 const prefersReducedMotion =
@@ -177,10 +179,11 @@ export const useStore = create<SimState>((set, get) => ({
   shipThrottle: 0,
   controls: {
     sensitivity: 1,
-    deadzone: 0.12,
+    deadzone: 0.1,
     invertPitch: false,
     flightAssist: true,
-    lookSensitivity: 1.5,
+    mouseSensitivity: 1.5,
+    fineControl: false,
   },
 
   setSpeed: (speed) => set({ speed }),

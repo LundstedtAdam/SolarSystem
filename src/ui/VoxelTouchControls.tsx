@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { voxelInput, resetVoxelInput, isTouchDevice } from '../voxel/voxelControls';
+import { voxelInput, resetVoxelInput, isTouchDevice, radialShape } from '../voxel/voxelControls';
 
 // Mobile-first on-foot controls: left joystick to move, right-side drag to look,
 // jump button. Writes the shared voxelInput the PlayerController reads. Hidden
@@ -22,8 +22,11 @@ function Joystick() {
     const cl = Math.min(len, rad);
     const nx = dx / len;
     const ny = dy / len;
-    voxelInput.move.x = nx * (cl / rad);
-    voxelInput.move.z = -ny * (cl / rad);
+    // Normalized radial dead zone + S-curve (1.5), same math as the gamepad.
+    const dz = useStore.getState().controls.deadzone;
+    const shaped = radialShape(nx * (cl / rad), ny * (cl / rad), dz);
+    voxelInput.move.x = shaped.x;
+    voxelInput.move.z = -shaped.y;
     if (knob.current) knob.current.style.transform = `translate(${nx * cl}px, ${ny * cl}px)`;
   };
   const end = (e: React.PointerEvent) => {

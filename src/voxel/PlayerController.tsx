@@ -24,9 +24,9 @@ import {
   consumeLook,
   consumeDig,
   attachDesktopControls,
+  cubicLook,
 } from './voxelControls';
 
-const BASE_LOOK = 0.0032; // per-pixel; multiplied by the user's lookSensitivity
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 
 /** Builds the visible first-person hand + tool, parented to the camera. */
@@ -112,10 +112,15 @@ export function PlayerController({
       ready.current = true;
     }
 
-    const sens = BASE_LOOK * useStore.getState().controls.lookSensitivity;
+    // Minecraft-style cubic look sensitivity (radians per pixel), shared by mouse
+    // and touch drag. Pitch never rolls — only yaw + clamped pitch are applied.
+    const ms = useStore.getState().controls.mouseSensitivity;
     const look = consumeLook();
-    player.yaw -= look.dx * sens;
-    player.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, player.pitch - look.dy * sens));
+    player.yaw -= cubicLook(look.dx, ms);
+    player.pitch = Math.max(
+      -PITCH_LIMIT,
+      Math.min(PITCH_LIMIT, player.pitch - cubicLook(look.dy, ms)),
+    );
 
     if (consumeDig()) api.dig();
 
