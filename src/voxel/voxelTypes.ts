@@ -39,10 +39,14 @@ export const BLOCK = {
   ICE_GLOW: 8, // luminous subsurface ice (emissive)
   LAVA: 9, // molten rock (emissive)
   SULPHUR: 10, // io sulphur deposits
+  // Built materials for Phase 10 points-of-interest (ruined structures).
+  METAL: 11, // hull / structural metal
+  PANEL: 12, // floor / wall panelling
+  GLASS: 13, // dome / window glazing
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 11;
+export const BLOCK_COUNT = 14;
 
 /** Floats per palette entry: r, g, b, emissive. */
 export const PALETTE_STRIDE = 4;

@@ -31,11 +31,16 @@ export interface LandmarkSpec {
   description?: string;
 }
 
+/** Structural archetype of a POI; selects the module pool + materials. */
+export type POIType = 'processor' | 'dome' | 'geothermal' | 'relay';
+
 /** A modular ruined point-of-interest, assembled + damaged from voxel templates
  *  and scannable for its layered story (consumed in Phase 10.2 / 10.4). */
 export interface POISpec {
   id: string;
   name: string;
+  /** Structural archetype (module pool + built materials). */
+  type: POIType;
   /** Placement cell size (voxels); cellHash decides which cells hold one. */
   cell: number;
   density: number;
@@ -129,7 +134,32 @@ const CONTENT: Record<string, ContentProfile> = {
         description: 'A canyon system thousands of kilometres long.',
       },
     ],
-    pois: [],
+    pois: [
+      {
+        id: 'mars_processor',
+        name: 'Atmospheric processor',
+        type: 'processor',
+        cell: 110,
+        density: 0.4,
+        story: {
+          base: 'An atmospheric processor — one of hundreds meant to thicken the Martian air over centuries.',
+          disruption: 'A dust storm choked its intakes; the reactor scrammed and never restarted.',
+          human: 'Tools were left mid-repair. Whoever was here expected to come back.',
+        },
+      },
+      {
+        id: 'mars_dome',
+        name: 'Botanical dome',
+        type: 'dome',
+        cell: 150,
+        density: 0.32,
+        story: {
+          base: 'A pressurised botanical dome, growing the first crops under glass.',
+          disruption: 'The glazing cracked; the pressure bled out and the cold took everything.',
+          human: 'Red dust has drifted over the planting beds. Nothing green remains.',
+        },
+      },
+    ],
     emitters: [{ kind: 'dust_devil', density: 0.12, cell: 40 }],
   },
 
@@ -145,7 +175,20 @@ const CONTENT: Record<string, ContentProfile> = {
         description: 'A vast, restless lava lake.',
       },
     ],
-    pois: [],
+    pois: [
+      {
+        id: 'io_geothermal',
+        name: 'Geothermal tap',
+        type: 'geothermal',
+        cell: 100,
+        density: 0.45,
+        story: {
+          base: 'A geothermal tap drawing power from Io’s endless volcanism.',
+          disruption: 'A resurfacing event buried the vents; the blast doors fused shut in the heat.',
+          human: 'The maintenance logs still blink in warning amber, talking to no one.',
+        },
+      },
+    ],
     emitters: [{ kind: 'fumarole', density: 0.18, cell: 24 }],
   },
 
@@ -169,7 +212,20 @@ const CONTENT: Record<string, ContentProfile> = {
         description: 'A possible ice volcano.',
       },
     ],
-    pois: [],
+    pois: [
+      {
+        id: 'pluto_relay',
+        name: 'Interstellar launch relay',
+        type: 'relay',
+        cell: 130,
+        density: 0.4,
+        story: {
+          base: 'A launch relay — the last waypoint for probes leaving the Solar System.',
+          disruption: 'The advancing nitrogen glacier reached its foundations and never stopped.',
+          human: 'Half the antenna array is already entombed in creeping ice.',
+        },
+      },
+    ],
     emitters: [],
   },
 

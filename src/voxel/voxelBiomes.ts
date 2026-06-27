@@ -5,7 +5,7 @@
 
 import { getBiome } from '../terrain/biomes';
 import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
-import { getContent, type LandmarkSpec } from './contentProfiles';
+import { getContent, type LandmarkSpec, type POISpec } from './contentProfiles';
 
 export type Archetype = 'rock' | 'regolith' | 'earth' | 'ice' | 'lava' | 'dune';
 
@@ -57,6 +57,8 @@ export interface VoxelTerrainParams {
   lavaLevel: number;
   /** Named procedural landmarks carved into the height field (Phase 10.1). */
   landmarks: LandmarkSpec[];
+  /** Modular ruined points-of-interest stamped into chunks (Phase 10.2). */
+  pois: POISpec[];
 }
 
 function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emissive = 0) {
@@ -93,6 +95,11 @@ export function getVoxelPalette(planet: string): Float32Array {
   );
   rgb(pal, BLOCK.LAVA, 1.0, 0.42, 0.08, 1.0);
   rgb(pal, BLOCK.SULPHUR, 0.85, 0.72, 0.16);
+  // Built materials for ruined POIs (Phase 10.2): weathered metal, panelling,
+  // and faintly self-lit glazing so domes/windows read against dim skies.
+  rgb(pal, BLOCK.METAL, 0.5, 0.52, 0.55);
+  rgb(pal, BLOCK.PANEL, 0.34, 0.36, 0.4);
+  rgb(pal, BLOCK.GLASS, 0.55, 0.7, 0.78, 0.12);
   return pal;
 }
 
@@ -118,6 +125,7 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     glowDepth: 0,
     lavaLevel: -1,
     landmarks: getContent(planet).landmarks,
+    pois: getContent(planet).pois,
   };
 
   switch (arche) {

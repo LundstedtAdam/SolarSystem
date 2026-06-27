@@ -82,7 +82,8 @@ export function ChunkManager({
     for (const lm of params.landmarks) {
       if (lm.kind === 'volcano' || lm.kind === 'ridge') up = Math.max(up, lm.amplitude);
     }
-    const maxH = params.baseHeight + params.rollAmp + params.mountainAmp + up;
+    const poiUp = params.pois.length > 0 ? 20 : 0; // POIs stand above the surface
+    const maxH = params.baseHeight + params.rollAmp + params.mountainAmp + up + poiUp;
     return Math.floor(maxH / CHUNK_SIZE) + 1;
   }, [params]);
 

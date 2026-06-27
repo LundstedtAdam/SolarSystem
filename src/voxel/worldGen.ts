@@ -9,6 +9,7 @@ import { fbm2, valueNoise3, valueNoise2, cellHash, seedFromName } from './noise'
 import type { Chunk } from './chunk';
 import { getVoxelTerrain, type VoxelTerrainParams } from './voxelBiomes';
 import type { LandmarkSpec } from './contentProfiles';
+import { generatePOI, POI_MAX_HALF_EXTENT } from './structures';
 
 /** Crater bowl + rim height delta (regolith bodies). */
 function craterDelta(wx: number, wz: number, seed: number, strength: number): number {
@@ -194,9 +195,53 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
     }
   }
 
+  stampPOIs(chunk, params, seed);
+
   chunk.reapplyEdits();
   chunk.refreshEmpty();
   chunk.generated = true;
+}
+
+/** Stamp any modular POIs whose footprint overlaps this chunk. POIs are placed
+ *  deterministically on a per-spec grid; each is generated once (cached) and the
+ *  voxels falling inside this chunk are written over the terrain. Generation-time
+ *  stamping means POIs mesh and collide for free. */
+function stampPOIs(chunk: Chunk, params: VoxelTerrainParams, seed: number): void {
+  if (params.pois.length === 0) return;
+  const { voxels } = chunk;
+  const baseX = chunk.cx * CHUNK_SIZE;
+  const baseY = chunk.cy * CHUNK_SIZE;
+  const baseZ = chunk.cz * CHUNK_SIZE;
+  const E = POI_MAX_HALF_EXTENT;
+
+  for (const spec of params.pois) {
+    const cell = spec.cell;
+    const sSeed = seed + (seedFromName(spec.id) % 100000);
+    const gx0 = Math.floor((baseX - E) / cell);
+    const gx1 = Math.floor((baseX + CHUNK_SIZE + E) / cell);
+    const gz0 = Math.floor((baseZ - E) / cell);
+    const gz1 = Math.floor((baseZ + CHUNK_SIZE + E) / cell);
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
+        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
+        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
+        const pSeed = Math.floor(cellHash(gx, gz, sSeed + 3) * 1e9);
+        const built = generatePOI(spec.type, pSeed, params.archetype);
+        const ox = ax - (built.footprint[0] >> 1);
+        const oz = az - (built.footprint[1] >> 1);
+        const oy = columnHeight(ax, az, params, seed); // floor sits on the surface
+        for (const v of built.voxels) {
+          const lx = ox + v.x - baseX;
+          const ly = oy + v.y - baseY;
+          const lz = oz + v.z - baseZ;
+          if (lx < 0 || lx >= CHUNK_SIZE || ly < 0 || ly >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
+            continue;
+          voxels[chunkIndex(lx, ly, lz)] = packVoxel(v.block);
+        }
+      }
+    }
+  }
 }
 
 /** Solid-land height at a world column (excludes sea/lava fill) — for placing
