@@ -18,7 +18,7 @@ import { voxelSpawnCenter, surfaceHeightAt } from './worldGen';
 import { getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
 import { footstepFor } from './voxelAudio';
-import { voxelInput, consumeLook, attachDesktopControls } from './voxelControls';
+import { voxelInput, voxelTelemetry, consumeLook, attachDesktopControls } from './voxelControls';
 
 const LOOK_SENS = 0.0022;
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
@@ -120,6 +120,10 @@ export function PlayerController({
     euler.set(player.pitch, player.yaw, 0);
     camera.quaternion.setFromEuler(euler);
     camera.position.set(player.pos.x, player.eyeY(), player.pos.z);
+
+    voxelTelemetry.x = player.pos.x;
+    voxelTelemetry.z = player.pos.z;
+    voxelTelemetry.yaw = player.yaw;
 
     // Footsteps: accrue ground distance, fire one per stride with the material
     // of the block underfoot.

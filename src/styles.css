@@ -815,6 +815,15 @@ canvas {
   font-size: 18px;
 }
 
+/* Voxel disembark/board atmospheric wash */
+.voxel-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
 /* Voxel (on-foot) touch controls */
 .voxel-touch {
   position: fixed;
