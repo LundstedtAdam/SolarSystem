@@ -8,7 +8,7 @@ import { CHUNK_SIZE, chunkIndex, packVoxel, BLOCK } from './voxelTypes';
 import { fbm2, valueNoise3, valueNoise2, cellHash, seedFromName } from './noise';
 import type { Chunk } from './chunk';
 import { getVoxelTerrain, type VoxelTerrainParams } from './voxelBiomes';
-import type { LandmarkSpec } from './contentProfiles';
+import type { LandmarkSpec, POISpec } from './contentProfiles';
 import { generatePOI, POI_MAX_HALF_EXTENT } from './structures';
 
 /** Crater bowl + rim height delta (regolith bodies). */
@@ -264,6 +264,45 @@ export function surfaceHeightAt(
 ): number {
   // Spawn above any sea/lava surface too, so the player never starts submerged.
   return Math.max(columnHeight(wx, wz, params, seed), params.waterLevel, params.lavaLevel);
+}
+
+export interface NearbyPOI {
+  spec: POISpec;
+  ax: number;
+  az: number;
+  dist: number;
+}
+
+/** Nearest POI anchor to (px, pz) within maxDist, or null. Reverses the same
+ *  deterministic placement the stamper uses, so the discovery scan and the
+ *  rendered ruin always agree. No spatial index needed — the cell grid is the
+ *  index. */
+export function findNearbyPOI(
+  params: VoxelTerrainParams,
+  seed: number,
+  px: number,
+  pz: number,
+  maxDist: number,
+): NearbyPOI | null {
+  let best: NearbyPOI | null = null;
+  for (const spec of params.pois) {
+    const cell = spec.cell;
+    const sSeed = seed + (seedFromName(spec.id) % 100000);
+    const gx0 = Math.floor((px - maxDist) / cell);
+    const gx1 = Math.floor((px + maxDist) / cell);
+    const gz0 = Math.floor((pz - maxDist) / cell);
+    const gz1 = Math.floor((pz + maxDist) / cell);
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
+        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
+        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
+        const dist = Math.hypot(px - ax, pz - az);
+        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
+      }
+    }
+  }
+  return best;
 }
 
 /** Eye-height spawn position over the terrain at the world origin column. */

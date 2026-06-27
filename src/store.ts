@@ -30,6 +30,61 @@ export interface ControlConfig {
   fineControl: boolean;
 }
 
+/** Layered narrative-stratigraphy text for a discovered point of interest. */
+export interface DiscoveryStory {
+  base: string;
+  disruption: string;
+  human: string;
+}
+
+/** A recorded discovery in the player's knowledge journal. */
+export interface JournalEntry {
+  key: string;
+  planet: string;
+  name: string;
+  story?: DiscoveryStory;
+  clue?: string;
+  ts: number;
+}
+
+/** Persisted knowledge progression (Phase 10.4). Knowledge is the reward, so it
+ *  survives reloads — but world voxel edits are intentionally not persisted. */
+interface DiscoveryState {
+  discovered: Record<string, true>;
+  journal: JournalEntry[];
+  mysteryClues: string[];
+}
+
+const DISCOVERY_KEY = 'solarsystem.discovery.v1';
+/** Collected mystery clues needed before the cross-body signal resolves. */
+const MYSTERY_THRESHOLD = 3;
+
+function loadDiscovery(): DiscoveryState {
+  const empty: DiscoveryState = { discovered: {}, journal: [], mysteryClues: [] };
+  if (typeof window === 'undefined') return empty;
+  try {
+    const raw = window.localStorage.getItem(DISCOVERY_KEY);
+    if (!raw) return empty;
+    const p = JSON.parse(raw) as Partial<DiscoveryState>;
+    return {
+      discovered: p.discovered ?? {},
+      journal: p.journal ?? [],
+      mysteryClues: p.mysteryClues ?? [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function saveDiscovery(d: DiscoveryState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(DISCOVERY_KEY, JSON.stringify(d));
+  } catch {
+    /* storage full / unavailable — discovery just won't persist this session */
+  }
+}
+
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -117,6 +172,11 @@ interface SimState {
   /** Player-tunable flight control feel. */
   controls: ControlConfig;
 
+  /** Knowledge journal: discovered POIs keyed by `${planet}:${id}`. */
+  discovered: Record<string, true>;
+  journal: JournalEntry[];
+  mysteryClues: string[];
+
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
   select: (body: SelectedBody, object: Object3D) => void;
@@ -150,6 +210,16 @@ interface SimState {
   setShipRotation: (rot: [number, number, number, number]) => void;
   setShipThrottle: (t: number) => void;
   setControls: (partial: Partial<ControlConfig>) => void;
+  /** Record a scanned POI into the journal; returns true if newly discovered.
+   *  Collecting MYSTERY_THRESHOLD clues resolves the cross-body signal. */
+  recordDiscovery: (e: {
+    planet: string;
+    id: string;
+    name: string;
+    story?: DiscoveryStory;
+    clue?: string;
+    mysteryId?: string;
+  }) => boolean;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -185,6 +255,8 @@ export const useStore = create<SimState>((set, get) => ({
     mouseSensitivity: 1.5,
     fineControl: false,
   },
+
+  ...loadDiscovery(),
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -289,4 +361,42 @@ export const useStore = create<SimState>((set, get) => ({
   setShipRotation: (shipRotation) => set({ shipRotation }),
   setShipThrottle: (shipThrottle) => set({ shipThrottle }),
   setControls: (partial) => set((s) => ({ controls: { ...s.controls, ...partial } })),
+  recordDiscovery: (e) => {
+    const s = get();
+    const key = `${e.planet}:${e.id}`;
+    if (s.discovered[key]) return false;
+
+    const discovered: Record<string, true> = { ...s.discovered, [key]: true };
+    let journal: JournalEntry[] = [
+      { key, planet: e.planet, name: e.name, story: e.story, clue: e.clue, ts: Date.now() },
+      ...s.journal,
+    ];
+    let mysteryClues = s.mysteryClues;
+    if (e.clue) {
+      const clueId = e.mysteryId ?? e.id;
+      mysteryClues = mysteryClues.includes(clueId) ? mysteryClues : [...mysteryClues, clueId];
+      // Cross-body epiphany: enough clues converge into one resolution entry.
+      if (mysteryClues.length >= MYSTERY_THRESHOLD && !discovered['mystery:signal']) {
+        discovered['mystery:signal'] = true;
+        journal = [
+          {
+            key: 'mystery:signal',
+            planet: '',
+            name: 'The Signal',
+            story: {
+              base: 'The same buried transmission, found on three separate worlds.',
+              disruption: 'Each site failed the moment it began to receive.',
+              human: 'The bearings converge — they all point at the same empty place.',
+            },
+            ts: Date.now(),
+          },
+          ...journal,
+        ];
+      }
+    }
+
+    saveDiscovery({ discovered, journal, mysteryClues });
+    set({ discovered, journal, mysteryClues });
+    return true;
+  },
 }));

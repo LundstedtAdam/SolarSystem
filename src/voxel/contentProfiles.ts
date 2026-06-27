@@ -46,6 +46,10 @@ export interface POISpec {
   density: number;
   /** Layered narrative-stratigraphy text revealed on scan. */
   story?: { base: string; disruption: string; human: string };
+  /** A cross-body mystery clue revealed on scan. */
+  clue?: string;
+  /** Mystery this clue belongs to; clues sharing an id converge to a resolution. */
+  mysteryId?: string;
 }
 
 /** A world-anchored particle emitter (dust devil, fumarole, geyser, bubbles…)
@@ -146,6 +150,8 @@ const CONTENT: Record<string, ContentProfile> = {
           disruption: 'A dust storm choked its intakes; the reactor scrammed and never restarted.',
           human: 'Tools were left mid-repair. Whoever was here expected to come back.',
         },
+        clue: 'A maintenance terminal still logs a faint signal from below — and a bearing.',
+        mysteryId: 'signal',
       },
       {
         id: 'mars_dome',
@@ -187,6 +193,8 @@ const CONTENT: Record<string, ContentProfile> = {
           disruption: 'A resurfacing event buried the vents; the blast doors fused shut in the heat.',
           human: 'The maintenance logs still blink in warning amber, talking to no one.',
         },
+        clue: 'Buried in the logs: the same signal, the same bearing as somewhere far colder.',
+        mysteryId: 'signal',
       },
     ],
     emitters: [{ kind: 'fumarole', density: 0.18, cell: 24 }],
@@ -224,6 +232,8 @@ const CONTENT: Record<string, ContentProfile> = {
           disruption: 'The advancing nitrogen glacier reached its foundations and never stopped.',
           human: 'Half the antenna array is already entombed in creeping ice.',
         },
+        clue: 'The dish is still locked onto one bearing — the third that matches the others.',
+        mysteryId: 'signal',
       },
     ],
     emitters: [],
