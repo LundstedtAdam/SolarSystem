@@ -5,6 +5,7 @@ import { Loading } from './ui/Loading';
 import { Controls } from './ui/Controls';
 import { Audio } from './ui/Audio';
 import { SurfaceAudio } from './audio/SurfaceAudio';
+import { VoxelAudio } from './audio/VoxelAudio';
 import { BodyPicker } from './ui/BodyPicker';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { Labels } from './ui/Labels';
@@ -34,6 +35,7 @@ export default function App() {
       <Controls />
       <Audio />
       <SurfaceAudio />
+      <VoxelAudio />
     </>
   );
 }

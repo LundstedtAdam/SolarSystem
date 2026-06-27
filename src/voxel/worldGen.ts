@@ -72,7 +72,7 @@ function layerBlock(
       if (depth <= 2) return BLOCK.SAND;
       return BLOCK.ROCK;
     case 'ice': {
-      if (depth <= 1) return BLOCK.SURFACE; // bright ice top
+      if (depth <= 1) return BLOCK.ICE; // bright ice top
       if (
         p.glowDepth > 0 &&
         depth > p.glowDepth &&

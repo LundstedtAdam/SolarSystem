@@ -6,6 +6,7 @@ import { QUALITY } from '../systems/quality';
 import { getBiome } from '../terrain/biomes';
 import { ChunkManager } from './ChunkManager';
 import { VoxelSky } from './VoxelSky';
+import { VoxelWeather } from './VoxelWeather';
 import { PlayerController } from './PlayerController';
 import type { VoxelApi } from './player';
 
@@ -82,6 +83,7 @@ export function VoxelScene() {
     <>
       <ChunkManager planet={planet} apiRef={apiRef} />
       <VoxelSky planet={planet} />
+      <VoxelWeather planet={planet} />
       <ambientLight intensity={ambientIntensity} color={ambientColor} />
       <SunLight planet={planet} />
       <PlayerController planet={planet} apiRef={apiRef} />

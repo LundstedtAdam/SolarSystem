@@ -209,9 +209,21 @@ export function ChunkManager({
     return voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE)) !== BLOCK.AIR;
   };
 
+  /** Block id at a world voxel (0 = air); generate-on-demand like isSolid. */
+  const blockAtApi = (wx: number, wy: number, wz: number): number => {
+    const cy = floorDiv(wy, CHUNK_SIZE);
+    if (cy < 0) return BLOCK.ROCK;
+    if (cy > vertMax) return BLOCK.AIR;
+    const cx = floorDiv(wx, CHUNK_SIZE);
+    const cz = floorDiv(wz, CHUNK_SIZE);
+    const c = ensureGenerated(cx, cy, cz);
+    if (!c) return BLOCK.AIR;
+    return voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE));
+  };
+
   // Publish the surface API for the player controller.
   useEffect(() => {
-    apiRef.current = { isSolid: isSolidApi, edit: editVoxel };
+    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel };
     return () => {
       apiRef.current = null;
     };

@@ -22,6 +22,8 @@ class AudioManager {
   private windGain?: GainNode;
   private windFilter?: BiquadFilterNode;
   private surfaceRumbleGain?: GainNode;
+  private caveGain?: GainNode;
+  private caveFilter?: BiquadFilterNode;
 
   private volume = 0.6;
   private muted = false;
@@ -196,6 +198,87 @@ class AudioManager {
       osc.start();
     });
     this.surfaceRumbleGain = rumbleGain;
+
+    // Cave drone: resonant low-pass noise + sub osc, swelled when underground.
+    const caveFilter = ctx.createBiquadFilter();
+    caveFilter.type = 'lowpass';
+    caveFilter.frequency.value = 280;
+    caveFilter.Q.value = 3.5;
+    const caveGain = ctx.createGain();
+    caveGain.gain.value = 0;
+    caveFilter.connect(caveGain).connect(bus);
+    const caveNoise = ctx.createBufferSource();
+    caveNoise.buffer = windBuf;
+    caveNoise.loop = true;
+    const caveNoiseGain = ctx.createGain();
+    caveNoiseGain.gain.value = 0.6;
+    caveNoise.connect(caveNoiseGain).connect(caveFilter);
+    caveNoise.start();
+    const caveOsc = ctx.createOscillator();
+    caveOsc.type = 'sine';
+    caveOsc.frequency.value = 46;
+    const caveOscGain = ctx.createGain();
+    caveOscGain.gain.value = 0.5;
+    caveOsc.connect(caveOscGain).connect(caveFilter);
+    caveOsc.start();
+    this.caveGain = caveGain;
+    this.caveFilter = caveFilter;
+  }
+
+  /** 0 = open sky, 1 = deep underground/cave (swells a resonant low drone). */
+  setCaveAmount(p: number) {
+    if (this.caveGain && this.caveFilter && this.ctx) {
+      const t = this.ctx.currentTime;
+      this.caveGain.gain.setTargetAtTime(p * 0.18, t, 0.4);
+      this.caveFilter.frequency.setTargetAtTime(240 + p * 220, t, 0.4);
+    }
+  }
+
+  /** One footstep, tuned per surface material. */
+  playFootstep(type: 'dust' | 'sand' | 'rock' | 'ice' | 'grass' | 'water') {
+    const bus = this.surfaceBus;
+    if (!this.ctx || !bus) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const cfg = {
+      dust: { freq: 320, hp: false, dur: 0.12, gain: 0.05, thump: 60 },
+      sand: { freq: 380, hp: false, dur: 0.13, gain: 0.05, thump: 52 },
+      rock: { freq: 900, hp: false, dur: 0.08, gain: 0.07, thump: 80 },
+      ice: { freq: 2600, hp: true, dur: 0.07, gain: 0.06, thump: 0 },
+      grass: { freq: 520, hp: false, dur: 0.11, gain: 0.045, thump: 0 },
+      water: { freq: 700, hp: false, dur: 0.2, gain: 0.07, thump: 38 },
+    }[type];
+
+    const dur = cfg.dur;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = cfg.hp ? 'highpass' : 'lowpass';
+    filter.frequency.value = cfg.freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(cfg.gain, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filter).connect(g).connect(bus);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+
+    if (cfg.thump > 0) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(cfg.thump, t);
+      osc.frequency.exponentialRampToValueAtTime(cfg.thump * 0.6, t + 0.1);
+      const og = ctx.createGain();
+      og.gain.setValueAtTime(0.0001, t);
+      og.gain.exponentialRampToValueAtTime(cfg.gain * 0.8, t + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(og).connect(bus);
+      osc.start(t);
+      osc.stop(t + 0.14);
+    }
   }
 
   /** Fade in the surface soundscape for a given body. */

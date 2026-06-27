@@ -12,6 +12,8 @@ export type SolidFn = (wx: number, wy: number, wz: number) => boolean;
 /** Read-only surface API the ChunkManager hands to the player/controller. */
 export interface VoxelApi {
   isSolid: SolidFn;
+  /** Block id at a world voxel (0 = air); used for footstep material. */
+  blockAt: (wx: number, wy: number, wz: number) => number;
   edit: (wx: number, wy: number, wz: number, blockId: number) => void;
 }
 

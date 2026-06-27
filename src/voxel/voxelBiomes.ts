@@ -67,7 +67,6 @@ function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emi
 /** RGBA palette (rgb + emissive) per block id, coloured from the body's biome. */
 export function getVoxelPalette(planet: string): Float32Array {
   const b = getBiome(planet);
-  const arche = archetypeFor(planet);
   const pal = new Float32Array(BLOCK_COUNT * PALETTE_STRIDE);
 
   // Generic layers from the biome elevation palette.
@@ -79,7 +78,7 @@ export function getVoxelPalette(planet: string): Float32Array {
   rgb(pal, BLOCK.GRASS, b.colorMid[0] * 0.75, b.colorMid[1], b.colorMid[2] * 0.5);
   rgb(pal, BLOCK.SAND, ...(b.colorMid as [number, number, number]));
   rgb(pal, BLOCK.WATER, 0.08, 0.26, 0.5);
-  rgb(pal, BLOCK.ICE, ...(b.colorMid as [number, number, number]));
+  rgb(pal, BLOCK.ICE, ...(b.colorHigh as [number, number, number]));
   // Glowing ice: blue-shifted toward the biome, self-lit.
   rgb(
     pal,
@@ -91,9 +90,6 @@ export function getVoxelPalette(planet: string): Float32Array {
   );
   rgb(pal, BLOCK.LAVA, 1.0, 0.42, 0.08, 1.0);
   rgb(pal, BLOCK.SULPHUR, 0.85, 0.72, 0.16);
-
-  // Let the surface block adopt the archetype's signature where it differs.
-  if (arche === 'ice') rgb(pal, BLOCK.SURFACE, ...(b.colorHigh as [number, number, number]));
   return pal;
 }
 

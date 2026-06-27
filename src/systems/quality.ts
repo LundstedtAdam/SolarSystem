@@ -32,6 +32,8 @@ export interface QualitySettings {
   voxelWorkers: number;
   /** Max chunk (re)mesh requests dispatched per frame, to spread load. */
   voxelMeshBudget: number;
+  /** Atmosphere/weather particle count in the voxel world. */
+  voxelParticles: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -55,6 +57,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelViewRadius: 2,
     voxelWorkers: 1,
     voxelMeshBudget: 2,
+    voxelParticles: 180,
   },
   medium: {
     planetSegments: 40,
@@ -76,6 +79,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelViewRadius: 3,
     voxelWorkers: 2,
     voxelMeshBudget: 3,
+    voxelParticles: 450,
   },
   high: {
     planetSegments: 64,
@@ -97,6 +101,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelViewRadius: 4,
     voxelWorkers: 3,
     voxelMeshBudget: 4,
+    voxelParticles: 900,
   },
   ultra: {
     planetSegments: 96,
@@ -118,6 +123,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelViewRadius: 5,
     voxelWorkers: 4,
     voxelMeshBudget: 6,
+    voxelParticles: 1500,
   },
 };
 

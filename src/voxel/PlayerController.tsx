@@ -11,9 +11,13 @@ import {
 } from 'three';
 import { useStore } from '../store';
 import { getBiome } from '../terrain/biomes';
+import { audio } from '../audio/AudioManager';
 import { Player, type VoxelApi } from './player';
 import { getSurfacePhysics } from './voxelPhysics';
-import { voxelSpawnCenter } from './worldGen';
+import { voxelSpawnCenter, surfaceHeightAt } from './worldGen';
+import { getVoxelTerrain } from './voxelBiomes';
+import { seedFromName } from './noise';
+import { footstepFor } from './voxelAudio';
 import { voxelInput, consumeLook, attachDesktopControls } from './voxelControls';
 
 const LOOK_SENS = 0.0022;
@@ -58,8 +62,12 @@ export function PlayerController({
   const gl = useThree((s) => s.gl);
   const player = useMemo(() => new Player(), []);
   const phys = useMemo(() => getSurfacePhysics(planet), [planet]);
+  const terrain = useMemo(() => getVoxelTerrain(planet), [planet]);
+  const seed = useMemo(() => seedFromName(planet), [planet]);
   const euler = useMemo(() => new Euler(0, 0, 0, 'YXZ'), []);
   const ready = useRef(false);
+  const stride = useRef(0); // accumulated walk distance for footsteps
+  const lastCave = useRef(-1);
 
   // Camera setup + desktop input wiring.
   useEffect(() => {
@@ -112,6 +120,30 @@ export function PlayerController({
     euler.set(player.pitch, player.yaw, 0);
     camera.quaternion.setFromEuler(euler);
     camera.position.set(player.pos.x, player.eyeY(), player.pos.z);
+
+    // Footsteps: accrue ground distance, fire one per stride with the material
+    // of the block underfoot.
+    if (player.onGround) {
+      const sp = Math.hypot(player.vel.x, player.vel.z);
+      stride.current += sp * Math.min(dt, 0.05);
+      if (stride.current > 2.2) {
+        stride.current = 0;
+        const fx = Math.floor(player.pos.x);
+        const fy = Math.floor(player.pos.y - 0.95);
+        const fz = Math.floor(player.pos.z);
+        audio.playFootstep(footstepFor(api.blockAt(fx, fy, fz)));
+      }
+    } else {
+      stride.current = 0;
+    }
+
+    // Underground swell: how far the eye sits below the surface column.
+    const top = surfaceHeightAt(player.pos.x, player.pos.z, terrain, seed);
+    const cave = Math.max(0, Math.min(1, (top - player.eyeY() + 2) / 10));
+    if (Math.abs(cave - lastCave.current) > 0.04) {
+      lastCave.current = cave;
+      audio.setCaveAmount(cave);
+    }
   });
 
   return null;
