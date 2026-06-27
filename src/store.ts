@@ -56,8 +56,21 @@ interface DiscoveryState {
 }
 
 const DISCOVERY_KEY = 'solarsystem.discovery.v1';
-/** Collected mystery clues needed before the cross-body signal resolves. */
+/** Clues (of one mystery) needed before it resolves into an epiphany entry. */
 const MYSTERY_THRESHOLD = 3;
+
+/** Resolutions per mystery id. A mystery with no entry here never resolves —
+ *  it lingers as an open thread (e.g. the lone Titan 'manufacturer' clue). */
+const MYSTERY_RESOLUTIONS: Record<string, { name: string; story: DiscoveryStory }> = {
+  signal: {
+    name: 'The Signal',
+    story: {
+      base: 'The same buried transmission, found on three separate worlds.',
+      disruption: 'Each site failed the moment it began to receive.',
+      human: 'The bearings converge — they all point at the same empty place.',
+    },
+  },
+};
 
 function loadDiscovery(): DiscoveryState {
   const empty: DiscoveryState = { discovered: {}, journal: [], mysteryClues: [] };
@@ -373,25 +386,20 @@ export const useStore = create<SimState>((set, get) => ({
     ];
     let mysteryClues = s.mysteryClues;
     if (e.clue) {
-      const clueId = e.mysteryId ?? e.id;
-      mysteryClues = mysteryClues.includes(clueId) ? mysteryClues : [...mysteryClues, clueId];
-      // Cross-body epiphany: enough clues converge into one resolution entry.
-      if (mysteryClues.length >= MYSTERY_THRESHOLD && !discovered['mystery:signal']) {
-        discovered['mystery:signal'] = true;
-        journal = [
-          {
-            key: 'mystery:signal',
-            planet: '',
-            name: 'The Signal',
-            story: {
-              base: 'The same buried transmission, found on three separate worlds.',
-              disruption: 'Each site failed the moment it began to receive.',
-              human: 'The bearings converge — they all point at the same empty place.',
-            },
-            ts: Date.now(),
-          },
-          ...journal,
-        ];
+      const mid = e.mysteryId ?? e.id;
+      const tag = `${mid}:${e.id}`; // unique per POI, grouped by mystery
+      if (!mysteryClues.includes(tag)) mysteryClues = [...mysteryClues, tag];
+      const res = MYSTERY_RESOLUTIONS[mid];
+      const resKey = `mystery:${mid}`;
+      if (res && !discovered[resKey]) {
+        const count = mysteryClues.filter((c) => c.startsWith(`${mid}:`)).length;
+        if (count >= MYSTERY_THRESHOLD) {
+          discovered[resKey] = true;
+          journal = [
+            { key: resKey, planet: '', name: res.name, story: res.story, ts: Date.now() },
+            ...journal,
+          ];
+        }
       }
     }
 

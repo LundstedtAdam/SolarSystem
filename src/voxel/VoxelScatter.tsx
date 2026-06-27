@@ -98,6 +98,9 @@ function PropLayer({
           const gx = cx0 + dx;
           const gz = cz0 + dz;
           if (cellHash(gx, gz, seed + 71) > density) continue;
+          // LOD: thin out distant props so far rings cost less than near ones.
+          // Stable as the player moves (rebuild is per cell-crossing), so no pop.
+          if (r > R * 0.6 && cellHash(gx, gz, seed + 99) > 0.5) continue;
           const wx = (gx + cellHash(gx, gz, seed + 1)) * cell;
           const wz = (gz + cellHash(gx, gz, seed + 2)) * cell;
           const land = landHeightAt(wx, wz, terrain, seed);

@@ -241,25 +241,311 @@ const CONTENT: Record<string, ContentProfile> = {
 
   Triton: {
     props: [],
-    landmarks: [],
-    pois: [],
+    landmarks: [
+      { name: 'Cantaloupe Terrain', kind: 'basin', position: [0, 480], radius: 440, amplitude: 12, description: 'Dimpled, melon-rind terrain unique to Triton.' },
+    ],
+    pois: [
+      {
+        id: 'triton_listening',
+        name: 'Listening post',
+        type: 'relay',
+        cell: 130,
+        density: 0.4,
+        story: {
+          base: 'A deep-space listening post on the system’s frozen edge.',
+          disruption: 'A new cryovolcanic vent opened directly beneath it.',
+          human: 'Nitrogen frost has sealed the door from the outside.',
+        },
+        clue: 'Its last recording is a bearing — matching one logged far sunward.',
+        mysteryId: 'signal',
+      },
+    ],
     emitters: [{ kind: 'geyser', density: 0.1, cell: 50 }], // nitrogen cryo-plumes
   },
 
   Titan: {
     props: [],
-    landmarks: [],
-    pois: [],
+    landmarks: [
+      { name: 'Kraken Mare', kind: 'lake', position: [0, 520], radius: 480, amplitude: 16, description: 'Titan’s largest methane sea.' },
+    ],
+    pois: [
+      {
+        id: 'titan_aerostat',
+        name: 'Aerostat wreck',
+        type: 'relay',
+        cell: 140,
+        density: 0.38,
+        story: {
+          base: 'A half-submerged aerostat that once drifted Titan’s thick skies.',
+          disruption: 'Its condensers clogged with tholin dust and it came down.',
+          human: 'The hull bears an Earth manufacturer’s mark — from no recorded mission.',
+        },
+        clue: 'Serial plate: built on Earth, for a flight that officially never happened.',
+        mysteryId: 'manufacturer',
+      },
+    ],
     emitters: [{ kind: 'methane_bubble', density: 0.3, cell: 14 }],
   },
 
   // Airless Moon: dust kicked up by the player's footsteps falls in a perfect
   // parabolic arc (vacuum). Player-anchored, so density/cell are unused.
   'Månen': {
+    props: [
+      // Pristine impact ejecta — no wind to round it.
+      { kind: 'rock', color: [0.62, 0.62, 0.64], emissive: [0, 0, 0], emissiveIntensity: 0, density: 0.4, cell: 6, minScale: 0.5, maxScale: 1.6, scaleXYZ: [1, 0.85, 1], yFactor: 0.3 },
+      // Glassy impact spherules — tiny, faintly bright.
+      { kind: 'slab', color: [0.8, 0.8, 0.85], emissive: [0.1, 0.1, 0.12], emissiveIntensity: 0.1, density: 0.08, cell: 10, minScale: 0.3, maxScale: 0.6, scaleXYZ: [1, 0.6, 1], yFactor: 0.4 },
+    ],
+    landmarks: [
+      { name: 'Tycho', kind: 'crater', position: [400, 360], radius: 240, amplitude: 30, description: 'A young crater with brilliant rays.' },
+    ],
+    pois: [
+      {
+        id: 'moon_dome',
+        name: 'Heritage dome',
+        type: 'dome',
+        cell: 120,
+        density: 0.38,
+        story: {
+          base: 'A protective dome raised over an Apollo-era landing site.',
+          disruption: 'A micrometeorite swarm punched the dome through in seconds.',
+          human: 'The flag inside still stands, under a ceiling of holes.',
+        },
+      },
+    ],
+    emitters: [{ kind: 'vacuum_dust', density: 0, cell: 0 }],
+  },
+
+  Merkurius: {
+    props: [
+      // Angular fractured basalt — no wind or water to smooth it.
+      { kind: 'rock', color: [0.45, 0.43, 0.42], emissive: [0, 0, 0], emissiveIntensity: 0, density: 0.34, cell: 6, minScale: 0.5, maxScale: 1.5, scaleXYZ: [1.2, 0.6, 0.9], yFactor: 0.3 },
+      // Bright blue-tinted hollow rims.
+      { kind: 'slab', color: [0.7, 0.74, 0.82], emissive: [0.05, 0.07, 0.12], emissiveIntensity: 0.12, density: 0.07, cell: 11, minScale: 0.6, maxScale: 1.2, scaleXYZ: [1.5, 0.4, 1.5], yFactor: 0.4 },
+    ],
+    landmarks: [
+      { name: 'Caloris Basin', kind: 'basin', position: [0, 560], radius: 520, amplitude: 26, description: 'One of the largest impact basins in the Solar System.' },
+    ],
+    pois: [
+      {
+        id: 'mercury_solar',
+        name: 'Solar-harvesting array',
+        type: 'processor',
+        cell: 120,
+        density: 0.4,
+        story: {
+          base: 'A subterranean array harvesting the ferocious sunlight from below the surface.',
+          disruption: 'Thermal expansion sheared the support trusses in a single hot dawn.',
+          human: 'Everything points one way — toward the exit. They ran.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Venus: {
+    props: [],
+    landmarks: [
+      { name: 'Maxwell Montes', kind: 'ridge', position: [-300, 250], radius: 80, amplitude: 70, length: 900, angleDeg: 35, description: 'Venus’s highest mountains.' },
+    ],
+    pois: [
+      {
+        id: 'venus_habitat',
+        name: 'Atmospheric habitat wreck',
+        type: 'dome',
+        cell: 130,
+        density: 0.36,
+        story: {
+          base: 'A cloud-borne habitat brought down into the tesserae highlands.',
+          disruption: 'Pressure and acid did in hours what the descent began.',
+          human: 'A crushed probe lies beside it — Venera-class, centuries older.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Jorden: {
+    props: [],
+    landmarks: [
+      { name: 'Elevator Anchor', kind: 'ridge', position: [0, 400], radius: 50, amplitude: 60, length: 200, angleDeg: 0, description: 'The ruined ground anchor of a space elevator.' },
+    ],
+    pois: [
+      {
+        id: 'earth_transit',
+        name: 'Flooded transit hub',
+        type: 'processor',
+        cell: 120,
+        density: 0.42,
+        story: {
+          base: 'A municipal transit hub beneath a drowned city.',
+          disruption: 'The seas came up the stairwells and never went back down.',
+          human: 'An automated broadcast still loops, calling trains that will never run.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Phobos: {
+    props: [],
+    landmarks: [
+      { name: 'Stickney', kind: 'crater', position: [0, 300], radius: 220, amplitude: 24, description: 'The great crater that nearly shattered Phobos.' },
+    ],
+    pois: [
+      {
+        id: 'phobos_tether',
+        name: 'Orbital tether station',
+        type: 'relay',
+        cell: 110,
+        density: 0.4,
+        story: {
+          base: 'The ground station of an orbital tether to Mars.',
+          disruption: 'The tether snapped; its cables lie tangled in the grooves.',
+          human: 'Someone spray-marked a countdown on the wall. It reached zero.',
+        },
+        clue: 'A scrawled bearing on the console — the same heading, again.',
+        mysteryId: 'signal',
+      },
+    ],
+    emitters: [],
+  },
+
+  Deimos: {
     props: [],
     landmarks: [],
-    pois: [],
-    emitters: [{ kind: 'vacuum_dust', density: 0, cell: 0 }],
+    pois: [
+      {
+        id: 'deimos_cache',
+        name: 'Buried cache',
+        type: 'processor',
+        cell: 90,
+        density: 0.5,
+        story: {
+          base: 'A smuggler’s cache, hidden under thick regolith.',
+          disruption: 'The dust did the hiding; nobody ever came back to dig it up.',
+          human: 'Pry it open and the manifests make no sense at all.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Europa: {
+    props: [
+      // Jagged ice pinnacles.
+      { kind: 'spire', color: [0.82, 0.9, 1.0], emissive: [0.25, 0.45, 0.9], emissiveIntensity: 0.4, density: 0.42, cell: 6, minScale: 0.8, maxScale: 2.6, scaleXYZ: [0.45, 1.2, 0.45], yFactor: 0.6 },
+      // Pressure-ridge ice blocks.
+      { kind: 'slab', color: [0.7, 0.8, 0.92], emissive: [0.1, 0.2, 0.4], emissiveIntensity: 0.18, density: 0.14, cell: 9, minScale: 0.7, maxScale: 1.6, scaleXYZ: [1.5, 0.6, 1.0], yFactor: 0.45 },
+    ],
+    landmarks: [
+      { name: 'Conamara Chaos', kind: 'basin', position: [0, 460], radius: 420, amplitude: 14, description: 'A jumble of ice rafts over a buried ocean.' },
+    ],
+    pois: [
+      {
+        id: 'europa_drill',
+        name: 'Sub-ice drilling platform',
+        type: 'geothermal',
+        cell: 120,
+        density: 0.4,
+        story: {
+          base: 'A platform drilling toward the ocean beneath the ice.',
+          disruption: 'The ice shifted and swallowed the shaft whole.',
+          human: 'Two submersibles hang frozen in the wall where the crack closed.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Ganymede: {
+    props: [],
+    landmarks: [
+      { name: 'Galileo Regio', kind: 'basin', position: [0, 500], radius: 460, amplitude: 12, description: 'An ancient dark-terrain province.' },
+    ],
+    pois: [
+      {
+        id: 'ganymede_magnetics',
+        name: 'Magnetic field station',
+        type: 'relay',
+        cell: 120,
+        density: 0.4,
+        story: {
+          base: 'A station studying Ganymede’s own magnetic field.',
+          disruption: 'Shifting ice grooves tore the building cleanly in half.',
+          human: 'The two halves drifted apart, instruments still reaching for each other.',
+        },
+        clue: 'A half-corrupted log repeats one bearing before the data ends.',
+        mysteryId: 'signal',
+      },
+    ],
+    emitters: [],
+  },
+
+  Callisto: {
+    props: [],
+    landmarks: [
+      { name: 'Valhalla', kind: 'crater', position: [0, 520], radius: 500, amplitude: 18, description: 'A vast multi-ring impact structure.' },
+    ],
+    pois: [
+      {
+        id: 'callisto_cryo',
+        name: 'Cryogenic facility',
+        type: 'dome',
+        cell: 130,
+        density: 0.36,
+        story: {
+          base: 'A fully operational cryogenic sleep facility.',
+          disruption: 'Nothing went wrong here. No breach, no fire, no fault.',
+          human: 'Every sleep pod is open, powered, and empty. Just absence.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Miranda: {
+    props: [],
+    landmarks: [
+      { name: 'Verona Rupes', kind: 'ridge', position: [-260, 0], radius: 70, amplitude: 80, length: 700, angleDeg: 90, description: 'The tallest known cliff in the Solar System.' },
+    ],
+    pois: [
+      {
+        id: 'miranda_outpost',
+        name: 'Cliffside outpost',
+        type: 'processor',
+        cell: 120,
+        density: 0.38,
+        story: {
+          base: 'A research outpost perched on the lip of Verona Rupes.',
+          disruption: 'The ledge gave way; most of the outpost went over the edge.',
+          human: 'A black box still pings, twenty kilometres straight down.',
+        },
+      },
+    ],
+    emitters: [],
+  },
+
+  Charon: {
+    props: [],
+    landmarks: [
+      { name: 'Serenity Chasma', kind: 'canyon', position: [0, 200], radius: 70, amplitude: 60, length: 1100, angleDeg: 8, description: 'A rift canyon that splits Charon’s face.' },
+    ],
+    pois: [
+      {
+        id: 'charon_facility',
+        name: 'Seismic facility',
+        type: 'processor',
+        cell: 120,
+        density: 0.38,
+        story: {
+          base: 'A facility probing Charon’s interior with seismic charges.',
+          disruption: 'Its own testing triggered the landslide that crushed it.',
+          human: 'The last log entry is an argument about whether to fire again.',
+        },
+      },
+    ],
+    emitters: [],
   },
 };
 
