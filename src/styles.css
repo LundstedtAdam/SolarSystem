@@ -23,10 +23,24 @@ body {
   background: #000;
   color: var(--text-color);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* This is a fullscreen game: stop touch-dragging from selecting text or
+     popping the iOS/Android copy/paste callout & magnifier while playing. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-enable selection where it's actually wanted (settings text/date fields). */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 canvas {
   display: block;
+  -webkit-touch-callout: none;
 }
 
 .loading {
