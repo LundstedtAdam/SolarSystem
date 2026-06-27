@@ -857,6 +857,9 @@ canvas {
 }
 .voxel-touch .touch-joystick {
   z-index: 1;
+  /* Pulled in from the edges for a more natural thumb position. */
+  bottom: 72px;
+  left: 52px;
 }
 .voxel-pad {
   pointer-events: auto;
@@ -865,7 +868,7 @@ canvas {
 .voxel-jump-btn,
 .voxel-dig-btn {
   position: absolute;
-  right: 36px;
+  right: 56px;
   z-index: 1;
   width: 84px;
   height: 84px;
@@ -880,10 +883,10 @@ canvas {
   touch-action: none;
 }
 .voxel-jump-btn {
-  bottom: 44px;
+  bottom: 72px;
 }
 .voxel-dig-btn {
-  bottom: 144px;
+  bottom: 176px;
   border-color: rgba(255, 200, 120, 0.45);
   color: rgba(255, 220, 170, 0.9);
 }
