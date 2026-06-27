@@ -6,7 +6,7 @@
 import { getBiome } from '../terrain/biomes';
 import { archetypeFor } from './voxelBiomes';
 
-export type ScatterKind = 'rock' | 'crystal' | 'spire' | 'fungus';
+export type ScatterKind = 'rock' | 'crystal' | 'spire' | 'fungus' | 'slab';
 
 export interface ScatterProfile {
   kind: ScatterKind;

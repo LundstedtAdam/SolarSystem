@@ -6,6 +6,7 @@ import {
   OctahedronGeometry,
   ConeGeometry,
   SphereGeometry,
+  BoxGeometry,
   MeshStandardMaterial,
   Object3D,
   Color,
@@ -13,7 +14,8 @@ import {
 } from 'three';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
-import { getScatter, type ScatterKind } from './scatterProfiles';
+import { getScatter, type ScatterKind, type ScatterProfile } from './scatterProfiles';
+import { getContent } from './contentProfiles';
 import { getVoxelTerrain } from './voxelBiomes';
 import { landHeightAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
@@ -26,6 +28,8 @@ function makeGeometry(kind: ScatterKind): BufferGeometry {
       return new ConeGeometry(0.4, 1, 5);
     case 'fungus':
       return new SphereGeometry(0.5, 6, 5);
+    case 'slab':
+      return new BoxGeometry(1, 1, 1); // flattened via scaleXYZ into layered slabs
     default:
       return new IcosahedronGeometry(0.5, 0);
   }
@@ -33,18 +37,25 @@ function makeGeometry(kind: ScatterKind): BufferGeometry {
 
 const dummy = new Object3D();
 
-// Deterministic instanced props on the terrain surface around the player.
-// Positions are hashed per scatter cell so a prop at a world spot is always the
-// same; the instance set is rebuilt only when the player moves between cells.
-export function VoxelScatter({ planet }: { planet: string }) {
+// Deterministic instanced props on the terrain surface around the player. Each
+// prop kind is its own InstancedMesh (PropLayer): positions are hashed per
+// scatter cell so a prop at a world spot is always the same, and the instance
+// set is rebuilt only when the player crosses a cell boundary. A per-layer seed
+// offset keeps the kinds from stacking on identical cells.
+function PropLayer({
+  profile,
+  terrain,
+  seed,
+  max,
+  viewRadius,
+}: {
+  profile: ScatterProfile;
+  terrain: ReturnType<typeof getVoxelTerrain>;
+  seed: number;
+  max: number;
+  viewRadius: number;
+}) {
   const camera = useThree((s) => s.camera);
-  const quality = QUALITY[useStore((s) => s.quality)];
-  const max = quality.voxelScatter;
-  const viewRadius = quality.voxelViewRadius;
-
-  const profile = useMemo(() => getScatter(planet), [planet]);
-  const terrain = useMemo(() => getVoxelTerrain(planet), [planet]);
-  const seed = useMemo(() => seedFromName(planet), [planet]);
 
   const mesh = useMemo(() => {
     const geo = makeGeometry(profile.kind);
@@ -124,4 +135,37 @@ export function VoxelScatter({ planet }: { planet: string }) {
   });
 
   return <primitive object={mesh} />;
+}
+
+export function VoxelScatter({ planet }: { planet: string }) {
+  const quality = QUALITY[useStore((s) => s.quality)];
+  const viewRadius = quality.voxelViewRadius;
+
+  const terrain = useMemo(() => getVoxelTerrain(planet), [planet]);
+  const seed = useMemo(() => seedFromName(planet), [planet]);
+
+  // Authored per-body props (Phase 10) take priority; otherwise fall back to the
+  // archetype scatter so every body keeps its existing single prop.
+  const profiles = useMemo(() => {
+    const authored = getContent(planet).props;
+    return authored.length > 0 ? authored : [getScatter(planet)];
+  }, [planet]);
+
+  // Split the instance budget across the prop layers.
+  const perLayerMax = Math.max(1, Math.floor(quality.voxelScatter / profiles.length));
+
+  return (
+    <>
+      {profiles.map((profile, i) => (
+        <PropLayer
+          key={i}
+          profile={profile}
+          terrain={terrain}
+          seed={seed + i * 1000}
+          max={perLayerMax}
+          viewRadius={viewRadius}
+        />
+      ))}
+    </>
+  );
 }
