@@ -20,10 +20,14 @@ export interface LandmarkSpec {
   kind: 'volcano' | 'canyon' | 'basin' | 'ridge' | 'crater' | 'lake';
   /** World anchor (voxel coords) relative to the disembark origin. */
   position: [number, number];
-  /** Approximate footprint radius in voxels. */
+  /** Radial footprint radius, or half-width for linear features (voxels). */
   radius: number;
-  /** Peak/trench amplitude in voxels (sign by kind). */
+  /** Peak/trench amplitude in voxels (magnitude; sign is applied by kind). */
   amplitude: number;
+  /** Linear features (canyon/ridge): full length along the axis (voxels). */
+  length?: number;
+  /** Linear features: axis orientation in degrees (0 = +X). */
+  angleDeg?: number;
   description?: string;
 }
 
@@ -105,7 +109,66 @@ const CONTENT: Record<string, ContentProfile> = {
         yFactor: 0.4,
       },
     ],
-    landmarks: [],
+    landmarks: [
+      {
+        name: 'Olympus Mons',
+        kind: 'volcano',
+        position: [620, 620],
+        radius: 380,
+        amplitude: 130, // towering shield volcano with a summit caldera
+        description: "The Solar System's largest volcano.",
+      },
+      {
+        name: 'Valles Marineris',
+        kind: 'canyon',
+        position: [-220, 40],
+        radius: 65, // half-width
+        amplitude: 52, // trench depth
+        length: 1300,
+        angleDeg: 18,
+        description: 'A canyon system thousands of kilometres long.',
+      },
+    ],
+    pois: [],
+    emitters: [],
+  },
+
+  Io: {
+    props: [], // archetype scatter (sulphur crystals) until 10.5
+    landmarks: [
+      {
+        name: 'Loki Patera',
+        kind: 'lake',
+        position: [430, 300],
+        radius: 200,
+        amplitude: 26, // depression depth; the lava level floods it into a lake
+        description: 'A vast, restless lava lake.',
+      },
+    ],
+    pois: [],
+    emitters: [],
+  },
+
+  Pluto: {
+    props: [],
+    landmarks: [
+      {
+        name: 'Sputnik Planitia',
+        kind: 'basin',
+        position: [0, 560],
+        radius: 520,
+        amplitude: 20, // broad, shallow nitrogen-ice plain
+        description: 'A vast plain of frozen nitrogen.',
+      },
+      {
+        name: 'Wright Mons',
+        kind: 'volcano',
+        position: [-430, 220],
+        radius: 220,
+        amplitude: 64, // suspected cryovolcano
+        description: 'A possible ice volcano.',
+      },
+    ],
     pois: [],
     emitters: [],
   },

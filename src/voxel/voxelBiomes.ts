@@ -5,6 +5,7 @@
 
 import { getBiome } from '../terrain/biomes';
 import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
+import { getContent, type LandmarkSpec } from './contentProfiles';
 
 export type Archetype = 'rock' | 'regolith' | 'earth' | 'ice' | 'lava' | 'dune';
 
@@ -54,6 +55,8 @@ export interface VoxelTerrainParams {
   glowDepth: number;
   /** Lava-lake level in voxels (lava), or -1. */
   lavaLevel: number;
+  /** Named procedural landmarks carved into the height field (Phase 10.1). */
+  landmarks: LandmarkSpec[];
 }
 
 function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emissive = 0) {
@@ -114,6 +117,7 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     duneAmp: 0,
     glowDepth: 0,
     lavaLevel: -1,
+    landmarks: getContent(planet).landmarks,
   };
 
   switch (arche) {

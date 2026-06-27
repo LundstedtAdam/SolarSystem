@@ -8,6 +8,7 @@ import { CHUNK_SIZE, chunkIndex, packVoxel, BLOCK } from './voxelTypes';
 import { fbm2, valueNoise3, valueNoise2, cellHash, seedFromName } from './noise';
 import type { Chunk } from './chunk';
 import { getVoxelTerrain, type VoxelTerrainParams } from './voxelBiomes';
+import type { LandmarkSpec } from './contentProfiles';
 
 /** Crater bowl + rim height delta (regolith bodies). */
 function craterDelta(wx: number, wz: number, seed: number, strength: number): number {
@@ -39,6 +40,56 @@ function craterDelta(wx: number, wz: number, seed: number, strength: number): nu
   return strength * (-bowl * bestR * 0.4 + rim * bestR * 0.16);
 }
 
+/** Height delta (voxels) from a single named landmark at world (wx, wz). Each
+ *  landmark is a deterministic analytic shape anchored at its world position —
+ *  the same approach as craterDelta, but one large hand-placed feature. */
+function landmarkDelta(wx: number, wz: number, lm: LandmarkSpec): number {
+  const dx = wx - lm.position[0];
+  const dz = wz - lm.position[1];
+  switch (lm.kind) {
+    case 'volcano': {
+      const t = Math.hypot(dx, dz) / lm.radius;
+      if (t >= 1) return 0;
+      const cone = Math.pow(1 - t, 1.6) * lm.amplitude;
+      // Summit caldera: a dip carved into the peak.
+      const caldera = t < 0.14 ? -(1 - t / 0.14) * lm.amplitude * 0.22 : 0;
+      return cone + caldera;
+    }
+    case 'basin':
+    case 'lake': {
+      const t = Math.hypot(dx, dz) / lm.radius;
+      if (t >= 1) return 0;
+      // Flat floor inside 0.7r, ramping back up to the rim — a shallow bowl.
+      const f = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+      return -lm.amplitude * f;
+    }
+    case 'crater': {
+      const t = Math.hypot(dx, dz) / lm.radius;
+      if (t > 1.3) return 0;
+      const bowl = t < 1 ? 1 - t * t : 0;
+      const rim = Math.exp(-(((t - 1) / 0.2) ** 2));
+      return -bowl * lm.amplitude + rim * lm.amplitude * 0.3;
+    }
+    case 'canyon':
+    case 'ridge': {
+      const a = ((lm.angleDeg ?? 0) * Math.PI) / 180;
+      const ux = Math.cos(a);
+      const uz = Math.sin(a);
+      const along = dx * ux + dz * uz;
+      const half = (lm.length ?? lm.radius * 2) / 2;
+      const perp = Math.abs(-dx * uz + dz * ux);
+      if (Math.abs(along) > half || perp > lm.radius) return 0;
+      const t = perp / lm.radius;
+      const taper = 1 - Math.pow(Math.abs(along) / half, 4); // ease out at the ends
+      return lm.kind === 'canyon'
+        ? -lm.amplitude * (1 - t * t) * taper // trench
+        : lm.amplitude * (1 - t) * taper; // wall
+    }
+    default:
+      return 0;
+  }
+}
+
 /** Surface height (voxels) of the column at world (wx, wz). */
 function columnHeight(wx: number, wz: number, p: VoxelTerrainParams, seed: number): number {
   const roll = (fbm2(wx * p.rollFreq, wz * p.rollFreq, seed, p.octaves) * 2 - 1) * p.rollAmp;
@@ -50,6 +101,7 @@ function columnHeight(wx: number, wz: number, p: VoxelTerrainParams, seed: numbe
     h += p.duneAmp * Math.sin(wx * 0.22 + wz * 0.08 + warp);
   }
   if (p.craters > 0) h += craterDelta(wx, wz, seed, p.craters);
+  for (let i = 0; i < p.landmarks.length; i++) h += landmarkDelta(wx, wz, p.landmarks[i]);
   return Math.floor(h);
 }
 

@@ -75,8 +75,14 @@ export function ChunkManager({
   const palette = useMemo(() => getVoxelPalette(planet), [planet]);
 
   // Vertical chunk span that can contain terrain (everything above is air).
+  // Tall landmarks (e.g. Olympus Mons) raise the ceiling so their peaks aren't
+  // clipped; basins/canyons only lower terrain, so they don't affect it.
   const vertMax = useMemo(() => {
-    const maxH = params.baseHeight + params.rollAmp + params.mountainAmp;
+    let up = 0;
+    for (const lm of params.landmarks) {
+      if (lm.kind === 'volcano' || lm.kind === 'ridge') up = Math.max(up, lm.amplitude);
+    }
+    const maxH = params.baseHeight + params.rollAmp + params.mountainAmp + up;
     return Math.floor(maxH / CHUNK_SIZE) + 1;
   }, [params]);
 
