@@ -15,6 +15,8 @@ export interface VoxelApi {
   /** Block id at a world voxel (0 = air); used for footstep material. */
   blockAt: (wx: number, wy: number, wz: number) => number;
   edit: (wx: number, wy: number, wz: number, blockId: number) => void;
+  /** Break the voxel currently under the crosshair. */
+  dig: () => void;
 }
 
 export interface PlayerInput {

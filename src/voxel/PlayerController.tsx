@@ -18,9 +18,15 @@ import { voxelSpawnCenter, surfaceHeightAt } from './worldGen';
 import { getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
 import { footstepFor } from './voxelAudio';
-import { voxelInput, voxelTelemetry, consumeLook, attachDesktopControls } from './voxelControls';
+import {
+  voxelInput,
+  voxelTelemetry,
+  consumeLook,
+  consumeDig,
+  attachDesktopControls,
+} from './voxelControls';
 
-const LOOK_SENS = 0.0022;
+const BASE_LOOK = 0.0032; // per-pixel; multiplied by the user's lookSensitivity
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 
 /** Builds the visible first-person hand + tool, parented to the camera. */
@@ -106,9 +112,12 @@ export function PlayerController({
       ready.current = true;
     }
 
+    const sens = BASE_LOOK * useStore.getState().controls.lookSensitivity;
     const look = consumeLook();
-    player.yaw -= look.dx * LOOK_SENS;
-    player.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, player.pitch - look.dy * LOOK_SENS));
+    player.yaw -= look.dx * sens;
+    player.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, player.pitch - look.dy * sens));
+
+    if (consumeDig()) api.dig();
 
     player.update(
       Math.min(dt, 0.05),

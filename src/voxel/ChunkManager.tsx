@@ -11,7 +11,10 @@ import {
   Mesh,
   Raycaster,
   Vector2,
-  Vector3,
+  LineSegments,
+  EdgesGeometry,
+  BoxGeometry,
+  LineBasicMaterial,
   type PerspectiveCamera,
 } from 'three';
 import { useStore } from '../store';
@@ -48,11 +51,24 @@ export function ChunkManager({
 }) {
   const quality = useStore((s) => s.quality);
   const q = QUALITY[quality];
-  const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
 
   const group = useMemo(() => new Group(), []);
   const material = useMemo(() => createVoxelMaterial(getBiome(planet)), [planet]);
+
+  // Targeted-voxel highlight (a subtle wireframe box around the aimed block).
+  const highlight = useMemo(() => {
+    const h = new LineSegments(
+      new EdgesGeometry(new BoxGeometry(1.004, 1.004, 1.004)),
+      new LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthTest: true }),
+    );
+    h.visible = false;
+    h.renderOrder = 3;
+    return h;
+  }, []);
+  const aimRay = useMemo(() => new Raycaster(), []);
+  const aimNdc = useMemo(() => new Vector2(0, 0), []);
+  const aimVoxel = useRef<[number, number, number] | null>(null);
 
   const params = useMemo(() => getVoxelTerrain(planet), [planet]);
   const seed = useMemo(() => seedFromName(planet), [planet]);
@@ -221,52 +237,21 @@ export function ChunkManager({
     return voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE));
   };
 
+  /** Break the voxel currently under the crosshair (driven by tap/click). */
+  const digApi = () => {
+    const a = aimVoxel.current;
+    if (a) editVoxel(a[0], a[1], a[2], BLOCK.AIR);
+  };
+
   // Publish the surface API for the player controller.
   useEffect(() => {
-    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel };
+    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel, dig: digApi };
     return () => {
       apiRef.current = null;
     };
     // Rebound when the body (params/seed) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiRef, params, seed, vertMax]);
-
-  // --- click-to-dig (debug interaction; full tap/tool UX lands in 9.3b) ---
-  useEffect(() => {
-    const dom = gl.domElement;
-    const ray = new Raycaster();
-    const ndc = new Vector2();
-    const inside = new Vector3();
-    const onDown = (ev: PointerEvent) => {
-      // Right-button digs; left drag is reserved for the debug look camera.
-      if (ev.button !== 2) return;
-      if (useStore.getState().sceneMode.type !== 'voxel') return;
-      if (document.pointerLockElement === dom) {
-        ndc.set(0, 0); // aim from screen centre in first-person
-      } else {
-        const rect = dom.getBoundingClientRect();
-        ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
-        ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-      }
-      ray.setFromCamera(ndc, camera);
-      const hits = ray.intersectObjects([...meshes.current.values()], false);
-      if (hits.length === 0) return;
-      const h = hits[0];
-      const n = h.face ? h.face.normal : new Vector3(0, 1, 0);
-      // Step just inside the hit face to land in the solid voxel.
-      inside.copy(h.point).addScaledVector(n, -0.5);
-      editVoxel(Math.floor(inside.x), Math.floor(inside.y), Math.floor(inside.z), BLOCK.AIR);
-    };
-    const onContext = (ev: Event) => ev.preventDefault();
-    dom.addEventListener('pointerdown', onDown);
-    dom.addEventListener('contextmenu', onContext);
-    return () => {
-      dom.removeEventListener('pointerdown', onDown);
-      dom.removeEventListener('contextmenu', onContext);
-    };
-    // editVoxel/camera are stable enough for this debug hook within a mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gl, camera]);
 
   // --- cleanup on unmount ---
   useEffect(() => {
@@ -277,8 +262,10 @@ export function ChunkManager({
       meshMap.clear();
       chunkMap.clear();
       material.dispose();
+      highlight.geometry.dispose();
+      (highlight.material as LineBasicMaterial).dispose();
     };
-  }, [material]);
+  }, [material, highlight]);
 
   // --- per-frame streaming ---
   const camChunk = useRef({ x: NaN, z: NaN });
@@ -334,7 +321,31 @@ export function ChunkManager({
     }
     camChunk.current.x = ccx;
     camChunk.current.z = ccz;
+
+    // Aim: raycast from the crosshair to find the targeted voxel (within reach)
+    // for the highlight + dig.
+    aimRay.setFromCamera(aimNdc, camera);
+    const hits = aimRay.intersectObjects([...meshes.current.values()], false);
+    const hit = hits.length > 0 ? hits[0] : null;
+    if (hit && hit.face && hit.distance <= REACH) {
+      const ix = Math.floor(hit.point.x - hit.face.normal.x * 0.5);
+      const iy = Math.floor(hit.point.y - hit.face.normal.y * 0.5);
+      const iz = Math.floor(hit.point.z - hit.face.normal.z * 0.5);
+      aimVoxel.current = [ix, iy, iz];
+      highlight.position.set(ix + 0.5, iy + 0.5, iz + 0.5);
+      highlight.visible = true;
+    } else {
+      aimVoxel.current = null;
+      highlight.visible = false;
+    }
   });
 
-  return <primitive object={group} />;
+  return (
+    <>
+      <primitive object={group} />
+      <primitive object={highlight} />
+    </>
+  );
 }
+
+const REACH = 6; // max dig/highlight distance in voxels

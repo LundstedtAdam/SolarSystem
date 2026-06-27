@@ -14,13 +14,19 @@ export interface SurfacePhysics {
   speedMul: number;
 }
 
-// Real surface gravity, Earth-relative, for the bodies that matter.
-const GRAVITY: Record<string, number> = {
-  Merkurius: 0.38, Venus: 0.9, Jorden: 1.0, Mars: 0.38,
-  'Månen': 0.165, Phobos: 0.0006, Deimos: 0.0003,
-  Io: 0.183, Europa: 0.134, Ganymede: 0.146, Callisto: 0.126,
-  Titan: 0.138, Miranda: 0.008, Triton: 0.079, Pluto: 0.063, Charon: 0.029,
+// Real NASA surface gravity (m/s²) per landable body.
+const GRAVITY_MS2: Record<string, number> = {
+  Merkurius: 3.7, Venus: 8.87, Jorden: 9.81, Mars: 3.71,
+  'Månen': 1.62, Phobos: 0.006, Deimos: 0.003,
+  Io: 1.8, Europa: 1.31, Ganymede: 1.43, Callisto: 1.24,
+  Titan: 1.35, Miranda: 0.079, Triton: 0.78, Pluto: 0.62, Charon: 0.288,
 };
+
+const EARTH_G = 9.81;
+// Floor on the Earth-relative multiplier so the smallest moons (Phobos, Deimos,
+// Miranda, Charon) feel nearly weightless without launching the player out of
+// the streamed area on every jump.
+const MIN_GRAVITY = 0.04;
 
 // Traction + speed by terrain archetype.
 const KIND_FEEL: Record<TerrainKind, { grip: number; speedMul: number }> = {
@@ -43,12 +49,16 @@ function findKindAndRadius(name: string): { kind?: TerrainKind; radiusKm?: numbe
 
 export function getSurfacePhysics(planet: string): SurfacePhysics {
   const { kind, radiusKm } = findKindAndRadius(planet);
-  let gravity = GRAVITY[planet];
-  if (gravity == null) {
-    // Crude proxy: scale by radius vs Earth (assumes similar density).
-    gravity = radiusKm ? Math.min(Math.max(radiusKm / 6371, 0.05), 1.3) : 0.5;
-  }
-  gravity = Math.max(gravity, 0.05);
+  // Real gravity as a multiple of Earth's; G_EARTH in player.ts maps Earth=1.0
+  // to the tuned in-game fall/jump feel.
+  const ms2 = GRAVITY_MS2[planet];
+  let gravity =
+    ms2 != null
+      ? ms2 / EARTH_G
+      : radiusKm
+        ? Math.min(Math.max(radiusKm / 6371, MIN_GRAVITY), 1.3) // proxy fallback
+        : 0.5;
+  gravity = Math.max(gravity, MIN_GRAVITY);
   const feel = KIND_FEEL[kind ?? 'rocky'];
   return { gravity, grip: feel.grip, speedMul: feel.speedMul };
 }

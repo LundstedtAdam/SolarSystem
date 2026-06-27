@@ -132,6 +132,19 @@ export function SettingsPanel() {
         </div>
 
         <div className="setting-row">
+          <label htmlFor="ctrl-looksens">Look sensitivity (on foot)</label>
+          <input
+            id="ctrl-looksens"
+            type="range"
+            min="0.3"
+            max="3"
+            step="0.05"
+            value={controls.lookSensitivity}
+            onChange={(e) => setControls({ lookSensitivity: parseFloat(e.target.value) })}
+          />
+        </div>
+
+        <div className="setting-row">
           <label htmlFor="ctrl-deadzone">{t('deadzone')}</label>
           <input
             id="ctrl-deadzone"

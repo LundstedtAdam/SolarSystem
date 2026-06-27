@@ -24,6 +24,8 @@ export interface ControlConfig {
   invertPitch: boolean;
   /** When on, the ship stabilizes and decelerates as inputs are released. */
   flightAssist: boolean;
+  /** First-person (on-foot) look-speed multiplier for mouse + touch. */
+  lookSensitivity: number;
 }
 
 const prefersReducedMotion =
@@ -173,7 +175,13 @@ export const useStore = create<SimState>((set, get) => ({
   shipVelocity: [0, 0, 0],
   shipRotation: [0, 0, 0, 1],
   shipThrottle: 0,
-  controls: { sensitivity: 1, deadzone: 0.12, invertPitch: false, flightAssist: true },
+  controls: {
+    sensitivity: 1,
+    deadzone: 0.12,
+    invertPitch: false,
+    flightAssist: true,
+    lookSensitivity: 1.5,
+  },
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),

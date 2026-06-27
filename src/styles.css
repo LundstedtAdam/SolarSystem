@@ -815,6 +815,22 @@ canvas {
   font-size: 18px;
 }
 
+/* On-foot aiming crosshair */
+.voxel-crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.6;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) 50% 50% / 2px 18px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) 50% 50% / 18px 2px no-repeat;
+  mix-blend-mode: difference;
+}
+
 /* Voxel disembark/board atmospheric wash */
 .voxel-transition {
   position: fixed;

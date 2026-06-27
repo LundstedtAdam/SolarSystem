@@ -57,21 +57,28 @@ function Joystick() {
 function LookLayer() {
   const pid = useRef<number | null>(null);
   const last = useRef({ x: 0, y: 0 });
+  const start = useRef({ x: 0, y: 0, t: 0, moved: 0 });
   return (
     <div
       className="voxel-look-layer"
       onPointerDown={(e) => {
         pid.current = e.pointerId;
         last.current = { x: e.clientX, y: e.clientY };
+        start.current = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
       }}
       onPointerMove={(e) => {
         if (e.pointerId !== pid.current) return;
         voxelInput.look.dx += e.clientX - last.current.x;
         voxelInput.look.dy += e.clientY - last.current.y;
         last.current = { x: e.clientX, y: e.clientY };
+        start.current.moved += Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y);
       }}
       onPointerUp={(e) => {
-        if (e.pointerId === pid.current) pid.current = null;
+        if (e.pointerId !== pid.current) return;
+        pid.current = null;
+        // A quick, near-stationary touch is a tap → dig at the crosshair.
+        const dist = Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y);
+        if (dist < 10 && performance.now() - start.current.t < 250) voxelInput.dig = true;
       }}
       onPointerCancel={() => {
         pid.current = null;

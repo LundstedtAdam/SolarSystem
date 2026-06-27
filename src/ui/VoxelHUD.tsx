@@ -49,6 +49,7 @@ export function VoxelHUD() {
 
   return (
     <div className="surface-hud">
+      <div className="voxel-crosshair" aria-hidden="true" />
       <div className="surface-hud-top">
         <div className="surface-hud-name">{sceneMode.planet.toUpperCase()} — ON FOOT</div>
         <div className="surface-hud-compass">

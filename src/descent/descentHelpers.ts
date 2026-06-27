@@ -57,16 +57,21 @@ export function findNearestLandable(
 
   for (const p of PLANETS) {
     positionAtTime(p.elements, p.distance, simTimeDays, _pos);
-    const dist = shipPos.distanceTo(_pos);
-    if (!best || dist < best.distance) {
-      best = { name: p.name, distance: dist, size: p.size };
+    // Only rank the planet itself if it's landable — otherwise a gas giant would
+    // always shadow its (landable) moons and you could never descend to them.
+    if (p.bodyType !== 'gas') {
+      const dist = shipPos.distanceTo(_pos);
+      if (!best || dist < best.distance) {
+        best = { name: p.name, distance: dist, size: p.size };
+      }
     }
+    const py = _pos.y;
     for (const m of p.moons) {
       const angle = m.initialAngle + (simTimeDays / m.orbitalPeriodDays) * Math.PI * 2;
       const mx = _pos.x + Math.cos(angle) * m.distance;
       const mz = _pos.z + Math.sin(angle) * m.distance;
       const md = Math.sqrt(
-        (shipPos.x - mx) ** 2 + shipPos.y ** 2 + (shipPos.z - mz) ** 2,
+        (shipPos.x - mx) ** 2 + (shipPos.y - py) ** 2 + (shipPos.z - mz) ** 2,
       );
       if (!best || md < best.distance) {
         best = { name: m.name, distance: md, size: m.size };

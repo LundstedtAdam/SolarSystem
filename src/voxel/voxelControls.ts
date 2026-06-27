@@ -10,6 +10,8 @@ export interface VoxelInputState {
   look: { dx: number; dy: number };
   jump: boolean;
   run: boolean;
+  /** Edge-triggered dig request (tap / click at the crosshair). */
+  dig: boolean;
 }
 
 export const voxelInput: VoxelInputState = {
@@ -17,6 +19,7 @@ export const voxelInput: VoxelInputState = {
   look: { dx: 0, dy: 0 },
   jump: false,
   run: false,
+  dig: false,
 };
 
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
@@ -31,6 +34,13 @@ export function consumeLook(): { dx: number; dy: number } {
   return d;
 }
 
+/** Read and clear the one-shot dig request. */
+export function consumeDig(): boolean {
+  const d = voxelInput.dig;
+  voxelInput.dig = false;
+  return d;
+}
+
 export function resetVoxelInput(): void {
   voxelInput.move.x = 0;
   voxelInput.move.z = 0;
@@ -38,6 +48,7 @@ export function resetVoxelInput(): void {
   voxelInput.look.dy = 0;
   voxelInput.jump = false;
   voxelInput.run = false;
+  voxelInput.dig = false;
 }
 
 /** Desktop: pointer-lock mouse look + WASD/Space/Shift. Returns a disposer. */
@@ -64,20 +75,31 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
       voxelInput.look.dy += e.movementY;
     }
   };
-  const onClick = () => {
-    if (document.pointerLockElement !== dom) dom.requestPointerLock?.();
+  // First click captures the pointer; subsequent left clicks dig at the
+  // crosshair. Right click also digs (no pointer-lock requirement).
+  const onPointerDown = (e: MouseEvent) => {
+    if (e.button === 2) {
+      voxelInput.dig = true;
+      return;
+    }
+    if (e.button !== 0) return;
+    if (document.pointerLockElement === dom) voxelInput.dig = true;
+    else dom.requestPointerLock?.();
   };
+  const onContext = (e: Event) => e.preventDefault();
 
   window.addEventListener('keydown', kd);
   window.addEventListener('keyup', ku);
   window.addEventListener('mousemove', onMouseMove);
-  dom.addEventListener('click', onClick);
+  dom.addEventListener('pointerdown', onPointerDown);
+  dom.addEventListener('contextmenu', onContext);
 
   return () => {
     window.removeEventListener('keydown', kd);
     window.removeEventListener('keyup', ku);
     window.removeEventListener('mousemove', onMouseMove);
-    dom.removeEventListener('click', onClick);
+    dom.removeEventListener('pointerdown', onPointerDown);
+    dom.removeEventListener('contextmenu', onContext);
     if (document.pointerLockElement === dom) document.exitPointerLock();
     resetVoxelInput();
   };
