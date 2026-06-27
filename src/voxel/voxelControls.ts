@@ -75,16 +75,14 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
       voxelInput.look.dy += e.movementY;
     }
   };
-  // First click captures the pointer; subsequent left clicks dig at the
-  // crosshair. Right click also digs (no pointer-lock requirement).
+  // Left click captures the pointer (mouse look); right click digs the voxel
+  // under the crosshair.
   const onPointerDown = (e: MouseEvent) => {
     if (e.button === 2) {
       voxelInput.dig = true;
       return;
     }
-    if (e.button !== 0) return;
-    if (document.pointerLockElement === dom) voxelInput.dig = true;
-    else dom.requestPointerLock?.();
+    if (e.button === 0 && document.pointerLockElement !== dom) dom.requestPointerLock?.();
   };
   const onContext = (e: Event) => e.preventDefault();
 
