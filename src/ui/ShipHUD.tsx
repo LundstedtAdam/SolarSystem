@@ -1,12 +1,8 @@
 import { Vector3 } from 'three';
 import { useStore } from '../store';
 import { useT } from '../i18n';
-import { findNearestLandable } from '../descent/descentHelpers';
+import { findNearestLandable, landRange } from '../descent/descentHelpers';
 import { isLandable, PLANETS } from '../systems/bodies';
-
-function landRange(bodySize: number): number {
-  return bodySize * 3.5 + 15;
-}
 
 /** All bodies a quick-nav autopilot can fly to: every planet plus every moon. */
 function navDestinations(): string[] {
@@ -111,40 +107,36 @@ export function ShipHUD() {
         </div>
       )}
 
-      {/* Bottom-center action cluster — all within thumb reach */}
+      {/* Bottom-center action cluster — dedicated, always-visible buttons within
+          thumb reach. Navigate and Exit are always shown; Land appears when a
+          landable body is in range; Cancel appears while autopilot is flying. */}
       <div className="ship-hud-actions">
-        {autopilotTarget ? (
+        <button className="button ship-hud-action" onClick={() => setNavOpen(!navOpen)}>
+          <span className="actual-text">&nbsp;{t('navigate')}&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;{t('navigate')}&nbsp;</span>
+        </button>
+        {canLand && (
           <button
-            className="button ship-hud-action ship-hud-cancel"
-            onClick={cancelAutopilot}
+            className="button ship-hud-action ship-hud-land"
+            onClick={() => beginDescent(nearest.name)}
+            style={{ color: landable ? undefined : '#ff6666' }}
           >
+            <span className="actual-text">&nbsp;Land&nbsp;</span>
+            <span aria-hidden="true" className="hover-text">&nbsp;Land&nbsp;</span>
+          </button>
+        )}
+        {autopilotTarget && (
+          <button className="button ship-hud-action ship-hud-cancel" onClick={cancelAutopilot}>
             <span className="actual-text">&nbsp;{t('cancel')} ▸ {name(autopilotTarget)}&nbsp;</span>
             <span aria-hidden="true" className="hover-text">
               &nbsp;{t('cancel')} ▸ {name(autopilotTarget)}&nbsp;
             </span>
           </button>
-        ) : (
-          <>
-            <button className="button ship-hud-action" onClick={() => setNavOpen(!navOpen)}>
-              <span className="actual-text">&nbsp;{t('navigate')}&nbsp;</span>
-              <span aria-hidden="true" className="hover-text">&nbsp;{t('navigate')}&nbsp;</span>
-            </button>
-            {canLand && (
-              <button
-                className="button ship-hud-action ship-hud-land"
-                onClick={() => beginDescent(nearest.name)}
-                style={{ color: landable ? undefined : '#ff6666' }}
-              >
-                <span className="actual-text">&nbsp;Land&nbsp;</span>
-                <span aria-hidden="true" className="hover-text">&nbsp;Land&nbsp;</span>
-              </button>
-            )}
-            <button className="button ship-hud-action" onClick={exitShip}>
-              <span className="actual-text">&nbsp;{t('exit')}&nbsp;</span>
-              <span aria-hidden="true" className="hover-text">&nbsp;{t('exit')}&nbsp;</span>
-            </button>
-          </>
         )}
+        <button className="button ship-hud-action" onClick={exitShip}>
+          <span className="actual-text">&nbsp;{t('exit')}&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;{t('exit')}&nbsp;</span>
+        </button>
       </div>
     </>
   );

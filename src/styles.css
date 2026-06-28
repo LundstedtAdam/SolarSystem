@@ -926,47 +926,60 @@ canvas {
   pointer-events: auto;
   touch-action: none;
 }
+/* On-foot action buttons: a 2x2 cluster in the bottom-right thumb zone (Dig /
+   Jump / Scan / Back), clear of the joystick (bottom-left) and the look layer.
+   Every button is >=44px and sits in the bottom band in both orientations. */
 .voxel-jump-btn,
 .voxel-dig-btn,
-.voxel-scan-btn {
+.voxel-scan-btn,
+.voxel-back-btn {
   position: absolute;
-  right: 56px;
   z-index: 1;
-  width: 84px;
-  height: 84px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
   font-family: monospace;
   font-size: 13px;
   letter-spacing: 1px;
   pointer-events: auto;
   touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
+/* bottom row */
 .voxel-jump-btn {
-  bottom: 72px;
+  bottom: 24px;
+  right: 24px;
 }
 .voxel-dig-btn {
-  bottom: 176px;
+  bottom: 24px;
+  right: 116px;
   border-color: rgba(255, 200, 120, 0.45);
   color: rgba(255, 220, 170, 0.9);
 }
-/* Scan sits left of the dig/jump column, still in the bottom thumb cluster.
-   Dimmed and non-interactive until a scannable anomaly is in the crosshair. */
+/* top row */
 .voxel-scan-btn {
-  bottom: 124px;
-  right: 150px;
-  width: 76px;
-  height: 76px;
+  bottom: 116px;
+  right: 24px;
   border-color: rgba(150, 210, 255, 0.45);
   color: rgba(200, 235, 255, 0.9);
-  opacity: 0.3;
+  opacity: 0.3; /* dimmed until a scannable anomaly is in the crosshair */
   transition: opacity 0.2s ease, box-shadow 0.2s ease;
 }
 .voxel-scan-btn.active {
   opacity: 1;
   box-shadow: 0 0 16px rgba(130, 200, 255, 0.55);
+}
+.voxel-back-btn {
+  bottom: 116px;
+  right: 116px;
+  border-color: rgba(160, 255, 180, 0.4);
+  color: rgba(200, 255, 210, 0.9);
 }
 
 /* Touch controls container — kept below the ShipHUD buttons (z-index 10) so the
@@ -1073,6 +1086,40 @@ canvas {
   }
   .surface-hud {
     padding: 16px 12px;
+  }
+  /* Keep the ship action cluster compact so it never reaches the corner pads. */
+  .ship-hud-action {
+    min-width: 80px;
+    font-size: 16px;
+  }
+  /* On-foot: pull the joystick to the corner and shrink the 2x2 action cluster
+     so the top row still sits inside the bottom band on short landscape screens. */
+  .voxel-touch .touch-joystick {
+    bottom: 16px;
+    left: 20px;
+  }
+  .voxel-jump-btn,
+  .voxel-dig-btn,
+  .voxel-scan-btn,
+  .voxel-back-btn {
+    width: 64px;
+    height: 64px;
+  }
+  .voxel-jump-btn {
+    bottom: 12px;
+    right: 16px;
+  }
+  .voxel-dig-btn {
+    bottom: 12px;
+    right: 88px;
+  }
+  .voxel-scan-btn {
+    bottom: 84px;
+    right: 16px;
+  }
+  .voxel-back-btn {
+    bottom: 84px;
+    right: 88px;
   }
 }
 

@@ -13,7 +13,7 @@ import {
 } from './shipPhysics';
 import { readInput, installKeyboardListeners, removeKeyboardListeners } from './shipInput';
 import { decayStick, resetStick } from './virtualStick';
-import { resolveDescentTarget, findNearestLandable } from '../descent/descentHelpers';
+import { resolveDescentTarget, findNearestLandable, landRange } from '../descent/descentHelpers';
 import { ShipModel } from './ShipModel';
 
 const _pos = new Vector3();
@@ -65,7 +65,7 @@ function pollFlightGamepad(store: ReturnType<typeof useStore.getState>) {
   const landDown = !!gp.buttons[0]?.pressed;
   if (landDown && !padFlightPrev.land) {
     const nearest = findNearestLandable(_pos, store.simTimeDays);
-    if (nearest && nearest.distance < nearest.size * 3.5 + 15) store.beginDescent(nearest.name);
+    if (nearest && nearest.distance < landRange(nearest.size)) store.beginDescent(nearest.name);
   }
   padFlightPrev.land = landDown;
 

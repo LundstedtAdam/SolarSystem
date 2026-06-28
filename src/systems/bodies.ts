@@ -362,3 +362,32 @@ export function isLandable(name: string): boolean {
 export function findParentPlanet(moonName: string): PlanetData | undefined {
   return PLANETS.find((p) => p.moons.some((m) => m.name === moonName));
 }
+
+// --- Moon orbit: single source of truth -------------------------------------
+// The renderer (scene/Moon.tsx) and the descent/proximity system
+// (descent/descentHelpers.ts) MUST place a moon at the same world position, or
+// a moon you can see can't be approached or landed on. Both call the helpers
+// below so the visual orbit and the landing math never diverge.
+
+/** Gentle constant orbital-plane tilt shared by all moons (Y component). */
+export const MOON_INCLINATION = Math.sin(0.1);
+
+/** Visual angular rate (rad per sim-day), sign preserved for retrograde moons.
+ *  Deliberately compressed (not 1:1 real-time) so moons visibly orbit. */
+export function moonAngularVis(orbitalPeriodDays: number): number {
+  return Math.sign(orbitalPeriodDays) * (0.15 / Math.sqrt(Math.abs(orbitalPeriodDays)));
+}
+
+/** Orbit angle of a moon at a given sim time (radians). */
+export function moonOrbitAngle(data: MoonData, simTimeDays: number): number {
+  return data.initialAngle + simTimeDays * moonAngularVis(data.orbitalPeriodDays);
+}
+
+/** Moon position relative to its parent planet's anchor at a given sim time.
+ *  Add this to the parent's Keplerian position (positionAtTime) for the world
+ *  position. Returns [x, y, z] in render units. */
+export function moonLocalOffset(data: MoonData, simTimeDays: number): [number, number, number] {
+  const theta = moonOrbitAngle(data, simTimeDays);
+  const r = data.distance;
+  return [r * Math.cos(theta), r * Math.sin(theta) * MOON_INCLINATION, r * Math.sin(theta)];
+}

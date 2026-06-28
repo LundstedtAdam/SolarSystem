@@ -8,6 +8,38 @@ const _target = new Vector3();
 const SURFACE_HEIGHT = 1.5;
 const CAM_DISTANCE = 6;
 
+/** Edge-state for the Phase 8 surface-mode gamepad actions. */
+const surfacePadPrev = { disembark: false, launch: false };
+
+/**
+ * Phase 8 surface-mode gamepad actions (edge-triggered):
+ *   A (0) — Disembark (step onto the voxel surface on foot)
+ *   B (1) — Launch (return to flight)
+ * Mirrors the on-foot pad (A act / B back) so the mapping stays consistent.
+ */
+function pollSurfaceGamepad(store: ReturnType<typeof useStore.getState>) {
+  const pads = navigator.getGamepads?.();
+  if (!pads) return;
+  let gp: Gamepad | null = null;
+  for (const p of pads) {
+    if (p) {
+      gp = p;
+      break;
+    }
+  }
+  if (!gp) {
+    surfacePadPrev.disembark = surfacePadPrev.launch = false;
+    return;
+  }
+  const aDown = !!gp.buttons[0]?.pressed;
+  if (aDown && !surfacePadPrev.disembark) store.disembark();
+  surfacePadPrev.disembark = aDown;
+
+  const bDown = !!gp.buttons[1]?.pressed;
+  if (bDown && !surfacePadPrev.launch) store.beginAscent();
+  surfacePadPrev.launch = bDown;
+}
+
 export function SurfaceCamera() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
   const initialized = useRef(false);
@@ -25,6 +57,8 @@ export function SurfaceCamera() {
       initialized.current = false;
       return;
     }
+
+    pollSurfaceGamepad(store);
 
     const [px, py, pz] = store.shipPosition;
     _target.set(px, py + SURFACE_HEIGHT, pz);

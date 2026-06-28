@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { voxelTelemetry } from '../voxel/voxelControls';
+import { voxelTelemetry, isTouchDevice } from '../voxel/voxelControls';
 
 // On-foot HUD: a compass that shows heading plus a marker pointing back to the
 // ship (the disembark point at the world origin) with distance, and the Board
@@ -42,6 +42,9 @@ export function VoxelHUD() {
 
   const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const cardinal = cardinals[Math.round(hud.heading / 45) % 8];
+  // On touch the Back action lives in the bottom 2x2 thumb cluster
+  // (VoxelTouchControls); on desktop it stays here as a clickable button.
+  const touch = isTouchDevice();
   // Ship marker placed on the ring at its relative bearing (up = ahead).
   const rad = (hud.shipAngle * Math.PI) / 180;
   const mx = 24 + Math.sin(rad) * 17;
@@ -69,12 +72,14 @@ export function VoxelHUD() {
         </div>
       </div>
 
-      <div className="surface-hud-actions">
-        <button className="button surface-hud-action" onClick={boardShip}>
-          <span className="actual-text">&nbsp;Board ship&nbsp;</span>
-          <span aria-hidden="true" className="hover-text">&nbsp;Board ship&nbsp;</span>
-        </button>
-      </div>
+      {!touch && (
+        <div className="surface-hud-actions">
+          <button className="button surface-hud-action" onClick={boardShip}>
+            <span className="actual-text">&nbsp;Board ship&nbsp;</span>
+            <span aria-hidden="true" className="hover-text">&nbsp;Board ship&nbsp;</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

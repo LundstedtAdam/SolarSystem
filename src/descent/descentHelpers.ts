@@ -1,6 +1,12 @@
 import { Vector3 } from 'three';
-import { PLANETS, findParentPlanet, type MoonData } from '../systems/bodies';
+import { PLANETS, findParentPlanet, moonLocalOffset, type MoonData } from '../systems/bodies';
 import { positionAtTime } from '../systems/ephemeris';
+
+/** Range (render units) within which a body can be landed on. Shared by the HUD
+ *  Land button and the keyboard/gamepad land shortcuts so they always agree. */
+export function landRange(bodySize: number): number {
+  return bodySize * 3.5 + 15;
+}
 
 export interface DescentTarget {
   name: string;
@@ -34,9 +40,11 @@ export function resolveDescentTarget(name: string, simTimeDays: number): Descent
   const moon = parent.moons.find((m) => m.name === name) as MoonData;
 
   positionAtTime(parent.elements, parent.distance, simTimeDays, _pos);
-  const angle = moon.initialAngle + (simTimeDays / moon.orbitalPeriodDays) * Math.PI * 2;
-  _pos.x += Math.cos(angle) * moon.distance;
-  _pos.z += Math.sin(angle) * moon.distance;
+  // Same offset the renderer uses, so we descend onto the moon you actually see.
+  const [ox, oy, oz] = moonLocalOffset(moon, simTimeDays);
+  _pos.x += ox;
+  _pos.y += oy;
+  _pos.z += oz;
 
   return {
     name: moon.name,
@@ -65,13 +73,14 @@ export function findNearestLandable(
         best = { name: p.name, distance: dist, size: p.size };
       }
     }
-    const py = _pos.y;
     for (const m of p.moons) {
-      const angle = m.initialAngle + (simTimeDays / m.orbitalPeriodDays) * Math.PI * 2;
-      const mx = _pos.x + Math.cos(angle) * m.distance;
-      const mz = _pos.z + Math.sin(angle) * m.distance;
+      // Same offset the renderer uses, so proximity matches the visible moon.
+      const [ox, oy, oz] = moonLocalOffset(m, simTimeDays);
+      const mx = _pos.x + ox;
+      const my = _pos.y + oy;
+      const mz = _pos.z + oz;
       const md = Math.sqrt(
-        (shipPos.x - mx) ** 2 + (shipPos.y - py) ** 2 + (shipPos.z - mz) ** 2,
+        (shipPos.x - mx) ** 2 + (shipPos.y - my) ** 2 + (shipPos.z - mz) ** 2,
       );
       if (!best || md < best.distance) {
         best = { name: m.name, distance: md, size: m.size };
