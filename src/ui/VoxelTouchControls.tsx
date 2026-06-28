@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { voxelInput, resetVoxelInput, isTouchDevice, radialShape } from '../voxel/voxelControls';
+import { useT } from '../i18n';
+import {
+  voxelInput,
+  voxelScan,
+  resetVoxelInput,
+  isTouchDevice,
+  radialShape,
+} from '../voxel/voxelControls';
 
 // Mobile-first on-foot controls: left joystick to move, right-side drag to look,
 // jump button. Writes the shared voxelInput the PlayerController reads. Hidden
@@ -97,6 +104,29 @@ function DigButton() {
   );
 }
 
+// Single-tap scan of the anomaly in the crosshair. Active (and only tappable)
+// while a scannable POI is in range and roughly ahead — polled from voxelScan.
+function ScanButton() {
+  const { t } = useT();
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setActive(voxelScan.available), 120);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <button
+      className={`voxel-scan-btn${active ? ' active' : ''}`}
+      aria-disabled={!active}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (active) voxelInput.scan = true;
+      }}
+    >
+      {t('scan').toUpperCase()}
+    </button>
+  );
+}
+
 function JumpButton() {
   const up = () => {
     voxelInput.jump = false;
@@ -131,6 +161,7 @@ export function VoxelTouchControls() {
     <div className="voxel-touch">
       <LookLayer />
       <Joystick />
+      <ScanButton />
       <DigButton />
       <JumpButton />
     </div>

@@ -330,6 +330,29 @@ export const PLANETS: PlanetData[] = [
   },
 ];
 
+/**
+ * Global render-layout scale. The ship model is a fixed ~1.2 units, so scaling
+ * every body's render radius AND every render distance by the same factor makes
+ * planets read as genuinely massive and the system as vast *relative to the
+ * craft*, while preserving every internal ratio — moon shells, the asteroid
+ * belt, and the size-proportional descent/ascent transitions all keep working
+ * untouched. The few absolute camera/starfield constants elsewhere multiply by
+ * this same value so the overview, intro, and skybox stay consistent.
+ */
+export const WORLD_SCALE = 2.5;
+
+// Apply the uniform scale once at module load. Physical data (realRadiusKm,
+// orbital elements, periods) is deliberately untouched — only the cinematic
+// render layout grows.
+for (const p of PLANETS) {
+  p.size *= WORLD_SCALE;
+  p.distance *= WORLD_SCALE;
+  for (const m of p.moons) {
+    m.size *= WORLD_SCALE;
+    m.distance *= WORLD_SCALE;
+  }
+}
+
 export function isLandable(name: string): boolean {
   const planet = PLANETS.find((p) => p.name === name);
   if (planet) return planet.bodyType !== 'gas';

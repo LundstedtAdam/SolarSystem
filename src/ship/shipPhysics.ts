@@ -6,8 +6,6 @@ export const MAX_THRUST = 350;
 export const ASSIST_DAMPING = 0.985;
 /** Near-frictionless Newtonian drift when flight assist is OFF. */
 export const DRIFT_DAMPING = 0.9995;
-export const GRAVITY_RANGE = 200;
-export const GRAVITY_STRENGTH = 500;
 
 /** Max angular rate per axis (rad/s), scaled by sensitivity. Capped so the
  *  ship never feels twitchy regardless of how hard the stick is pushed. */
@@ -35,15 +33,9 @@ export interface AngularVelocity {
   roll: number;
 }
 
-export interface GravityBody {
-  position: Vector3;
-  size: number;
-}
-
 const _forward = new Vector3();
 const _axis = new Vector3();
 const _deltaQ = new Quaternion();
-const _grav = new Vector3();
 
 /**
  * Eases the ship's angular velocity toward the rate commanded by the (already
@@ -89,27 +81,6 @@ export function updateRotation(
 export function computeThrust(quat: Quaternion, throttle: number): Vector3 {
   _forward.set(0, 0, -1).applyQuaternion(quat);
   return _forward.multiplyScalar(throttle * MAX_THRUST);
-}
-
-export function computeGravity(
-  shipPos: Vector3,
-  bodies: GravityBody[],
-): Vector3 {
-  _grav.set(0, 0, 0);
-  for (const body of bodies) {
-    const dx = body.position.x - shipPos.x;
-    const dy = body.position.y - shipPos.y;
-    const dz = body.position.z - shipPos.z;
-    const distSq = dx * dx + dy * dy + dz * dz;
-    const dist = Math.sqrt(distSq);
-    if (dist > GRAVITY_RANGE || dist < 1) continue;
-    const mass = body.size * body.size * body.size;
-    const strength = Math.min((GRAVITY_STRENGTH * mass) / distSq, 50);
-    _grav.x += (dx / dist) * strength;
-    _grav.y += (dy / dist) * strength;
-    _grav.z += (dz / dist) * strength;
-  }
-  return _grav;
 }
 
 export function integrate(

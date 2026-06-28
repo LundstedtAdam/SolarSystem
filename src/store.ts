@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Object3D } from 'three';
 import { daysSinceJ2000, periodDays } from './systems/ephemeris';
-import { PLANETS, isLandable, type PlanetData } from './systems/bodies';
+import { PLANETS, isLandable, WORLD_SCALE, type PlanetData } from './systems/bodies';
 import { detectQuality, type Quality } from './systems/quality';
 import type { Lang } from './i18n';
 
@@ -184,6 +184,12 @@ interface SimState {
   shipThrottle: number;
   /** Player-tunable flight control feel. */
   controls: ControlConfig;
+  /** Quick-nav destination the autopilot is flying toward (body name), or null
+   *  when under manual control. Cleared on arrival or any manual input. */
+  autopilotTarget: string | null;
+  /** Whether the quick-nav destination picker is open (shared so the gamepad's
+   *  Nav button can toggle the same sheet the touch button does). */
+  navPickerOpen: boolean;
 
   /** Knowledge journal: discovered POIs keyed by `${planet}:${id}`. */
   discovered: Record<string, true>;
@@ -223,6 +229,11 @@ interface SimState {
   setShipRotation: (rot: [number, number, number, number]) => void;
   setShipThrottle: (t: number) => void;
   setControls: (partial: Partial<ControlConfig>) => void;
+  /** Begin quick-nav autopilot toward a body (no-op unless piloting). */
+  startAutopilot: (target: string) => void;
+  /** Hand control back to the player (arrival, cancel button, or manual input). */
+  cancelAutopilot: () => void;
+  setNavPickerOpen: (open: boolean) => void;
   /** Record a scanned POI into the journal; returns true if newly discovered.
    *  Collecting MYSTERY_THRESHOLD clues resolves the cross-body signal. */
   recordDiscovery: (e: {
@@ -256,10 +267,12 @@ export const useStore = create<SimState>((set, get) => ({
   planetObjects: {},
 
   sceneMode: { type: 'solar' },
-  shipPosition: [0, 50, 500],
+  shipPosition: [0, 50 * WORLD_SCALE, 500 * WORLD_SCALE],
   shipVelocity: [0, 0, 0],
   shipRotation: [0, 0, 0, 1],
   shipThrottle: 0,
+  autopilotTarget: null,
+  navPickerOpen: false,
   controls: {
     sensitivity: 1,
     deadzone: 0.1,
@@ -336,13 +349,15 @@ export const useStore = create<SimState>((set, get) => ({
         // Restore the time-scale the player had before flying.
         speed: s.prevSpeed ?? s.speed,
         prevSpeed: null,
+        autopilotTarget: null,
+        navPickerOpen: false,
       };
     }),
   beginDescent: (target: string) => {
     const s = get();
     if (s.sceneMode.type !== 'piloting') return false;
     if (!isLandable(target)) return false;
-    set({ sceneMode: { type: 'descending', target, phase: 'orbit' } });
+    set({ sceneMode: { type: 'descending', target, phase: 'orbit' }, autopilotTarget: null });
     return true;
   },
   setDescentPhase: (phase) =>
@@ -374,6 +389,10 @@ export const useStore = create<SimState>((set, get) => ({
   setShipRotation: (shipRotation) => set({ shipRotation }),
   setShipThrottle: (shipThrottle) => set({ shipThrottle }),
   setControls: (partial) => set((s) => ({ controls: { ...s.controls, ...partial } })),
+  startAutopilot: (target) =>
+    set((s) => (s.sceneMode.type === 'piloting' ? { autopilotTarget: target, navPickerOpen: false } : {})),
+  cancelAutopilot: () => set((s) => (s.autopilotTarget ? { autopilotTarget: null } : {})),
+  setNavPickerOpen: (navPickerOpen) => set({ navPickerOpen }),
   recordDiscovery: (e) => {
     const s = get();
     const key = `${e.planet}:${e.id}`;

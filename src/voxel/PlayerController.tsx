@@ -24,6 +24,7 @@ import {
   consumeLook,
   consumeDig,
   attachDesktopControls,
+  pollVoxelGamepad,
   cubicLook,
 } from './voxelControls';
 
@@ -112,9 +113,18 @@ export function PlayerController({
       ready.current = true;
     }
 
+    // Gamepad: write the shared input (move/look/jump/dig/scan) and surface the
+    // edge-triggered "back to ship" so it matches the flight pad's deadzone/curve.
+    const cfg = useStore.getState().controls;
+    const { back } = pollVoxelGamepad(Math.min(dt, 0.05), cfg.deadzone);
+    if (back) {
+      useStore.getState().boardShip();
+      return;
+    }
+
     // Minecraft-style cubic look sensitivity (radians per pixel), shared by mouse
     // and touch drag. Pitch never rolls — only yaw + clamped pitch are applied.
-    const ms = useStore.getState().controls.mouseSensitivity;
+    const ms = cfg.mouseSensitivity;
     const look = consumeLook();
     player.yaw -= cubicLook(look.dx, ms);
     player.pitch = Math.max(

@@ -27,7 +27,7 @@ import { AscentCamera } from '../descent/AscentCamera';
 import { SurfaceScene } from '../terrain/SurfaceScene';
 import { VoxelScene } from '../voxel/VoxelScene';
 import { Effects } from '../postfx/Effects';
-import { PLANETS } from '../systems/bodies';
+import { PLANETS, WORLD_SCALE } from '../systems/bodies';
 import { useStore, type SceneMode } from '../store';
 import { QUALITY } from '../systems/quality';
 
@@ -68,7 +68,12 @@ export function SolarSystem() {
     <Canvas
       frameloop={frameloop}
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}
-      camera={{ fov: 75, near: 0.5, far: 50000, position: [0, 300, 800] }}
+      camera={{
+        fov: 75,
+        near: 0.5,
+        far: 50000 * WORLD_SCALE,
+        position: [0, 300 * WORLD_SCALE, 800 * WORLD_SCALE],
+      }}
       gl={createRenderer as never}
       dpr={[1, dprMax]}
     >

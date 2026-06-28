@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
-import { voxelTelemetry } from '../voxel/voxelControls';
+import { voxelTelemetry, voxelScan, consumeScan } from '../voxel/voxelControls';
 import { getVoxelTerrain } from '../voxel/voxelBiomes';
 import { seedFromName } from '../voxel/noise';
 import { findNearbyPOI } from '../voxel/worldGen';
@@ -11,6 +11,9 @@ import { findNearbyPOI } from '../voxel/worldGen';
 // story into the knowledge journal. Knowledge persists across reloads (store).
 const SENSOR_RANGE = 48; // a faint "something is here" hint
 const SCAN_RANGE = 14; // close enough to actually scan
+// Half-angle (deg) of the "in the crosshair" cone — the Scan button only lights
+// up when the anomaly is roughly in front of the player, not merely nearby.
+const CROSSHAIR_CONE = 45;
 
 interface Nearby {
   id: string;
@@ -37,11 +40,18 @@ export function DiscoveryPanel() {
   const readoutTimer = useRef<ReturnType<typeof setTimeout>>();
   const nearbyRef = useRef<Nearby | null>(null);
   nearbyRef.current = nearby;
+  // Stable handle to the latest scan() so the poll loop (which doesn't depend on
+  // scan in its deps) never calls a stale closure.
+  const scanRef = useRef<() => void>(() => {});
 
   // Poll the nearest POI a few times a second (cheap: scans a small cell grid).
+  // Also publishes whether a scan is available (in range + roughly in the
+  // crosshair) for the on-screen Scan button, and consumes one-shot scan
+  // requests coming from that button, the gamepad's left trigger, or the E key.
   useEffect(() => {
     if (sceneMode.type !== 'voxel') {
       setNearby(null);
+      voxelScan.available = false;
       return;
     }
     const params = getVoxelTerrain(planet);
@@ -60,6 +70,7 @@ export function DiscoveryPanel() {
         const tx = dx / len;
         const tz = dz / len;
         const bearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
+        const isDiscovered = !!discovered[`${planet}:${hit.spec.id}`];
         setNearby({
           id: hit.spec.id,
           name: hit.spec.name,
@@ -68,16 +79,21 @@ export function DiscoveryPanel() {
           story: hit.spec.story,
           clue: hit.spec.clue,
           mysteryId: hit.spec.mysteryId,
-          discovered: !!discovered[`${planet}:${hit.spec.id}`],
+          discovered: isDiscovered,
         });
+        voxelScan.available =
+          !isDiscovered && hit.dist <= SCAN_RANGE && Math.abs(bearing) <= CROSSHAIR_CONE;
       } else {
         setNearby(null);
+        voxelScan.available = false;
       }
+      if (consumeScan()) scanRef.current();
     };
-    const iv = setInterval(tick, 220);
+    const iv = setInterval(tick, 120);
     tick();
     return () => {
       running = false;
+      voxelScan.available = false;
       clearInterval(iv);
     };
   }, [sceneMode.type, planet, discovered]);
@@ -99,6 +115,7 @@ export function DiscoveryPanel() {
       readoutTimer.current = setTimeout(() => setReadout(null), 9000);
     }
   }, [planet, recordDiscovery]);
+  scanRef.current = scan;
 
   // Keyboard: E to scan, J to toggle the journal.
   useEffect(() => {
@@ -113,20 +130,15 @@ export function DiscoveryPanel() {
 
   if (sceneMode.type !== 'voxel') return null;
 
-  const canScan = nearby && !nearby.discovered && nearby.dist <= SCAN_RANGE;
   const arrow = nearby ? bearingArrow(nearby.bearing) : '';
 
   return (
     <div style={panelRoot}>
-      {/* Sensor hint — direction + distance only, never a map waypoint. */}
+      {/* Sensor hint — direction + distance only, never a map waypoint. The
+          actual Scan action lives in the bottom thumb-reach cluster. */}
       {nearby && !readout && (
         <div style={sensor}>
           {nearby.discovered ? '◇' : '◆'} {arrow} {t('anomaly')} · {nearby.dist.toFixed(0)}m
-          {canScan && (
-            <button style={scanBtn} onClick={scan}>
-              {t('scan')} (E)
-            </button>
-          )}
         </div>
       )}
 
@@ -193,16 +205,6 @@ const sensor: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
-};
-const scanBtn: React.CSSProperties = {
-  pointerEvents: 'auto',
-  background: 'rgba(120,200,255,0.2)',
-  border: '1px solid rgba(160,210,255,0.5)',
-  color: '#dff',
-  padding: '4px 10px',
-  borderRadius: 6,
-  fontSize: 13,
-  cursor: 'pointer',
 };
 const readoutBox: React.CSSProperties = {
   position: 'absolute',

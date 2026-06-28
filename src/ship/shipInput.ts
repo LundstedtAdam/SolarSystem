@@ -103,6 +103,17 @@ export function fineControlHeld(): boolean {
   return keys.has('shift');
 }
 
+/** True while the gamepad's left bumper (LB/L1, button 4) is held — the pad's
+ *  momentary fine-control modifier, mirroring Shift on the keyboard. */
+export function gamepadFineHeld(): boolean {
+  const gamepads = navigator.getGamepads?.();
+  if (!gamepads) return false;
+  for (const gp of gamepads) {
+    if (gp) return !!gp.buttons[4]?.pressed;
+  }
+  return false;
+}
+
 /** Raw gamepad axes (no shaping); null when no pad is present. */
 function readGamepadRaw(): ShipInput | null {
   const gamepads = navigator.getGamepads?.();
@@ -165,8 +176,8 @@ function applyFineControl(input: ShipInput): ShipInput {
  */
 export function readInput(): ShipInput {
   const cfg = useStore.getState().controls;
-  // Effective fine control: the persistent settings toggle OR Shift held.
-  const fine = cfg.fineControl || fineControlHeld();
+  // Effective fine control: the persistent settings toggle OR Shift OR LB held.
+  const fine = cfg.fineControl || fineControlHeld() || gamepadFineHeld();
   const finish = (input: ShipInput): ShipInput => (fine ? applyFineControl(input) : input);
 
   const gp = readGamepadRaw();

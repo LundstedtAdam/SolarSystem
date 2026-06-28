@@ -9,9 +9,12 @@ import {
   positionWorld,
   cameraPosition,
 } from 'three/tsl';
-import { TEXTURES } from '../systems/bodies';
+import { TEXTURES, WORLD_SCALE } from '../systems/bodies';
 import { QUALITY } from '../systems/quality';
 import { useStore } from '../store';
+
+// Sun render radius, scaled with the rest of the body layout.
+const SUN_RADIUS = 20 * WORLD_SCALE;
 
 /**
  * Sun: an HDR-bright textured sphere (values >1 so the bloom pass makes it
@@ -45,7 +48,7 @@ export function Sun() {
   return (
     <group>
       <mesh name="Sun">
-        <sphereGeometry args={[20, 64, 64]} />
+        <sphereGeometry args={[SUN_RADIUS, 64, 64]} />
         <primitive object={sunMat} attach="material" />
         {/* Single key light; decay 0 keeps compressed-scale outer planets lit.
             Casts shadows (ring on Saturn, planets on moons). */}
@@ -58,13 +61,13 @@ export function Sun() {
           shadow-mapSize-width={q.shadowMapSize}
           shadow-mapSize-height={q.shadowMapSize}
           shadow-camera-near={0.5}
-          shadow-camera-far={3000}
+          shadow-camera-far={3000 * WORLD_SCALE}
           shadow-bias={-0.0003}
           shadow-normalBias={0.45}
         />
       </mesh>
       <mesh scale={1.85}>
-        <sphereGeometry args={[20, 48, 48]} />
+        <sphereGeometry args={[SUN_RADIUS, 48, 48]} />
         <primitive object={coronaMat} attach="material" />
       </mesh>
     </group>

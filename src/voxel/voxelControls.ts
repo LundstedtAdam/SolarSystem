@@ -12,6 +12,8 @@ export interface VoxelInputState {
   run: boolean;
   /** Edge-triggered dig request (tap / click at the crosshair). */
   dig: boolean;
+  /** Edge-triggered scan request (Scan button / E key / left trigger). */
+  scan: boolean;
 }
 
 export const voxelInput: VoxelInputState = {
@@ -20,7 +22,14 @@ export const voxelInput: VoxelInputState = {
   jump: false,
   run: false,
   dig: false,
+  scan: false,
 };
+
+/** Whether a scannable POI is currently in range and roughly in the crosshair.
+ *  Written by the DiscoveryPanel each poll, read by the Scan button so it only
+ *  lights up when a single tap would actually record something. Non-reactive to
+ *  avoid 60fps React churn — the button polls it. */
+export const voxelScan = { available: false };
 
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
  *  the compass never forces a 60fps React re-render). Updated by the
@@ -41,6 +50,13 @@ export function consumeDig(): boolean {
   return d;
 }
 
+/** Read and clear the one-shot scan request. */
+export function consumeScan(): boolean {
+  const s = voxelInput.scan;
+  voxelInput.scan = false;
+  return s;
+}
+
 export function resetVoxelInput(): void {
   voxelInput.move.x = 0;
   voxelInput.move.z = 0;
@@ -49,6 +65,7 @@ export function resetVoxelInput(): void {
   voxelInput.jump = false;
   voxelInput.run = false;
   voxelInput.dig = false;
+  voxelInput.scan = false;
 }
 
 /** Desktop: pointer-lock mouse look + WASD/Space/Shift. Returns a disposer. */
@@ -135,4 +152,71 @@ export function radialShape(x: number, y: number, deadzone: number): { x: number
   const shaped = Math.pow(scaled, 1.5);
   const k = shaped / m;
   return { x: x * k, y: y * k };
+}
+
+// --- Gamepad on the surface (Phase 11) -------------------------------------
+// Right-stick look gain: pixels-equivalent per second at full deflection. The
+// delta is fed through the same cubicLook curve as mouse/touch, so the feel
+// matches. Triggers are treated as buttons with a 0.4 press threshold.
+const PAD_LOOK_GAIN = 1100;
+const TRIGGER_THRESHOLD = 0.4;
+const padPrev = { dig: false, scan: false, back: false };
+
+function padButton(gp: Gamepad, i: number): boolean {
+  return !!gp.buttons[i]?.pressed;
+}
+
+/**
+ * Poll the first connected gamepad and write the shared voxelInput, matching the
+ * flight deadzone/curves. Left stick moves, right stick looks (accumulated as a
+ * pixel-equivalent delta), A jumps, right trigger digs, left trigger scans, B
+ * returns to the ship. Edge-triggered actions fire once per press. Returns
+ * `back` so the caller can board the ship. No-op (and returns false) when no pad
+ * is connected, so keyboard/touch keep working on devices without one.
+ */
+export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean } {
+  const pads = navigator.getGamepads?.();
+  if (!pads) return { back: false };
+  let gp: Gamepad | null = null;
+  for (const p of pads) {
+    if (p) {
+      gp = p;
+      break;
+    }
+  }
+  if (!gp) {
+    padPrev.dig = padPrev.scan = padPrev.back = false;
+    return { back: false };
+  }
+
+  // Move — left stick, radial deadzone + S-curve. Forward is -Y on the stick.
+  const mv = radialShape(gp.axes[0] ?? 0, gp.axes[1] ?? 0, deadzone);
+  voxelInput.move.x = mv.x;
+  voxelInput.move.z = -mv.y;
+
+  // Look — right stick, radial deadzone, accumulated as pixel-equivalent so it
+  // runs through the shared cubicLook curve downstream.
+  const lk = radialShape(gp.axes[2] ?? 0, gp.axes[3] ?? 0, deadzone);
+  voxelInput.look.dx += lk.x * PAD_LOOK_GAIN * dt;
+  voxelInput.look.dy += lk.y * PAD_LOOK_GAIN * dt;
+
+  // A (0) jump held; LB/L1 (4) run.
+  voxelInput.jump = padButton(gp, 0);
+  voxelInput.run = padButton(gp, 4);
+
+  // Right trigger (7) dig, left trigger (6) scan — edge-triggered one-shots.
+  const digDown = (gp.buttons[7]?.value ?? 0) > TRIGGER_THRESHOLD;
+  if (digDown && !padPrev.dig) voxelInput.dig = true;
+  padPrev.dig = digDown;
+
+  const scanDown = (gp.buttons[6]?.value ?? 0) > TRIGGER_THRESHOLD;
+  if (scanDown && !padPrev.scan) voxelInput.scan = true;
+  padPrev.scan = scanDown;
+
+  // B (1) — back to ship, edge-triggered.
+  const backDown = padButton(gp, 1);
+  const back = backDown && !padPrev.back;
+  padPrev.back = backDown;
+
+  return { back };
 }

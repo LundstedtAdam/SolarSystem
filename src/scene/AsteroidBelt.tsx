@@ -14,12 +14,13 @@ import {
 import { vec3, float } from 'three/tsl';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
+import { WORLD_SCALE } from '../systems/bodies';
 
-// Belt sits between Mars (render dist ~620) and Jupiter (~950), centered ~700,
-// kept inside Jupiter's inner moon shell (~762) so nothing crosses orbits.
-const INNER = 645;
-const OUTER = 755;
-const THICKNESS = 16; // full vertical spread; concentrated toward the plane
+// Belt sits between Mars and Jupiter, kept inside Jupiter's inner moon shell so
+// nothing crosses orbits. Scaled by WORLD_SCALE alongside the body layout.
+const INNER = 645 * WORLD_SCALE;
+const OUTER = 755 * WORLD_SCALE;
+const THICKNESS = 16 * WORLD_SCALE; // full vertical spread; concentrated toward the plane
 
 /**
  * Size/detail tiers — a realistic belt is mostly dust with a few large bodies.
