@@ -35,7 +35,7 @@ import {
   voxelId,
   BLOCK,
   blockHardness,
-  ORE_TO_RESOURCE,
+  blockToResource,
   type MeshRequest,
   type MeshResult,
 } from './voxelTypes';
@@ -401,7 +401,7 @@ export function ChunkManager({
     }
 
     if (frac >= 1) {
-      const res = ORE_TO_RESOURCE[block];
+      const res = blockToResource(block);
       if (res) {
         useStore
           .getState()

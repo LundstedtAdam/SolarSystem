@@ -109,6 +109,28 @@ export function isOre(id: BlockId): boolean {
   return ORE_TO_RESOURCE[id] !== undefined;
 }
 
+/** Host (non-ore) terrain that still yields a universal fundamental when mined,
+ *  so every dig is rewarding (the nano loop), not just the rare ore vein. Soil
+ *  and salvageable ruin panels give carbon; rock/sand/glass give silicon; ruin
+ *  hull metal gives iron. Liquids (water/lava), ice, and sulphur deliberately
+ *  yield nothing here — they're either un-pocketable or base-harvested gases. */
+const HOST_RESOURCE: Partial<Record<number, ResourceType>> = {
+  [BLOCK.SURFACE]: 'carbon',
+  [BLOCK.SUBSOIL]: 'carbon',
+  [BLOCK.GRASS]: 'carbon',
+  [BLOCK.PANEL]: 'carbon',
+  [BLOCK.SAND]: 'silicon',
+  [BLOCK.ROCK]: 'silicon',
+  [BLOCK.GLASS]: 'silicon',
+  [BLOCK.METAL]: 'iron',
+};
+
+/** The resource a mined block yields, or undefined if it yields nothing.
+ *  Ore veins give their specific resource; common terrain gives a fundamental. */
+export function blockToResource(id: BlockId): ResourceType | undefined {
+  return ORE_TO_RESOURCE[id] ?? HOST_RESOURCE[id];
+}
+
 /** Seconds of continuous mining to break a block. Soft topsoils break fast;
  *  rock and ore are slower; artifacts are the slowest. Unlisted solids use
  *  DEFAULT_HARDNESS. Returned by blockHardness(). */
