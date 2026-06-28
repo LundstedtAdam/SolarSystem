@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { useStore } from '../store';
 import { useT } from '../i18n';
 import { dateFromDays } from '../systems/ephemeris';
+import { PLANETS } from '../systems/bodies';
 
-/** Top control bar: simulated date, time-scale, and primary actions. */
+/** Top bar (date + hamburger) and the single navigation drawer. The drawer holds
+ *  two sections — Actions and Bodies — so the body list is no longer pinned to
+ *  the screen edge. Used on every viewport; the persistent picker is gone. */
 export function HUD() {
   const speed = useStore((s) => s.speed);
   const setSpeed = useStore((s) => s.setSpeed);
@@ -17,7 +20,9 @@ export function HUD() {
   const enterShip = useStore((s) => s.enterShip);
   const sceneMode = useStore((s) => s.sceneMode);
   const dayInt = useStore((s) => Math.floor(s.simTimeDays));
-  const { t, lang } = useT();
+  const focusIndex = useStore((s) => s.focusIndex);
+  const focusPlanetByIndex = useStore((s) => s.focusPlanetByIndex);
+  const { t, name, lang } = useT();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const dateLabel = dateFromDays(dayInt).toLocaleDateString(lang === 'sv' ? 'sv-SE' : 'en-US', {
@@ -26,82 +31,22 @@ export function HUD() {
     day: 'numeric',
   });
 
-  const isSolar = sceneMode.type === 'solar';
+  if (sceneMode.type !== 'solar') return null;
 
-  if (!isSolar) return null;
-
-  const actionButtons = (
-    <>
-      <button className="button" onClick={togglePause} aria-pressed={paused}>
-        <span className="actual-text">&nbsp;{paused ? t('play') : t('pause')}&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">
-          &nbsp;{paused ? t('play') : t('pause')}&nbsp;
-        </span>
-      </button>
-      <button className="button" onClick={toggleTour} aria-pressed={tourActive}>
-        <span className="actual-text">&nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">
-          &nbsp;{tourActive ? t('stop') : t('tour')}&nbsp;
-        </span>
-      </button>
-      <button className="button" onClick={toggleOrbits}>
-        <span className="actual-text">&nbsp;{t('orbits')}&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">
-          &nbsp;{t('orbits')}&nbsp;
-        </span>
-      </button>
-      <button className="button" onClick={reset}>
-        <span className="actual-text">&nbsp;{t('reset')}&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">
-          &nbsp;{t('reset')}&nbsp;
-        </span>
-      </button>
-      <button className="button" onClick={toggleSettings}>
-        <span className="actual-text">&nbsp;{t('settings')}&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">
-          &nbsp;{t('settings')}&nbsp;
-        </span>
-      </button>
-      <button className="button" onClick={enterShip} style={{ minWidth: 44, minHeight: 44 }}>
-        <span className="actual-text">&nbsp;Fly&nbsp;</span>
-        <span aria-hidden="true" className="hover-text">&nbsp;Fly&nbsp;</span>
-      </button>
-    </>
-  );
+  const close = () => setDrawerOpen(false);
+  const act = (fn: () => void) => () => {
+    fn();
+    close();
+  };
 
   return (
     <>
-      {/* Desktop layout — unchanged */}
-      <div className="ui ui-desktop">
-        <div className="control">
-          <div className="date">{dateLabel}</div>
-          <label htmlFor="speed">{t('timeScale')}:</label>
-          <label className="slider">
-            <input
-              type="range"
-              className="level"
-              id="speed"
-              min="0.1"
-              max="20"
-              step="0.1"
-              value={speed}
-              onChange={(e) => setSpeed(parseFloat(e.target.value))}
-            />
-            <output className="value" htmlFor="speed">
-              {speed}x
-            </output>
-          </label>
-        </div>
-        {actionButtons}
-      </div>
-
-      {/* Mobile layout — hamburger + drawer */}
       <div className="ui-mobile-bar">
         <div className="mobile-date">{dateLabel}</div>
         <button
           className="hamburger-btn"
           onClick={() => setDrawerOpen(!drawerOpen)}
-          aria-label="Menu"
+          aria-label={t('menu')}
           aria-expanded={drawerOpen}
         >
           <span className={`hamburger-icon ${drawerOpen ? 'open' : ''}`}>
@@ -113,12 +58,15 @@ export function HUD() {
       </div>
 
       {drawerOpen && (
-        <div className="mobile-drawer-backdrop" onClick={() => setDrawerOpen(false)}>
+        <div className="mobile-drawer-backdrop" onClick={close}>
           <nav
             className="mobile-drawer"
             onClick={(e) => e.stopPropagation()}
             role="navigation"
+            aria-label={t('menu')}
           >
+            {/* Section 1 — Actions */}
+            <div className="drawer-heading">{t('actions')}</div>
             <div className="drawer-section">
               <label htmlFor="speed-mobile">{t('timeScale')}:</label>
               <label className="slider">
@@ -138,24 +86,39 @@ export function HUD() {
               </label>
             </div>
             <div className="drawer-actions">
-              <button className="drawer-btn" onClick={() => { togglePause(); setDrawerOpen(false); }}>
+              <button className="drawer-btn" onClick={act(togglePause)}>
                 {paused ? t('play') : t('pause')}
               </button>
-              <button className="drawer-btn" onClick={() => { toggleTour(); setDrawerOpen(false); }}>
+              <button className="drawer-btn" onClick={act(toggleTour)}>
                 {tourActive ? t('stop') : t('tour')}
               </button>
-              <button className="drawer-btn" onClick={() => { toggleOrbits(); setDrawerOpen(false); }}>
+              <button className="drawer-btn" onClick={act(toggleOrbits)}>
                 {t('orbits')}
               </button>
-              <button className="drawer-btn" onClick={() => { reset(); setDrawerOpen(false); }}>
+              <button className="drawer-btn" onClick={act(reset)}>
                 {t('reset')}
               </button>
-              <button className="drawer-btn" onClick={() => { toggleSettings(); setDrawerOpen(false); }}>
+              <button className="drawer-btn" onClick={act(toggleSettings)}>
                 {t('settings')}
               </button>
-              <button className="drawer-btn drawer-btn-fly" onClick={() => { enterShip(); setDrawerOpen(false); }}>
-                Fly
+              <button className="drawer-btn drawer-btn-fly" onClick={act(enterShip)}>
+                {t('fly')}
               </button>
+            </div>
+
+            {/* Section 2 — Bodies */}
+            <div className="drawer-heading drawer-heading-bodies">{t('bodies')}</div>
+            <div className="drawer-bodies">
+              {PLANETS.map((p, i) => (
+                <button
+                  key={p.name}
+                  className={`drawer-body-btn${focusIndex === i ? ' active' : ''}`}
+                  aria-current={focusIndex === i}
+                  onClick={act(() => focusPlanetByIndex(i))}
+                >
+                  {name(p.name)}
+                </button>
+              ))}
             </div>
           </nav>
         </div>

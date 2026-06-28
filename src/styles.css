@@ -55,33 +55,8 @@ canvas {
   z-index: 1000;
 }
 
-.ui {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  right: 20px;
-  z-index: 200;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  justify-content: center;
-}
-
-/* Mobile hamburger bar — hidden on desktop */
+/* Top bar + hamburger drawer — single navigation menu on all viewports. */
 .ui-mobile-bar {
-  display: none;
-}
-
-/* Mobile drawer */
-.mobile-drawer-backdrop {
-  display: none;
-}
-
-@media (hover: none) and (pointer: coarse) {
-  .ui-desktop {
-    display: none !important;
-  }
-  .ui-mobile-bar {
     display: flex;
     position: fixed;
     top: 0;
@@ -199,7 +174,43 @@ canvas {
     color: #93ad88;
     border: 1px solid rgba(147, 173, 136, 0.3);
   }
-}
+  .drawer-heading {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+  }
+  .drawer-heading-bodies {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .drawer-bodies {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 4px;
+  }
+  .drawer-body-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    text-align: left;
+    padding: 12px;
+    min-height: 44px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .drawer-body-btn:active {
+    background: rgba(147, 173, 136, 0.2);
+  }
+  .drawer-body-btn.active {
+    color: #93ad88;
+    border-color: rgba(147, 173, 136, 0.5);
+  }
 
 .control {
   background: var(--ui-background);
@@ -496,38 +507,6 @@ canvas {
 }
 .scene-label-btn:hover {
   background: rgba(147, 173, 136, 0.8);
-}
-
-/* Body picker (right edge) */
-.body-picker {
-  position: fixed;
-  top: 50%;
-  right: 16px;
-  transform: translateY(-50%);
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.picker-item {
-  background: var(--ui-background);
-  border: 1px solid transparent;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 13px;
-  letter-spacing: 0.5px;
-  text-align: right;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.picker-item:hover {
-  color: #fff;
-  background: rgba(0, 0, 0, 0.85);
-}
-.picker-item.active {
-  color: #93ad88;
-  border-color: #93ad88;
 }
 
 /* Settings modal */
