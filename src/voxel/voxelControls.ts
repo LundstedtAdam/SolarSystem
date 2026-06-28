@@ -182,7 +182,8 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
     }
   }
   if (!gp) {
-    voxelInput.mine = false;
+    // No pad: leave voxelInput.mine alone — it's owned by the touch Dig button /
+    // left-mouse here. (Only the gamepad branch below sets mine, from RT.)
     padPrev.scan = padPrev.back = false;
     return { back: false };
   }
