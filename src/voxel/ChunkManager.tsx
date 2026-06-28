@@ -21,9 +21,10 @@ import {
   Color,
   type PerspectiveCamera,
 } from 'three';
-import { useStore } from '../store';
+import { useStore, nextStructureId, type Structure } from '../store';
 import { getBiome } from '../terrain/biomes';
 import { audio } from '../audio/AudioManager';
+import { BUILDABLES } from './buildables';
 import { createVoxelMaterial } from './voxelMaterial';
 import { QUALITY } from '../systems/quality';
 import {
@@ -44,7 +45,14 @@ import { MesherPool, buildGeometry } from './mesher';
 import { generateChunk } from './worldGen';
 import { getVoxelPalette, getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
-import { loadBodyEdits, saveBodyEdits, saveInventory, type BodyEdits } from './persistence';
+import {
+  loadBodyEdits,
+  saveBodyEdits,
+  saveInventory,
+  loadStructures,
+  saveStructures,
+  type BodyEdits,
+} from './persistence';
 import type { VoxelApi } from './player';
 
 function floorDiv(a: number, b: number): number {
@@ -78,6 +86,8 @@ export function ChunkManager({
   const aimRay = useMemo(() => new Raycaster(), []);
   const aimNdc = useMemo(() => new Vector2(0, 0), []);
   const aimVoxel = useRef<[number, number, number] | null>(null);
+  // The empty cell adjacent to the aimed face — where placement happens.
+  const placeVoxel = useRef<[number, number, number] | null>(null);
 
   // Hold-to-mine: a darkening "crack" box over the targeted voxel whose opacity
   // and scale track break progress, plus a small one-shot debris burst on break.
@@ -148,6 +158,12 @@ export function ChunkManager({
   useEffect(() => {
     let alive = true;
     savedEdits.current = {};
+    // Restore placed structures (silos) for this body.
+    loadStructures(planet).then((list) => {
+      if (!alive) return;
+      const others = useStore.getState().structures.filter((s) => s.planet !== planet);
+      useStore.getState().setStructures([...others, ...list]);
+    });
     loadBodyEdits(planet).then((map) => {
       if (!alive) return;
       savedEdits.current = map;
@@ -179,6 +195,7 @@ export function ChunkManager({
       }
       void saveBodyEdits(planet, out);
       void saveInventory(useStore.getState().inventory);
+      void saveStructures(planet, useStore.getState().structures);
     };
 
     const onHide = () => {
@@ -409,6 +426,13 @@ export function ChunkManager({
       }
       spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
       audio.playMineBreak();
+      // Mining a silo core removes the entity and spills its stored contents.
+      if (block === BLOCK.SILO) {
+        const st = useStore
+          .getState()
+          .structures.find((s) => s.pos[0] === a[0] && s.pos[1] === a[1] && s.pos[2] === a[2]);
+        if (st) useStore.getState().removeStructure(st.id);
+      }
       editVoxel(a[0], a[1], a[2], BLOCK.AIR);
       ms.key = null;
       ms.progress = 0;
@@ -416,9 +440,32 @@ export function ChunkManager({
     }
   };
 
+  /** Place the active buildable in the cell adjacent to the aimed face. */
+  const placeApi = () => {
+    const p = placeVoxel.current;
+    if (!p) return;
+    if (blockAtApi(p[0], p[1], p[2]) !== BLOCK.AIR) return; // cell occupied
+    const store = useStore.getState();
+    const b = BUILDABLES[store.activeBuildable];
+    if (!store.spendResources(b.cost)) return; // can't afford
+    for (const v of b.stamp) editVoxel(p[0] + v.dx, p[1] + v.dy, p[2] + v.dz, v.block);
+    if (b.id === 'silo' && store.sceneMode.type === 'voxel') {
+      const structure: Structure = {
+        id: nextStructureId(),
+        planet: store.sceneMode.planet,
+        type: 'silo',
+        pos: [p[0], p[1], p[2]],
+        stored: {},
+        capacity: b.capacity ?? 240,
+      };
+      store.addStructure(structure);
+    }
+    audio.playPlace();
+  };
+
   // Publish the surface API for the player controller.
   useEffect(() => {
-    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel, mineTick };
+    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel, mineTick, place: placeApi };
     return () => {
       apiRef.current = null;
     };
@@ -508,14 +555,19 @@ export function ChunkManager({
     const hits = aimRay.intersectObjects([...meshes.current.values()], false);
     const hit = hits.length > 0 ? hits[0] : null;
     if (hit && hit.face && hit.distance <= REACH) {
+      const nx = Math.round(hit.face.normal.x);
+      const ny = Math.round(hit.face.normal.y);
+      const nz = Math.round(hit.face.normal.z);
       const ix = Math.floor(hit.point.x - hit.face.normal.x * 0.5);
       const iy = Math.floor(hit.point.y - hit.face.normal.y * 0.5);
       const iz = Math.floor(hit.point.z - hit.face.normal.z * 0.5);
       aimVoxel.current = [ix, iy, iz];
+      placeVoxel.current = [ix + nx, iy + ny, iz + nz]; // the air cell on the hit face
       highlight.position.set(ix + 0.5, iy + 0.5, iz + 0.5);
       highlight.visible = true;
     } else {
       aimVoxel.current = null;
+      placeVoxel.current = null;
       highlight.visible = false;
     }
   });

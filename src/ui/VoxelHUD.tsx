@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, backpackUsed } from '../store';
+import { useT } from '../i18n';
 import { voxelTelemetry, isTouchDevice } from '../voxel/voxelControls';
+import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
 import type { ResourceType } from '../voxel/voxelTypes';
 
 const RESOURCE_LABEL: Record<ResourceType, string> = {
@@ -61,6 +63,59 @@ function Backpack() {
   );
 }
 
+function costLabel(cost: Partial<Record<ResourceType, number>>): string {
+  return (Object.keys(cost) as ResourceType[])
+    .map((k) => `${cost[k]} ${RESOURCE_LABEL[k]}`)
+    .join(' + ');
+}
+
+/** Pick what the Place action builds. Selection is infrequent, so this sits with
+ *  the backpack readout (top-left) rather than in the thumb cluster. */
+function BuildSelector() {
+  const { t } = useT();
+  const active = useStore((s) => s.activeBuildable);
+  const setActive = useStore((s) => s.setActiveBuildable);
+  const inventory = useStore((s) => s.inventory);
+
+  // Desktop: cycle the buildable with B (UI clicks don't work under pointer-lock).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyB') return;
+      const cur = useStore.getState().activeBuildable;
+      const i = BUILDABLE_IDS.indexOf(cur);
+      useStore.getState().setActiveBuildable(BUILDABLE_IDS[(i + 1) % BUILDABLE_IDS.length]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div className="voxel-build">
+      <div className="voxel-build-head">{t('build')}</div>
+      <div className="voxel-build-row">
+        {BUILDABLE_IDS.map((id) => {
+          const cost = BUILDABLES[id].cost;
+          const affordable = (Object.keys(cost) as ResourceType[]).every(
+            (k) => (inventory[k] ?? 0) >= (cost[k] ?? 0),
+          );
+          return (
+            <button
+              key={id}
+              className={`voxel-build-btn${active === id ? ' active' : ''}`}
+              onClick={() => setActive(id)}
+            >
+              <span>{t(id)}</span>
+              <span className={`voxel-build-cost${affordable ? '' : ' short'}`}>
+                {costLabel(cost)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // On-foot HUD: a compass that shows heading plus a marker pointing back to the
 // ship (the disembark point at the world origin) with distance, and the Board
 // ship action that returns to the Phase 8 surface view.
@@ -113,6 +168,7 @@ export function VoxelHUD() {
     <div className="surface-hud">
       <div className="voxel-crosshair" aria-hidden="true" />
       <Backpack />
+      <BuildSelector />
       <div className="surface-hud-top">
         <div className="surface-hud-name">{sceneMode.planet.toUpperCase()} — ON FOOT</div>
         <div className="surface-hud-compass">

@@ -119,6 +119,10 @@ export function getVoxelPalette(planet: string): Float32Array {
   rgb(pal, BLOCK.HEMATITE_ORE, 0.52, 0.29, 0.27);
   rgb(pal, BLOCK.LITHIUM_ORE, 0.85, 0.6, 0.7, 0.18);
   rgb(pal, BLOCK.ARTIFACT, 0.6, 0.3, 0.9, 0.65);
+
+  // Phase 11.1 — player-placed build materials (read clearly as artificial).
+  rgb(pal, BLOCK.BUILD, 0.62, 0.64, 0.68);
+  rgb(pal, BLOCK.SILO, 0.4, 0.62, 0.72, 0.15);
   return pal;
 }
 

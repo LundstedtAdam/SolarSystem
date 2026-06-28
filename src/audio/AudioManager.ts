@@ -341,6 +341,28 @@ class AudioManager {
     osc.stop(t + 0.18);
   }
 
+  /** A short mechanical "thunk" when a block/structure is placed. */
+  playPlace() {
+    const bus = this.surfaceBus;
+    if (!this.ctx || !bus) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 900;
+    osc.connect(lp).connect(g).connect(bus);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  }
+
   /** Fade in the surface soundscape for a given body. */
   startSurface(profile: SurfaceAudioProfile) {
     if (!this.ctx) return;

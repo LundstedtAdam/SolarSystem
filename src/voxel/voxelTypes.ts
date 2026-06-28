@@ -59,10 +59,13 @@ export const BLOCK = {
   HEMATITE_ORE: 24,
   LITHIUM_ORE: 25,
   ARTIFACT: 26, // anomalous artifact — deep hostile cores, endgame drives
+  // Phase 11.1 — player-placed build materials.
+  BUILD: 27, // generic structural block
+  SILO: 28, // storage-silo core (entity anchor)
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 27;
+export const BLOCK_COUNT = 29;
 
 /** Floats per palette entry: r, g, b, emissive. */
 export const PALETTE_STRIDE = 4;
@@ -122,7 +125,9 @@ const HOST_RESOURCE: Partial<Record<number, ResourceType>> = {
   [BLOCK.SAND]: 'silicon',
   [BLOCK.ROCK]: 'silicon',
   [BLOCK.GLASS]: 'silicon',
+  [BLOCK.BUILD]: 'silicon',
   [BLOCK.METAL]: 'iron',
+  [BLOCK.SILO]: 'iron',
 };
 
 /** The resource a mined block yields, or undefined if it yields nothing.
@@ -161,6 +166,8 @@ const HARDNESS: Partial<Record<number, number>> = {
   [BLOCK.HEMATITE_ORE]: 1.4,
   [BLOCK.LITHIUM_ORE]: 1.4,
   [BLOCK.ARTIFACT]: 2.4,
+  [BLOCK.BUILD]: 0.9,
+  [BLOCK.SILO]: 1.2,
 };
 
 /** Seconds of continuous mining required to break the given block. */

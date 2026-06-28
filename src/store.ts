@@ -3,6 +3,7 @@ import type { Object3D } from 'three';
 import { daysSinceJ2000, periodDays } from './systems/ephemeris';
 import { PLANETS, isLandable, WORLD_SCALE, type PlanetData } from './systems/bodies';
 import type { ResourceType } from './voxel/voxelTypes';
+import type { BuildableId } from './voxel/buildables';
 import { detectQuality, type Quality } from './systems/quality';
 import type { Lang } from './i18n';
 
@@ -62,6 +63,25 @@ export interface ResourceDrop {
 export function backpackUsed(inv: Partial<Record<ResourceType, number>>): number {
   let n = 0;
   for (const k in inv) n += inv[k as ResourceType] ?? 0;
+  return n;
+}
+
+/** A placed storage structure (Phase 11.1). Its voxels persist via the chunk
+ *  edit overlay; this entity tracks the stored contents + anchor. */
+export interface Structure {
+  id: number;
+  planet: string;
+  type: 'silo';
+  /** World voxel of the SILO core (anchor). */
+  pos: [number, number, number];
+  stored: Partial<Record<ResourceType, number>>;
+  capacity: number;
+}
+
+/** Total units stored across a structure's stacks. */
+export function structureUsed(s: Structure): number {
+  let n = 0;
+  for (const k in s.stored) n += s.stored[k as ResourceType] ?? 0;
   return n;
 }
 
@@ -219,6 +239,10 @@ interface SimState {
   backpackCapacity: number;
   /** Resources dropped on the ground (overflow) awaiting pickup. */
   drops: ResourceDrop[];
+  /** Phase 11.1 placed structures (silos) across all bodies. */
+  structures: Structure[];
+  /** Currently selected buildable for the Place action. */
+  activeBuildable: BuildableId;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -277,6 +301,21 @@ interface SimState {
   collectDrop: (id: number) => void;
   /** Replace the whole backpack (used by persistence hydration). */
   setInventory: (inv: Partial<Record<ResourceType, number>>) => void;
+
+  /** Phase 11.1 building/storage. */
+  setActiveBuildable: (b: BuildableId) => void;
+  /** Deduct a resource cost if affordable; returns true on success. */
+  spendResources: (cost: Partial<Record<ResourceType, number>>) => boolean;
+  addStructure: (s: Structure) => void;
+  /** Remove a structure and spill its stored contents as ground drops. */
+  removeStructure: (id: number) => void;
+  /** Add a resource to a silo up to capacity; returns the amount accepted. */
+  siloAbsorb: (id: number, type: ResourceType, amount: number) => number;
+  /** Empty the backpack into a silo up to its capacity. */
+  depositToStructure: (id: number) => void;
+  /** Move a ground drop into a silo (up to capacity); reduces/removes the drop. */
+  absorbDropIntoSilo: (siloId: number, dropId: number) => void;
+  setStructures: (structures: Structure[]) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -320,6 +359,8 @@ export const useStore = create<SimState>((set, get) => ({
   inventory: {},
   backpackCapacity: 50,
   drops: [],
+  structures: [],
+  activeBuildable: 'block',
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -494,7 +535,107 @@ export const useStore = create<SimState>((set, get) => ({
     set({ inventory, drops });
   },
   setInventory: (inventory) => set({ inventory }),
+
+  setActiveBuildable: (activeBuildable) => set({ activeBuildable }),
+  spendResources: (cost) => {
+    const s = get();
+    for (const k in cost) {
+      const type = k as ResourceType;
+      if ((s.inventory[type] ?? 0) < (cost[type] ?? 0)) return false;
+    }
+    const inventory = { ...s.inventory };
+    for (const k in cost) {
+      const type = k as ResourceType;
+      inventory[type] = (inventory[type] ?? 0) - (cost[type] ?? 0);
+    }
+    set({ inventory });
+    return true;
+  },
+  addStructure: (structure) => set((s) => ({ structures: [...s.structures, structure] })),
+  removeStructure: (id) => {
+    const s = get();
+    const st = s.structures.find((x) => x.id === id);
+    if (!st) return;
+    // Spill stored contents as ground drops at the structure.
+    const newDrops: ResourceDrop[] = [];
+    for (const k in st.stored) {
+      const type = k as ResourceType;
+      const amount = st.stored[type] ?? 0;
+      if (amount > 0) {
+        newDrops.push({ id: nextDropId++, planet: st.planet, pos: st.pos, type, amount });
+      }
+    }
+    set({
+      structures: s.structures.filter((x) => x.id !== id),
+      drops: newDrops.length ? [...s.drops, ...newDrops] : s.drops,
+    });
+  },
+  siloAbsorb: (id, type, amount) => {
+    const s = get();
+    const st = s.structures.find((x) => x.id === id);
+    if (!st) return 0;
+    const space = Math.max(0, st.capacity - structureUsed(st));
+    const accepted = Math.min(amount, space);
+    if (accepted <= 0) return 0;
+    set({
+      structures: s.structures.map((x) =>
+        x.id === id ? { ...x, stored: { ...x.stored, [type]: (x.stored[type] ?? 0) + accepted } } : x,
+      ),
+    });
+    return accepted;
+  },
+  depositToStructure: (id) => {
+    const s = get();
+    const st = s.structures.find((x) => x.id === id);
+    if (!st) return;
+    let space = Math.max(0, st.capacity - structureUsed(st));
+    if (space <= 0) return;
+    const inventory = { ...s.inventory };
+    const stored = { ...st.stored };
+    for (const k in inventory) {
+      if (space <= 0) break;
+      const type = k as ResourceType;
+      const have = inventory[type] ?? 0;
+      const move = Math.min(have, space);
+      if (move <= 0) continue;
+      inventory[type] = have - move;
+      stored[type] = (stored[type] ?? 0) + move;
+      space -= move;
+    }
+    set({
+      inventory,
+      structures: s.structures.map((x) => (x.id === id ? { ...x, stored } : x)),
+    });
+  },
+  absorbDropIntoSilo: (siloId, dropId) => {
+    const s = get();
+    const silo = s.structures.find((x) => x.id === siloId);
+    const drop = s.drops.find((d) => d.id === dropId);
+    if (!silo || !drop) return;
+    const space = Math.max(0, silo.capacity - structureUsed(silo));
+    const accepted = Math.min(drop.amount, space);
+    if (accepted <= 0) return;
+    const structures = s.structures.map((x) =>
+      x.id === siloId
+        ? { ...x, stored: { ...x.stored, [drop.type]: (x.stored[drop.type] ?? 0) + accepted } }
+        : x,
+    );
+    const remaining = drop.amount - accepted;
+    const drops =
+      remaining > 0
+        ? s.drops.map((d) => (d.id === dropId ? { ...d, amount: remaining } : d))
+        : s.drops.filter((d) => d.id !== dropId);
+    set({ structures, drops });
+  },
+  setStructures: (structures) => {
+    // Keep the id source ahead of any restored ids so new placements don't clash.
+    for (const s of structures) if (s.id >= nextDropId) nextDropId = s.id + 1;
+    set({ structures });
+  },
 }));
 
-/** Monotonic id source for ground drops. */
+/** Monotonic id source for ground drops + structures. */
 let nextDropId = 1;
+export function nextStructureId(): number {
+  return nextDropId++;
+}

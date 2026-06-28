@@ -21,7 +21,10 @@ import { footstepFor } from './voxelAudio';
 import {
   voxelInput,
   voxelTelemetry,
+  voxelSilo,
   consumeLook,
+  consumePlace,
+  consumeDeposit,
   attachDesktopControls,
   pollVoxelGamepad,
   cubicLook,
@@ -30,6 +33,10 @@ import {
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 /** Squared distance within which the player vacuums up a ground drop. */
 const PICKUP_RANGE_SQ = 2.0 * 2.0;
+/** Squared range over which a silo pulls in nearby ground drops. */
+const SILO_ABSORB_SQ = 5.0 * 5.0;
+/** Squared range within which the player can manually deposit into a silo. */
+const DEPOSIT_SQ = 3.5 * 3.5;
 
 /** Builds the visible first-person hand + tool, parented to the camera. */
 function makeHand(biome: ReturnType<typeof getBiome>): Group {
@@ -135,6 +142,8 @@ export function PlayerController({
 
     // Continuous hold-to-mine at the crosshair (touch Dig / left mouse / RT).
     api.mineTick(Math.min(dt, 0.05), voxelInput.mine);
+    // Edge-triggered placement of the active buildable (one per tap).
+    if (consumePlace()) api.place();
 
     player.update(
       Math.min(dt, 0.05),
@@ -153,15 +162,44 @@ export function PlayerController({
 
     // Walk-over pickup of overflow drops on this body (only when there's space).
     const st = useStore.getState();
+    const px = player.pos.x;
+    const py = player.pos.y;
+    const pz = player.pos.z;
     if (st.drops.length > 0) {
       for (const d of st.drops) {
         if (d.planet !== planet) continue;
-        const dx = d.pos[0] - player.pos.x;
-        const dy = d.pos[1] - player.pos.y;
-        const dz = d.pos[2] - player.pos.z;
+        const dx = d.pos[0] - px;
+        const dy = d.pos[1] - py;
+        const dz = d.pos[2] - pz;
         if (dx * dx + dy * dy + dz * dz < PICKUP_RANGE_SQ) st.collectDrop(d.id);
       }
     }
+
+    // Silos: pull in nearby ground drops, and expose a deposit affordance.
+    let siloNear = -1;
+    let siloNearSq = DEPOSIT_SQ;
+    for (const s of st.structures) {
+      if (s.planet !== planet) continue;
+      const sx = s.pos[0] - px;
+      const sy = s.pos[1] - py;
+      const sz = s.pos[2] - pz;
+      const sq = sx * sx + sy * sy + sz * sz;
+      if (sq < siloNearSq) {
+        siloNearSq = sq;
+        siloNear = s.id;
+      }
+      for (const d of st.drops) {
+        if (d.planet !== planet) continue;
+        const ddx = d.pos[0] - s.pos[0];
+        const ddy = d.pos[1] - s.pos[1];
+        const ddz = d.pos[2] - s.pos[2];
+        if (ddx * ddx + ddy * ddy + ddz * ddz < SILO_ABSORB_SQ) {
+          st.absorbDropIntoSilo(s.id, d.id);
+        }
+      }
+    }
+    voxelSilo.available = siloNear >= 0;
+    if (consumeDeposit() && siloNear >= 0) st.depositToStructure(siloNear);
 
     // Footsteps: accrue ground distance, fire one per stride with the material
     // of the block underfoot.

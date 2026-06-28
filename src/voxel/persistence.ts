@@ -9,6 +9,7 @@
 
 import localforage from 'localforage';
 import type { ResourceType } from './voxelTypes';
+import type { Structure } from '../store';
 
 const SCHEMA = 'v1';
 
@@ -59,6 +60,30 @@ export async function loadInventory(): Promise<Partial<Record<ResourceType, numb
 export async function saveInventory(inv: Partial<Record<ResourceType, number>>): Promise<void> {
   try {
     await store.setItem(INVENTORY_KEY, inv);
+  } catch {
+    /* ignore */
+  }
+}
+
+function structuresKey(planet: string): string {
+  return `structures.${SCHEMA}.${planet}`;
+}
+
+/** Load placed structures (silos) for a body (empty list if none / on error). */
+export async function loadStructures(planet: string): Promise<Structure[]> {
+  try {
+    return (await store.getItem<Structure[]>(structuresKey(planet))) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Persist the structures belonging to a body (filters by planet). */
+export async function saveStructures(planet: string, all: Structure[]): Promise<void> {
+  try {
+    const own = all.filter((s) => s.planet === planet);
+    if (own.length === 0) await store.removeItem(structuresKey(planet));
+    else await store.setItem(structuresKey(planet), own);
   } catch {
     /* ignore */
   }

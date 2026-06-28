@@ -14,6 +14,10 @@ export interface VoxelInputState {
   mine: boolean;
   /** Edge-triggered scan request (Scan button / E key / left trigger). */
   scan: boolean;
+  /** Edge-triggered place request (Place button / right mouse / pad X). */
+  place: boolean;
+  /** Edge-triggered deposit-into-silo request (Deposit button / F / pad Y). */
+  deposit: boolean;
 }
 
 export const voxelInput: VoxelInputState = {
@@ -23,6 +27,8 @@ export const voxelInput: VoxelInputState = {
   run: false,
   mine: false,
   scan: false,
+  place: false,
+  deposit: false,
 };
 
 /** Whether a scannable POI is currently in range and roughly in the crosshair.
@@ -30,6 +36,10 @@ export const voxelInput: VoxelInputState = {
  *  lights up when a single tap would actually record something. Non-reactive to
  *  avoid 60fps React churn — the button polls it. */
 export const voxelScan = { available: false };
+
+/** Whether a storage silo is within deposit range of the player — drives the
+ *  contextual Deposit button (non-reactive; polled). */
+export const voxelSilo = { available: false };
 
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
  *  the compass never forces a 60fps React re-render). Updated by the
@@ -50,6 +60,20 @@ export function consumeScan(): boolean {
   return s;
 }
 
+/** Read and clear the one-shot place request. */
+export function consumePlace(): boolean {
+  const p = voxelInput.place;
+  voxelInput.place = false;
+  return p;
+}
+
+/** Read and clear the one-shot deposit request. */
+export function consumeDeposit(): boolean {
+  const d = voxelInput.deposit;
+  voxelInput.deposit = false;
+  return d;
+}
+
 export function resetVoxelInput(): void {
   voxelInput.move.x = 0;
   voxelInput.move.z = 0;
@@ -59,6 +83,8 @@ export function resetVoxelInput(): void {
   voxelInput.run = false;
   voxelInput.mine = false;
   voxelInput.scan = false;
+  voxelInput.place = false;
+  voxelInput.deposit = false;
 }
 
 /** Desktop: pointer-lock mouse look + WASD/Space/Shift. Returns a disposer. */
@@ -72,6 +98,7 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
   };
   const kd = (e: KeyboardEvent) => {
     if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'KeyF') voxelInput.deposit = true; // deposit into nearby silo
     keys[e.code] = true;
     refreshKeys();
   };
@@ -91,6 +118,8 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
     if (e.button === 0) {
       if (document.pointerLockElement !== dom) dom.requestPointerLock?.();
       else voxelInput.mine = true;
+    } else if (e.button === 2 && document.pointerLockElement === dom) {
+      voxelInput.place = true; // right-click places the active buildable
     }
   };
   const onPointerUp = (e: MouseEvent) => {
@@ -157,7 +186,7 @@ export function radialShape(x: number, y: number, deadzone: number): { x: number
 // matches. Triggers are treated as buttons with a 0.4 press threshold.
 const PAD_LOOK_GAIN = 1100;
 const TRIGGER_THRESHOLD = 0.4;
-const padPrev = { scan: false, back: false };
+const padPrev = { scan: false, back: false, place: false, deposit: false };
 
 function padButton(gp: Gamepad, i: number): boolean {
   return !!gp.buttons[i]?.pressed;
@@ -184,7 +213,7 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
   if (!gp) {
     // No pad: leave voxelInput.mine alone — it's owned by the touch Dig button /
     // left-mouse here. (Only the gamepad branch below sets mine, from RT.)
-    padPrev.scan = padPrev.back = false;
+    padPrev.scan = padPrev.back = padPrev.place = padPrev.deposit = false;
     return { back: false };
   }
 
@@ -209,6 +238,15 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
   const scanDown = (gp.buttons[6]?.value ?? 0) > TRIGGER_THRESHOLD;
   if (scanDown && !padPrev.scan) voxelInput.scan = true;
   padPrev.scan = scanDown;
+
+  // X (2) place, Y (3) deposit — edge-triggered.
+  const placeDown = padButton(gp, 2);
+  if (placeDown && !padPrev.place) voxelInput.place = true;
+  padPrev.place = placeDown;
+
+  const depositDown = padButton(gp, 3);
+  if (depositDown && !padPrev.deposit) voxelInput.deposit = true;
+  padPrev.deposit = depositDown;
 
   // B (1) — back to ship, edge-triggered.
   const backDown = padButton(gp, 1);

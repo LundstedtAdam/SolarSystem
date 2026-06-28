@@ -19,6 +19,10 @@ export interface VoxelApi {
    *  while `active`; breaks the block once its hardness is met, yielding any
    *  resource. Resets progress when the aim moves or mining stops. */
   mineTick: (dt: number, active: boolean) => void;
+  /** Place the active buildable in the air cell adjacent to the aimed face
+   *  (deducts its cost; registers a silo entity). No-op if nothing is aimed,
+   *  the cell is occupied, or the cost is unaffordable. */
+  place: () => void;
 }
 
 export interface PlayerInput {

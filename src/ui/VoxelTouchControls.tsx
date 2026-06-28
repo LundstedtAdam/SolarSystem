@@ -4,6 +4,7 @@ import { useT } from '../i18n';
 import {
   voxelInput,
   voxelScan,
+  voxelSilo,
   resetVoxelInput,
   isTouchDevice,
   radialShape,
@@ -154,6 +155,44 @@ function JumpButton() {
   );
 }
 
+// Place the active buildable (edge-triggered, one per tap).
+function PlaceButton() {
+  const { t } = useT();
+  return (
+    <button
+      className="voxel-place-btn"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        voxelInput.place = true;
+      }}
+    >
+      {t('place').toUpperCase()}
+    </button>
+  );
+}
+
+// Deposit the backpack into a nearby silo — only active when one is in range.
+function DepositButton() {
+  const { t } = useT();
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setActive(voxelSilo.available), 120);
+    return () => clearInterval(id);
+  }, []);
+  if (!active) return null;
+  return (
+    <button
+      className="voxel-deposit-btn active"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        voxelInput.deposit = true;
+      }}
+    >
+      {t('deposit').toUpperCase()}
+    </button>
+  );
+}
+
 // Return to the Phase 8 surface view (out of the on-foot voxel world).
 function BackButton() {
   const boardShip = useStore((s) => s.boardShip);
@@ -185,6 +224,8 @@ export function VoxelTouchControls() {
       <LookLayer />
       <Joystick />
       <BackButton />
+      <DepositButton />
+      <PlaceButton />
       <ScanButton />
       <DigButton />
       <JumpButton />

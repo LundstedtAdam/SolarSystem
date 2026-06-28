@@ -931,6 +931,62 @@ canvas {
   line-height: 1.3;
 }
 
+/* On-foot build selector — sits under the backpack (top-left); infrequent use. */
+.voxel-build {
+  position: fixed;
+  top: 188px;
+  left: 12px;
+  z-index: 10;
+  width: 168px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: monospace;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+.voxel-build-head {
+  letter-spacing: 1px;
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+.voxel-build-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.voxel-build-btn {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e8f0f4;
+  font-family: monospace;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.voxel-build-btn.active {
+  background: rgba(130, 200, 255, 0.18);
+  border-color: rgba(160, 210, 255, 0.6);
+}
+.voxel-build-cost {
+  font-size: 10px;
+  opacity: 0.65;
+}
+.voxel-build-cost.short {
+  color: #ff9a7a;
+  opacity: 0.9;
+}
+
 /* On-foot aiming crosshair */
 .voxel-crosshair {
   position: fixed;
@@ -981,13 +1037,16 @@ canvas {
   pointer-events: auto;
   touch-action: none;
 }
-/* On-foot action buttons: a 2x2 cluster in the bottom-right thumb zone (Dig /
-   Jump / Scan / Back), clear of the joystick (bottom-left) and the look layer.
-   Every button is >=44px and sits in the bottom band in both orientations. */
+/* On-foot action buttons: a 2-col x 3-row cluster in the bottom-right thumb zone
+   (Dig/Jump, Place/Scan, Back/Deposit), clear of the joystick (bottom-left) and
+   the look layer. Every button is >=44px and stays in the bottom band; landscape
+   reflows to 3 cols x 2 rows below. */
 .voxel-jump-btn,
 .voxel-dig-btn,
 .voxel-scan-btn,
-.voxel-back-btn {
+.voxel-back-btn,
+.voxel-place-btn,
+.voxel-deposit-btn {
   position: absolute;
   z-index: 1;
   width: 80px;
@@ -997,7 +1056,7 @@ canvas {
   border: 2px solid rgba(255, 255, 255, 0.3);
   color: rgba(255, 255, 255, 0.85);
   font-family: monospace;
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 1px;
   pointer-events: auto;
   touch-action: none;
@@ -1006,21 +1065,27 @@ canvas {
   justify-content: center;
   text-align: center;
 }
-/* bottom row */
-.voxel-jump-btn {
-  bottom: 24px;
-  right: 24px;
-}
+/* row 1 (bottom) */
 .voxel-dig-btn {
   bottom: 24px;
-  right: 116px;
+  right: 24px;
   border-color: rgba(255, 200, 120, 0.45);
   color: rgba(255, 220, 170, 0.9);
 }
-/* top row */
-.voxel-scan-btn {
+.voxel-jump-btn {
+  bottom: 24px;
+  right: 116px;
+}
+/* row 2 */
+.voxel-place-btn {
   bottom: 116px;
   right: 24px;
+  border-color: rgba(180, 220, 160, 0.45);
+  color: rgba(210, 240, 195, 0.9);
+}
+.voxel-scan-btn {
+  bottom: 116px;
+  right: 116px;
   border-color: rgba(150, 210, 255, 0.45);
   color: rgba(200, 235, 255, 0.9);
   opacity: 0.3; /* dimmed until a scannable anomaly is in the crosshair */
@@ -1030,11 +1095,19 @@ canvas {
   opacity: 1;
   box-shadow: 0 0 16px rgba(130, 200, 255, 0.55);
 }
+/* row 3 (top) */
 .voxel-back-btn {
-  bottom: 116px;
-  right: 116px;
+  bottom: 208px;
+  right: 24px;
   border-color: rgba(160, 255, 180, 0.4);
   color: rgba(200, 255, 210, 0.9);
+}
+.voxel-deposit-btn {
+  bottom: 208px;
+  right: 116px;
+  border-color: rgba(255, 225, 150, 0.5);
+  color: rgba(255, 235, 175, 0.95);
+  box-shadow: 0 0 16px rgba(255, 215, 130, 0.5);
 }
 
 /* Touch controls container — kept below the ShipHUD buttons (z-index 10) so the
@@ -1153,28 +1226,41 @@ canvas {
     bottom: 16px;
     left: 20px;
   }
+  /* Landscape: 3 cols x 2 rows so the top row stays inside the bottom band. */
   .voxel-jump-btn,
   .voxel-dig-btn,
   .voxel-scan-btn,
-  .voxel-back-btn {
-    width: 64px;
-    height: 64px;
+  .voxel-back-btn,
+  .voxel-place-btn,
+  .voxel-deposit-btn {
+    width: 62px;
+    height: 62px;
+  }
+  /* row 1 (bottom): Dig, Jump, Place */
+  .voxel-dig-btn {
+    bottom: 12px;
+    right: 16px;
   }
   .voxel-jump-btn {
     bottom: 12px;
-    right: 16px;
+    right: 86px;
   }
-  .voxel-dig-btn {
+  .voxel-place-btn {
     bottom: 12px;
-    right: 88px;
+    right: 156px;
   }
+  /* row 2 (top): Scan, Back, Deposit */
   .voxel-scan-btn {
-    bottom: 84px;
+    bottom: 82px;
     right: 16px;
   }
   .voxel-back-btn {
-    bottom: 84px;
-    right: 88px;
+    bottom: 82px;
+    right: 86px;
+  }
+  .voxel-deposit-btn {
+    bottom: 82px;
+    right: 156px;
   }
 }
 
