@@ -57,6 +57,10 @@ export interface ResourceDrop {
   pos: [number, number, number];
   type: ResourceType;
   amount: number;
+  /** ms timestamp before which the drop can't be re-collected (Minecraft-style
+   *  pickup delay) — set when the player intentionally drops a stack so it
+   *  doesn't instantly vacuum back in. */
+  noPickupUntil?: number;
 }
 
 /** Total carried units across all resource stacks. */
@@ -301,6 +305,9 @@ interface SimState {
   collectDrop: (id: number) => void;
   /** Replace the whole backpack (used by persistence hydration). */
   setInventory: (inv: Partial<Record<ResourceType, number>>) => void;
+  /** Intentionally drop a resource stack onto the terrain at `pos` (with a brief
+   *  pickup grace so it isn't instantly re-collected). */
+  discardResource: (type: ResourceType, amount: number, pos: [number, number, number]) => void;
 
   /** Phase 11.1 building/storage. */
   setActiveBuildable: (b: BuildableId) => void;
@@ -535,6 +542,24 @@ export const useStore = create<SimState>((set, get) => ({
     set({ inventory, drops });
   },
   setInventory: (inventory) => set({ inventory }),
+  discardResource: (type, amount, pos) => {
+    const s = get();
+    const have = s.inventory[type] ?? 0;
+    const drop = Math.min(amount, have);
+    if (drop <= 0) return;
+    const inventory = { ...s.inventory, [type]: have - drop };
+    if ((inventory[type] ?? 0) <= 0) delete inventory[type];
+    const planet = s.sceneMode.type === 'voxel' ? s.sceneMode.planet : '';
+    const entry: ResourceDrop = {
+      id: nextDropId++,
+      planet,
+      pos,
+      type,
+      amount: drop,
+      noPickupUntil: Date.now() + 4000,
+    };
+    set({ inventory, drops: [...s.drops, entry] });
+  },
 
   setActiveBuildable: (activeBuildable) => set({ activeBuildable }),
   spendResources: (cost) => {

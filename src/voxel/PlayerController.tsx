@@ -157,6 +157,7 @@ export function PlayerController({
     camera.position.set(player.pos.x, player.eyeY(), player.pos.z);
 
     voxelTelemetry.x = player.pos.x;
+    voxelTelemetry.y = player.pos.y;
     voxelTelemetry.z = player.pos.z;
     voxelTelemetry.yaw = player.yaw;
 
@@ -165,9 +166,11 @@ export function PlayerController({
     const px = player.pos.x;
     const py = player.pos.y;
     const pz = player.pos.z;
+    const now = Date.now();
     if (st.drops.length > 0) {
       for (const d of st.drops) {
         if (d.planet !== planet) continue;
+        if (d.noPickupUntil && d.noPickupUntil > now) continue; // pickup grace
         const dx = d.pos[0] - px;
         const dy = d.pos[1] - py;
         const dz = d.pos[2] - pz;
@@ -190,6 +193,7 @@ export function PlayerController({
       }
       for (const d of st.drops) {
         if (d.planet !== planet) continue;
+        if (d.noPickupUntil && d.noPickupUntil > now) continue; // pickup grace
         const ddx = d.pos[0] - s.pos[0];
         const ddy = d.pos[1] - s.pos[1];
         const ddz = d.pos[2] - s.pos[2];

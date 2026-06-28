@@ -44,7 +44,7 @@ export const voxelSilo = { available: false };
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
  *  the compass never forces a 60fps React re-render). Updated by the
  *  PlayerController each frame; the ship sits at the world origin. */
-export const voxelTelemetry = { x: 0, z: 0, yaw: 0 };
+export const voxelTelemetry = { x: 0, y: 0, z: 0, yaw: 0 };
 
 export function consumeLook(): { dx: number; dy: number } {
   const d = { dx: voxelInput.look.dx, dy: voxelInput.look.dy };

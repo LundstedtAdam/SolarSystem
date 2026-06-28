@@ -21,47 +21,7 @@ const RESOURCE_LABEL: Record<ResourceType, string> = {
   artifact: 'Artifact',
 };
 
-/** Compact backpack readout: capacity bar + carried resource stacks. Purely
- *  informational (non-interactive) so it sits top-left, clear of the thumbs. */
-function Backpack() {
-  const inventory = useStore((s) => s.inventory);
-  const capacity = useStore((s) => s.backpackCapacity);
-  const hasDrops = useStore((s) => s.drops.length > 0);
-  const used = backpackUsed(inventory);
-  const full = used >= capacity;
-  const entries = (Object.keys(inventory) as ResourceType[])
-    .filter((k) => (inventory[k] ?? 0) > 0)
-    .sort();
-
-  return (
-    <div className="voxel-backpack">
-      <div className="voxel-backpack-head">
-        BACKPACK {used}/{capacity}
-      </div>
-      <div className="voxel-backpack-bar">
-        <div
-          className="voxel-backpack-fill"
-          style={{ width: `${Math.min(100, (used / capacity) * 100)}%`, background: full ? '#ff7a5a' : undefined }}
-        />
-      </div>
-      {entries.length === 0 ? (
-        <div className="voxel-backpack-empty">Empty — mine ore veins</div>
-      ) : (
-        <div className="voxel-backpack-list">
-          {entries.map((k) => (
-            <div key={k} className="voxel-backpack-row">
-              <span>{RESOURCE_LABEL[k]}</span>
-              <span>{inventory[k]}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {(full || hasDrops) && (
-        <div className="voxel-backpack-warn">Full — resources are dropping. Build storage.</div>
-      )}
-    </div>
-  );
-}
+type Menu = 'none' | 'backpack' | 'build';
 
 function costLabel(cost: Partial<Record<ResourceType, number>>): string {
   return (Object.keys(cost) as ResourceType[])
@@ -69,61 +29,154 @@ function costLabel(cost: Partial<Record<ResourceType, number>>): string {
     .join(' + ');
 }
 
-/** Pick what the Place action builds. Selection is infrequent, so this sits with
- *  the backpack readout (top-left) rather than in the thumb cluster. */
-function BuildSelector() {
-  const { t } = useT();
-  const active = useStore((s) => s.activeBuildable);
-  const setActive = useStore((s) => s.setActiveBuildable);
-  const inventory = useStore((s) => s.inventory);
+/** A drop position just in front of the player's feet, from live telemetry. */
+function dropPos(): [number, number, number] {
+  const { x, y, z, yaw } = voxelTelemetry;
+  return [x - Math.sin(yaw) * 1.2, y, z - Math.cos(yaw) * 1.2];
+}
 
-  // Desktop: cycle the buildable with B (UI clicks don't work under pointer-lock).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== 'KeyB') return;
-      const cur = useStore.getState().activeBuildable;
-      const i = BUILDABLE_IDS.indexOf(cur);
-      useStore.getState().setActiveBuildable(BUILDABLE_IDS[(i + 1) % BUILDABLE_IDS.length]);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+/** The backpack as an open/close sheet: capacity, stacks, and a Drop per stack. */
+function BackpackSheet({ onClose }: { onClose: () => void }) {
+  const { t } = useT();
+  const inventory = useStore((s) => s.inventory);
+  const capacity = useStore((s) => s.backpackCapacity);
+  const discardResource = useStore((s) => s.discardResource);
+  const used = backpackUsed(inventory);
+  const full = used >= capacity;
+  const entries = (Object.keys(inventory) as ResourceType[])
+    .filter((k) => (inventory[k] ?? 0) > 0)
+    .sort();
 
   return (
-    <div className="voxel-build">
-      <div className="voxel-build-head">{t('build')}</div>
-      <div className="voxel-build-row">
-        {BUILDABLE_IDS.map((id) => {
-          const cost = BUILDABLES[id].cost;
-          const affordable = (Object.keys(cost) as ResourceType[]).every(
-            (k) => (inventory[k] ?? 0) >= (cost[k] ?? 0),
-          );
-          return (
-            <button
-              key={id}
-              className={`voxel-build-btn${active === id ? ' active' : ''}`}
-              onClick={() => setActive(id)}
-            >
-              <span>{t(id)}</span>
-              <span className={`voxel-build-cost${affordable ? '' : ' short'}`}>
-                {costLabel(cost)}
-              </span>
-            </button>
-          );
-        })}
+    <div className="voxel-sheet-backdrop" onClick={onClose}>
+      <div className="voxel-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="voxel-sheet-head">
+          <span>
+            {t('backpack')} {used}/{capacity}
+          </span>
+          <button className="voxel-sheet-close" onClick={onClose}>
+            {t('close')}
+          </button>
+        </div>
+        <div className="voxel-backpack-bar">
+          <div
+            className="voxel-backpack-fill"
+            style={{
+              width: `${Math.min(100, (used / capacity) * 100)}%`,
+              background: full ? '#ff7a5a' : undefined,
+            }}
+          />
+        </div>
+        {entries.length === 0 ? (
+          <div className="voxel-backpack-empty">Empty — mine ore veins.</div>
+        ) : (
+          <div className="voxel-sheet-list">
+            {entries.map((k) => (
+              <div key={k} className="voxel-pack-row">
+                <span className="voxel-pack-name">{RESOURCE_LABEL[k]}</span>
+                <span className="voxel-pack-amount">{inventory[k]}</span>
+                <button
+                  className="voxel-drop-btn"
+                  onClick={() => discardResource(k, inventory[k] ?? 0, dropPos())}
+                >
+                  {t('drop')}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// On-foot HUD: a compass that shows heading plus a marker pointing back to the
-// ship (the disembark point at the world origin) with distance, and the Board
-// ship action that returns to the Phase 8 surface view.
+/** The build picker as an open/close sheet. Picking a buildable closes it. */
+function BuildSheet({ onClose }: { onClose: () => void }) {
+  const { t } = useT();
+  const active = useStore((s) => s.activeBuildable);
+  const setActive = useStore((s) => s.setActiveBuildable);
+  const inventory = useStore((s) => s.inventory);
+
+  return (
+    <div className="voxel-sheet-backdrop" onClick={onClose}>
+      <div className="voxel-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="voxel-sheet-head">
+          <span>{t('build')}</span>
+          <button className="voxel-sheet-close" onClick={onClose}>
+            {t('close')}
+          </button>
+        </div>
+        <div className="voxel-sheet-list">
+          {BUILDABLE_IDS.map((id) => {
+            const cost = BUILDABLES[id].cost;
+            const affordable = (Object.keys(cost) as ResourceType[]).every(
+              (k) => (inventory[k] ?? 0) >= (cost[k] ?? 0),
+            );
+            return (
+              <button
+                key={id}
+                className={`voxel-build-btn${active === id ? ' active' : ''}`}
+                onClick={() => {
+                  setActive(id);
+                  onClose();
+                }}
+              >
+                <span>{t(id)}</span>
+                <span className={`voxel-build-cost${affordable ? '' : ' short'}`}>
+                  {costLabel(cost)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// On-foot HUD: compass + ship beacon, the open/close Backpack & Build menus, and
+// (desktop) the Board-ship action.
 export function VoxelHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
   const boardShip = useStore((s) => s.boardShip);
+  const inventory = useStore((s) => s.inventory);
+  const capacity = useStore((s) => s.backpackCapacity);
+  const activeBuildable = useStore((s) => s.activeBuildable);
+  const { t } = useT();
   const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0 });
+  const [menu, setMenu] = useState<Menu>('none');
   const raf = useRef(0);
+
+  // Opening a menu frees the desktop cursor (pointer-lock) so it can click.
+  const openMenu = (target: Menu) => {
+    setMenu((prev) => {
+      const next = prev === target ? 'none' : target;
+      if (next !== 'none' && document.pointerLockElement) document.exitPointerLock();
+      return next;
+    });
+  };
+
+  // Desktop keys: Tab → backpack, B → build, Esc → close.
+  useEffect(() => {
+    if (sceneMode.type !== 'voxel') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        openMenu('backpack');
+      } else if (e.code === 'KeyB') {
+        openMenu('build');
+      } else if (e.code === 'Escape') {
+        setMenu('none');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sceneMode.type]);
+
+  // Close menus when leaving the voxel world.
+  useEffect(() => {
+    if (sceneMode.type !== 'voxel') setMenu('none');
+  }, [sceneMode.type]);
 
   useEffect(() => {
     if (sceneMode.type !== 'voxel') return;
@@ -131,9 +184,7 @@ export function VoxelHUD() {
     const tick = () => {
       if (!running) return;
       const { x, z, yaw } = voxelTelemetry;
-      // Heading: forward is (-sin yaw, -cos yaw); 0° = facing -Z (north).
       const heading = ((-yaw * 180) / Math.PI + 360) % 360;
-      // Relative bearing of the ship (origin) from the player's facing.
       const fx = -Math.sin(yaw);
       const fz = -Math.cos(yaw);
       const len = Math.hypot(x, z) || 1;
@@ -141,7 +192,7 @@ export function VoxelHUD() {
       const tz = -z / len;
       const dot = fx * tx + fz * tz;
       const cross = fx * tz - fz * tx;
-      const shipAngle = (Math.atan2(cross, dot) * 180) / Math.PI; // 0 = ahead
+      const shipAngle = (Math.atan2(cross, dot) * 180) / Math.PI;
       setHud({ heading, shipAngle, dist: Math.hypot(x, z) });
       raf.current = requestAnimationFrame(tick);
     };
@@ -156,30 +207,44 @@ export function VoxelHUD() {
 
   const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const cardinal = cardinals[Math.round(hud.heading / 45) % 8];
-  // On touch the Back action lives in the bottom 2x2 thumb cluster
-  // (VoxelTouchControls); on desktop it stays here as a clickable button.
   const touch = isTouchDevice();
-  // Ship marker placed on the ring at its relative bearing (up = ahead).
   const rad = (hud.shipAngle * Math.PI) / 180;
   const mx = 24 + Math.sin(rad) * 17;
   const my = 24 - Math.cos(rad) * 17;
+  const used = backpackUsed(inventory);
 
   return (
     <div className="surface-hud">
       <div className="voxel-crosshair" aria-hidden="true" />
-      <Backpack />
-      <BuildSelector />
+
+      {/* Top-right menu toggles (also serve as compact indicators). */}
+      <div className="voxel-menu-toggles">
+        <button
+          className={`voxel-toggle-btn${menu === 'backpack' ? ' active' : ''}`}
+          onClick={() => openMenu('backpack')}
+        >
+          {t('backpack')} {used}/{capacity}
+        </button>
+        <button
+          className={`voxel-toggle-btn${menu === 'build' ? ' active' : ''}`}
+          onClick={() => openMenu('build')}
+        >
+          {t('build')}: {t(activeBuildable)}
+        </button>
+      </div>
+
+      {menu === 'backpack' && <BackpackSheet onClose={() => setMenu('none')} />}
+      {menu === 'build' && <BuildSheet onClose={() => setMenu('none')} />}
+
       <div className="surface-hud-top">
         <div className="surface-hud-name">{sceneMode.planet.toUpperCase()} — ON FOOT</div>
         <div className="surface-hud-compass">
           <svg width="56" height="56" viewBox="0 0 48 48">
             <circle cx="24" cy="24" r="22" fill="rgba(0,0,0,0.35)" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-            {/* North needle rotates with heading */}
             <g transform={`rotate(${-hud.heading}, 24, 24)`}>
               <polygon points="24,5 27,20 24,17 21,20" fill="#ff4444" opacity="0.9" />
               <text x="24" y="46" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.5)">N</text>
             </g>
-            {/* Ship marker (relative bearing, up = ahead) */}
             <circle cx={mx} cy={my} r="3" fill="#7fd0ff" stroke="rgba(0,0,0,0.5)" strokeWidth="0.5" />
           </svg>
           <div className="surface-hud-cardinal">
