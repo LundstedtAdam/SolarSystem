@@ -6,6 +6,7 @@
 import { getBiome } from '../terrain/biomes';
 import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
 import { getContent, type LandmarkSpec, type POISpec } from './contentProfiles';
+import { getBodyResources, type ResourceVein } from './resourceProfiles';
 
 export type Archetype = 'rock' | 'regolith' | 'earth' | 'ice' | 'lava' | 'dune';
 
@@ -59,6 +60,8 @@ export interface VoxelTerrainParams {
   landmarks: LandmarkSpec[];
   /** Modular ruined points-of-interest stamped into chunks (Phase 10.2). */
   pois: POISpec[];
+  /** Mineable ore veins for this body (Phase 11). */
+  resources: ResourceVein[];
 }
 
 function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emissive = 0) {
@@ -100,6 +103,22 @@ export function getVoxelPalette(planet: string): Float32Array {
   rgb(pal, BLOCK.METAL, 0.5, 0.52, 0.55);
   rgb(pal, BLOCK.PANEL, 0.34, 0.36, 0.4);
   rgb(pal, BLOCK.GLASS, 0.55, 0.7, 0.78, 0.12);
+
+  // Phase 11 — mineable ore veins. Distinct, recognizable tints (a couple are
+  // faintly self-lit) so a vein reads clearly against the host rock at depth.
+  rgb(pal, BLOCK.CARBON_ORE, 0.12, 0.12, 0.14);
+  rgb(pal, BLOCK.SILICON_ORE, 0.6, 0.62, 0.68);
+  rgb(pal, BLOCK.IRON_ORE, 0.5, 0.34, 0.26);
+  rgb(pal, BLOCK.COPPER_ORE, 0.72, 0.45, 0.2);
+  rgb(pal, BLOCK.ZINC_ORE, 0.55, 0.6, 0.62);
+  rgb(pal, BLOCK.WOLFRAMITE_ORE, 0.26, 0.21, 0.19);
+  rgb(pal, BLOCK.SPHALERITE_ORE, 0.56, 0.46, 0.2);
+  rgb(pal, BLOCK.MALACHITE_ORE, 0.15, 0.55, 0.35);
+  rgb(pal, BLOCK.TUNGSTEN_ORE, 0.46, 0.48, 0.51);
+  rgb(pal, BLOCK.TITANITE_ORE, 0.7, 0.55, 0.25);
+  rgb(pal, BLOCK.HEMATITE_ORE, 0.52, 0.29, 0.27);
+  rgb(pal, BLOCK.LITHIUM_ORE, 0.85, 0.6, 0.7, 0.18);
+  rgb(pal, BLOCK.ARTIFACT, 0.6, 0.3, 0.9, 0.65);
   return pal;
 }
 
@@ -126,6 +145,7 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     lavaLevel: -1,
     landmarks: getContent(planet).landmarks,
     pois: getContent(planet).pois,
+    resources: getBodyResources(arche),
   };
 
   switch (arche) {

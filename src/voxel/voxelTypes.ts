@@ -43,13 +43,108 @@ export const BLOCK = {
   METAL: 11, // hull / structural metal
   PANEL: 12, // floor / wall panelling
   GLASS: 13, // dome / window glazing
+  // Phase 11 — mineable resource veins. Fundamentals occur on every body;
+  // the rest are biome-specific (see contentProfiles resources + voxelBiomes
+  // palette). Each maps to a ResourceType via ORE_TO_RESOURCE.
+  CARBON_ORE: 14,
+  SILICON_ORE: 15,
+  IRON_ORE: 16,
+  COPPER_ORE: 17,
+  ZINC_ORE: 18,
+  WOLFRAMITE_ORE: 19,
+  SPHALERITE_ORE: 20,
+  MALACHITE_ORE: 21,
+  TUNGSTEN_ORE: 22,
+  TITANITE_ORE: 23,
+  HEMATITE_ORE: 24,
+  LITHIUM_ORE: 25,
+  ARTIFACT: 26, // anomalous artifact — deep hostile cores, endgame drives
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 14;
+export const BLOCK_COUNT = 27;
 
 /** Floats per palette entry: r, g, b, emissive. */
 export const PALETTE_STRIDE = 4;
+
+// --- Phase 11 resources ------------------------------------------------------
+
+/** A gatherable resource. Mined ores plus (later) condensed gases and refined
+ *  ingots. Inventory is keyed by these strings. */
+export type ResourceType =
+  | 'carbon'
+  | 'silicon'
+  | 'iron'
+  | 'copper'
+  | 'zinc'
+  | 'wolframite'
+  | 'sphalerite'
+  | 'malachite'
+  | 'tungsten'
+  | 'titanite'
+  | 'hematite'
+  | 'lithium'
+  | 'artifact';
+
+/** Ore block id -> the resource it yields when mined. Non-ore blocks are absent
+ *  (mining them just removes terrain and yields nothing). */
+export const ORE_TO_RESOURCE: Partial<Record<number, ResourceType>> = {
+  [BLOCK.CARBON_ORE]: 'carbon',
+  [BLOCK.SILICON_ORE]: 'silicon',
+  [BLOCK.IRON_ORE]: 'iron',
+  [BLOCK.COPPER_ORE]: 'copper',
+  [BLOCK.ZINC_ORE]: 'zinc',
+  [BLOCK.WOLFRAMITE_ORE]: 'wolframite',
+  [BLOCK.SPHALERITE_ORE]: 'sphalerite',
+  [BLOCK.MALACHITE_ORE]: 'malachite',
+  [BLOCK.TUNGSTEN_ORE]: 'tungsten',
+  [BLOCK.TITANITE_ORE]: 'titanite',
+  [BLOCK.HEMATITE_ORE]: 'hematite',
+  [BLOCK.LITHIUM_ORE]: 'lithium',
+  [BLOCK.ARTIFACT]: 'artifact',
+};
+
+/** True if a block id is a mineable ore (yields a resource). */
+export function isOre(id: BlockId): boolean {
+  return ORE_TO_RESOURCE[id] !== undefined;
+}
+
+/** Seconds of continuous mining to break a block. Soft topsoils break fast;
+ *  rock and ore are slower; artifacts are the slowest. Unlisted solids use
+ *  DEFAULT_HARDNESS. Returned by blockHardness(). */
+const DEFAULT_HARDNESS = 0.5;
+const HARDNESS: Partial<Record<number, number>> = {
+  [BLOCK.SURFACE]: 0.35,
+  [BLOCK.SUBSOIL]: 0.45,
+  [BLOCK.GRASS]: 0.3,
+  [BLOCK.SAND]: 0.3,
+  [BLOCK.ICE]: 0.5,
+  [BLOCK.ICE_GLOW]: 0.6,
+  [BLOCK.ROCK]: 0.9,
+  [BLOCK.SULPHUR]: 0.5,
+  [BLOCK.LAVA]: 1.2,
+  [BLOCK.METAL]: 1.4,
+  [BLOCK.PANEL]: 1.1,
+  [BLOCK.GLASS]: 0.6,
+  [BLOCK.CARBON_ORE]: 1.0,
+  [BLOCK.SILICON_ORE]: 1.0,
+  [BLOCK.IRON_ORE]: 1.3,
+  [BLOCK.COPPER_ORE]: 1.2,
+  [BLOCK.ZINC_ORE]: 1.2,
+  [BLOCK.WOLFRAMITE_ORE]: 1.5,
+  [BLOCK.SPHALERITE_ORE]: 1.3,
+  [BLOCK.MALACHITE_ORE]: 1.3,
+  [BLOCK.TUNGSTEN_ORE]: 1.7,
+  [BLOCK.TITANITE_ORE]: 1.5,
+  [BLOCK.HEMATITE_ORE]: 1.4,
+  [BLOCK.LITHIUM_ORE]: 1.4,
+  [BLOCK.ARTIFACT]: 2.4,
+};
+
+/** Seconds of continuous mining required to break the given block. */
+export function blockHardness(id: BlockId): number {
+  return HARDNESS[id] ?? DEFAULT_HARDNESS;
+}
 
 export function packVoxel(id: BlockId): number {
   return id & ID_MASK;

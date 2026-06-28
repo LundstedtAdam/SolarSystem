@@ -9,6 +9,7 @@ import { VoxelSky } from './VoxelSky';
 import { VoxelWeather } from './VoxelWeather';
 import { VoxelScatter } from './VoxelScatter';
 import { Emitters } from './Emitters';
+import { DropItems } from './DropItems';
 import { PlayerController } from './PlayerController';
 import type { VoxelApi } from './player';
 
@@ -87,6 +88,7 @@ export function VoxelScene() {
       <VoxelSky planet={planet} />
       <VoxelScatter planet={planet} />
       <Emitters planet={planet} />
+      <DropItems planet={planet} />
       <VoxelWeather planet={planet} />
       <ambientLight intensity={ambientIntensity} color={ambientColor} />
       <SunLight planet={planet} />

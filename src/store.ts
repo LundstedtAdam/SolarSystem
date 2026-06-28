@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Object3D } from 'three';
 import { daysSinceJ2000, periodDays } from './systems/ephemeris';
 import { PLANETS, isLandable, WORLD_SCALE, type PlanetData } from './systems/bodies';
+import type { ResourceType } from './voxel/voxelTypes';
 import { detectQuality, type Quality } from './systems/quality';
 import type { Lang } from './i18n';
 
@@ -45,6 +46,23 @@ export interface JournalEntry {
   story?: DiscoveryStory;
   clue?: string;
   ts: number;
+}
+
+/** A resource dropped on the terrain when the backpack overflows. Re-collected
+ *  by walking over it once there's space (Phase 11). */
+export interface ResourceDrop {
+  id: number;
+  planet: string;
+  pos: [number, number, number];
+  type: ResourceType;
+  amount: number;
+}
+
+/** Total carried units across all resource stacks. */
+export function backpackUsed(inv: Partial<Record<ResourceType, number>>): number {
+  let n = 0;
+  for (const k in inv) n += inv[k as ResourceType] ?? 0;
+  return n;
 }
 
 /** Persisted knowledge progression (Phase 10.4). Knowledge is the reward, so it
@@ -196,6 +214,12 @@ interface SimState {
   journal: JournalEntry[];
   mysteryClues: string[];
 
+  /** Phase 11 backpack: carried resource stacks and the total-unit capacity. */
+  inventory: Partial<Record<ResourceType, number>>;
+  backpackCapacity: number;
+  /** Resources dropped on the ground (overflow) awaiting pickup. */
+  drops: ResourceDrop[];
+
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
   select: (body: SelectedBody, object: Object3D) => void;
@@ -244,6 +268,15 @@ interface SimState {
     clue?: string;
     mysteryId?: string;
   }) => boolean;
+
+  /** Mine a resource: add what fits to the backpack, drop the overflow on the
+   *  terrain at `pos`. Returns the amount that overflowed (0 if it all fit). */
+  mineResource: (type: ResourceType, amount: number, planet: string, pos: [number, number, number]) => number;
+  /** Walk-over pickup of a ground drop; collects only what now fits. Removes the
+   *  drop when fully collected. */
+  collectDrop: (id: number) => void;
+  /** Replace the whole backpack (used by persistence hydration). */
+  setInventory: (inv: Partial<Record<ResourceType, number>>) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -283,6 +316,10 @@ export const useStore = create<SimState>((set, get) => ({
   },
 
   ...loadDiscovery(),
+
+  inventory: {},
+  backpackCapacity: 50,
+  drops: [],
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -426,4 +463,38 @@ export const useStore = create<SimState>((set, get) => ({
     set({ discovered, journal, mysteryClues });
     return true;
   },
+
+  mineResource: (type, amount, planet, pos) => {
+    const s = get();
+    const space = Math.max(0, s.backpackCapacity - backpackUsed(s.inventory));
+    const added = Math.min(amount, space);
+    const overflow = amount - added;
+    if (added > 0) {
+      set({ inventory: { ...s.inventory, [type]: (s.inventory[type] ?? 0) + added } });
+    }
+    if (overflow > 0) {
+      const drop: ResourceDrop = { id: nextDropId++, planet, pos, type, amount: overflow };
+      set((st) => ({ drops: [...st.drops, drop] }));
+    }
+    return overflow;
+  },
+  collectDrop: (id) => {
+    const s = get();
+    const drop = s.drops.find((d) => d.id === id);
+    if (!drop) return;
+    const space = Math.max(0, s.backpackCapacity - backpackUsed(s.inventory));
+    if (space <= 0) return;
+    const taken = Math.min(drop.amount, space);
+    const inventory = { ...s.inventory, [drop.type]: (s.inventory[drop.type] ?? 0) + taken };
+    const remaining = drop.amount - taken;
+    const drops =
+      remaining > 0
+        ? s.drops.map((d) => (d.id === id ? { ...d, amount: remaining } : d))
+        : s.drops.filter((d) => d.id !== id);
+    set({ inventory, drops });
+  },
+  setInventory: (inventory) => set({ inventory }),
 }));
+
+/** Monotonic id source for ground drops. */
+let nextDropId = 1;

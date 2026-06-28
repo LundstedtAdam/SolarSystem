@@ -22,13 +22,14 @@ import {
   voxelInput,
   voxelTelemetry,
   consumeLook,
-  consumeDig,
   attachDesktopControls,
   pollVoxelGamepad,
   cubicLook,
 } from './voxelControls';
 
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
+/** Squared distance within which the player vacuums up a ground drop. */
+const PICKUP_RANGE_SQ = 2.0 * 2.0;
 
 /** Builds the visible first-person hand + tool, parented to the camera. */
 function makeHand(biome: ReturnType<typeof getBiome>): Group {
@@ -132,7 +133,8 @@ export function PlayerController({
       Math.min(PITCH_LIMIT, player.pitch - cubicLook(look.dy, ms)),
     );
 
-    if (consumeDig()) api.dig();
+    // Continuous hold-to-mine at the crosshair (touch Dig / left mouse / RT).
+    api.mineTick(Math.min(dt, 0.05), voxelInput.mine);
 
     player.update(
       Math.min(dt, 0.05),
@@ -148,6 +150,18 @@ export function PlayerController({
     voxelTelemetry.x = player.pos.x;
     voxelTelemetry.z = player.pos.z;
     voxelTelemetry.yaw = player.yaw;
+
+    // Walk-over pickup of overflow drops on this body (only when there's space).
+    const st = useStore.getState();
+    if (st.drops.length > 0) {
+      for (const d of st.drops) {
+        if (d.planet !== planet) continue;
+        const dx = d.pos[0] - player.pos.x;
+        const dy = d.pos[1] - player.pos.y;
+        const dz = d.pos[2] - player.pos.z;
+        if (dx * dx + dy * dy + dz * dz < PICKUP_RANGE_SQ) st.collectDrop(d.id);
+      }
+    }
 
     // Footsteps: accrue ground distance, fire one per stride with the material
     // of the block underfoot.

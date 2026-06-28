@@ -15,8 +15,10 @@ export interface VoxelApi {
   /** Block id at a world voxel (0 = air); used for footstep material. */
   blockAt: (wx: number, wy: number, wz: number) => number;
   edit: (wx: number, wy: number, wz: number, blockId: number) => void;
-  /** Break the voxel currently under the crosshair. */
-  dig: () => void;
+  /** Advance continuous (hold-to-mine) digging at the crosshair by `dt` seconds
+   *  while `active`; breaks the block once its hardness is met, yielding any
+   *  resource. Resets progress when the aim moves or mining stops. */
+  mineTick: (dt: number, active: boolean) => void;
 }
 
 export interface PlayerInput {

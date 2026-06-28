@@ -281,6 +281,66 @@ class AudioManager {
     }
   }
 
+  /** A soft repeating "chip" while hold-mining a voxel. Short filtered noise. */
+  playMineTick() {
+    const bus = this.surfaceBus;
+    if (!this.ctx || !bus) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.06;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1400 + Math.random() * 500;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.04, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filter).connect(g).connect(bus);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+
+  /** A crunchier burst when a voxel finally breaks: noise + a low thump. */
+  playMineBreak() {
+    const bus = this.surfaceBus;
+    if (!this.ctx || !bus) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.16;
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1100;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filter).connect(g).connect(bus);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(55, t + 0.14);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(0.07, t + 0.01);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    osc.connect(og).connect(bus);
+    osc.start(t);
+    osc.stop(t + 0.18);
+  }
+
   /** Fade in the surface soundscape for a given body. */
   startSurface(profile: SurfaceAudioProfile) {
     if (!this.ctx) return;

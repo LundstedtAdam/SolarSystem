@@ -1,6 +1,65 @@
 import { useEffect, useRef, useState } from 'react';
-import { useStore } from '../store';
+import { useStore, backpackUsed } from '../store';
 import { voxelTelemetry, isTouchDevice } from '../voxel/voxelControls';
+import type { ResourceType } from '../voxel/voxelTypes';
+
+const RESOURCE_LABEL: Record<ResourceType, string> = {
+  carbon: 'Carbon',
+  silicon: 'Silicon',
+  iron: 'Iron',
+  copper: 'Copper',
+  zinc: 'Zinc',
+  wolframite: 'Wolframite',
+  sphalerite: 'Sphalerite',
+  malachite: 'Malachite',
+  tungsten: 'Tungsten',
+  titanite: 'Titanite',
+  hematite: 'Hematite',
+  lithium: 'Lithium',
+  artifact: 'Artifact',
+};
+
+/** Compact backpack readout: capacity bar + carried resource stacks. Purely
+ *  informational (non-interactive) so it sits top-left, clear of the thumbs. */
+function Backpack() {
+  const inventory = useStore((s) => s.inventory);
+  const capacity = useStore((s) => s.backpackCapacity);
+  const hasDrops = useStore((s) => s.drops.length > 0);
+  const used = backpackUsed(inventory);
+  const full = used >= capacity;
+  const entries = (Object.keys(inventory) as ResourceType[])
+    .filter((k) => (inventory[k] ?? 0) > 0)
+    .sort();
+
+  return (
+    <div className="voxel-backpack">
+      <div className="voxel-backpack-head">
+        BACKPACK {used}/{capacity}
+      </div>
+      <div className="voxel-backpack-bar">
+        <div
+          className="voxel-backpack-fill"
+          style={{ width: `${Math.min(100, (used / capacity) * 100)}%`, background: full ? '#ff7a5a' : undefined }}
+        />
+      </div>
+      {entries.length === 0 ? (
+        <div className="voxel-backpack-empty">Empty — mine ore veins</div>
+      ) : (
+        <div className="voxel-backpack-list">
+          {entries.map((k) => (
+            <div key={k} className="voxel-backpack-row">
+              <span>{RESOURCE_LABEL[k]}</span>
+              <span>{inventory[k]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(full || hasDrops) && (
+        <div className="voxel-backpack-warn">Full — resources are dropping. Build storage.</div>
+      )}
+    </div>
+  );
+}
 
 // On-foot HUD: a compass that shows heading plus a marker pointing back to the
 // ship (the disembark point at the world origin) with distance, and the Board
@@ -53,6 +112,7 @@ export function VoxelHUD() {
   return (
     <div className="surface-hud">
       <div className="voxel-crosshair" aria-hidden="true" />
+      <Backpack />
       <div className="surface-hud-top">
         <div className="surface-hud-name">{sceneMode.planet.toUpperCase()} — ON FOOT</div>
         <div className="surface-hud-compass">

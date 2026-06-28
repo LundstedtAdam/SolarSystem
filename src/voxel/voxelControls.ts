@@ -10,8 +10,8 @@ export interface VoxelInputState {
   look: { dx: number; dy: number };
   jump: boolean;
   run: boolean;
-  /** Edge-triggered dig request (tap / click at the crosshair). */
-  dig: boolean;
+  /** Held continuous-mining request (touch Dig button / left mouse / RT held). */
+  mine: boolean;
   /** Edge-triggered scan request (Scan button / E key / left trigger). */
   scan: boolean;
 }
@@ -21,7 +21,7 @@ export const voxelInput: VoxelInputState = {
   look: { dx: 0, dy: 0 },
   jump: false,
   run: false,
-  dig: false,
+  mine: false,
   scan: false,
 };
 
@@ -43,13 +43,6 @@ export function consumeLook(): { dx: number; dy: number } {
   return d;
 }
 
-/** Read and clear the one-shot dig request. */
-export function consumeDig(): boolean {
-  const d = voxelInput.dig;
-  voxelInput.dig = false;
-  return d;
-}
-
 /** Read and clear the one-shot scan request. */
 export function consumeScan(): boolean {
   const s = voxelInput.scan;
@@ -64,7 +57,7 @@ export function resetVoxelInput(): void {
   voxelInput.look.dy = 0;
   voxelInput.jump = false;
   voxelInput.run = false;
-  voxelInput.dig = false;
+  voxelInput.mine = false;
   voxelInput.scan = false;
 }
 
@@ -92,14 +85,16 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
       voxelInput.look.dy += e.movementY;
     }
   };
-  // Left click captures the pointer (mouse look); right click digs the voxel
-  // under the crosshair.
+  // Left click captures the pointer; once locked, holding the left button mines
+  // the voxel under the crosshair continuously (release to stop).
   const onPointerDown = (e: MouseEvent) => {
-    if (e.button === 2) {
-      voxelInput.dig = true;
-      return;
+    if (e.button === 0) {
+      if (document.pointerLockElement !== dom) dom.requestPointerLock?.();
+      else voxelInput.mine = true;
     }
-    if (e.button === 0 && document.pointerLockElement !== dom) dom.requestPointerLock?.();
+  };
+  const onPointerUp = (e: MouseEvent) => {
+    if (e.button === 0) voxelInput.mine = false;
   };
   const onContext = (e: Event) => e.preventDefault();
 
@@ -107,6 +102,7 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
   window.addEventListener('keyup', ku);
   window.addEventListener('mousemove', onMouseMove);
   dom.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('mouseup', onPointerUp);
   dom.addEventListener('contextmenu', onContext);
 
   return () => {
@@ -114,6 +110,7 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
     window.removeEventListener('keyup', ku);
     window.removeEventListener('mousemove', onMouseMove);
     dom.removeEventListener('pointerdown', onPointerDown);
+    window.removeEventListener('mouseup', onPointerUp);
     dom.removeEventListener('contextmenu', onContext);
     if (document.pointerLockElement === dom) document.exitPointerLock();
     resetVoxelInput();
@@ -160,7 +157,7 @@ export function radialShape(x: number, y: number, deadzone: number): { x: number
 // matches. Triggers are treated as buttons with a 0.4 press threshold.
 const PAD_LOOK_GAIN = 1100;
 const TRIGGER_THRESHOLD = 0.4;
-const padPrev = { dig: false, scan: false, back: false };
+const padPrev = { scan: false, back: false };
 
 function padButton(gp: Gamepad, i: number): boolean {
   return !!gp.buttons[i]?.pressed;
@@ -185,7 +182,8 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
     }
   }
   if (!gp) {
-    padPrev.dig = padPrev.scan = padPrev.back = false;
+    voxelInput.mine = false;
+    padPrev.scan = padPrev.back = false;
     return { back: false };
   }
 
@@ -204,10 +202,8 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
   voxelInput.jump = padButton(gp, 0);
   voxelInput.run = padButton(gp, 4);
 
-  // Right trigger (7) dig, left trigger (6) scan — edge-triggered one-shots.
-  const digDown = (gp.buttons[7]?.value ?? 0) > TRIGGER_THRESHOLD;
-  if (digDown && !padPrev.dig) voxelInput.dig = true;
-  padPrev.dig = digDown;
+  // Right trigger (7) held = continuous mine; left trigger (6) scan = one-shot.
+  voxelInput.mine = (gp.buttons[7]?.value ?? 0) > TRIGGER_THRESHOLD;
 
   const scanDown = (gp.buttons[6]?.value ?? 0) > TRIGGER_THRESHOLD;
   if (scanDown && !padPrev.scan) voxelInput.scan = true;

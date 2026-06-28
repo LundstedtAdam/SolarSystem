@@ -90,14 +90,21 @@ function LookLayer() {
   );
 }
 
+// Hold to mine continuously; release to stop.
 function DigButton() {
+  const stop = () => {
+    voxelInput.mine = false;
+  };
   return (
     <button
       className="voxel-dig-btn"
       onPointerDown={(e) => {
         e.stopPropagation();
-        voxelInput.dig = true;
+        voxelInput.mine = true;
       }}
+      onPointerUp={stop}
+      onPointerCancel={stop}
+      onPointerLeave={stop}
     >
       DIG
     </button>

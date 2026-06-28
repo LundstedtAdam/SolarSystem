@@ -1,3 +1,6 @@
+import { useEffect } from 'react';
+import { useStore } from './store';
+import { loadInventory } from './voxel/persistence';
 import { SolarSystem } from './scene/SolarSystem';
 import { HUD } from './ui/HUD';
 import { InfoPanel } from './ui/InfoPanel';
@@ -18,6 +21,15 @@ import { VoxelTouchControls } from './ui/VoxelTouchControls';
 import { TouchControls } from './ui/TouchControls';
 
 export default function App() {
+  // Restore the persisted backpack once on load (voxel edits load per-body in
+  // the ChunkManager). Body edits + inventory are saved on leaving a surface
+  // and when the tab is hidden.
+  useEffect(() => {
+    loadInventory().then((inv) => {
+      if (inv) useStore.getState().setInventory(inv);
+    });
+  }, []);
+
   return (
     <>
       <SolarSystem />

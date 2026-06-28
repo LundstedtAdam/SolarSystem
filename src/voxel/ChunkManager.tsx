@@ -15,19 +15,27 @@ import {
   EdgesGeometry,
   BoxGeometry,
   LineBasicMaterial,
+  MeshBasicMaterial,
+  InstancedMesh,
+  Matrix4,
+  Color,
   type PerspectiveCamera,
 } from 'three';
 import { useStore } from '../store';
 import { getBiome } from '../terrain/biomes';
+import { audio } from '../audio/AudioManager';
 import { createVoxelMaterial } from './voxelMaterial';
 import { QUALITY } from '../systems/quality';
 import {
   CHUNK_SIZE,
   PADDED_VOLUME,
   PADDED_SIZE,
+  PALETTE_STRIDE,
   paddedIndex,
   voxelId,
   BLOCK,
+  blockHardness,
+  ORE_TO_RESOURCE,
   type MeshRequest,
   type MeshResult,
 } from './voxelTypes';
@@ -36,6 +44,7 @@ import { MesherPool, buildGeometry } from './mesher';
 import { generateChunk } from './worldGen';
 import { getVoxelPalette, getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
+import { loadBodyEdits, saveBodyEdits, saveInventory, type BodyEdits } from './persistence';
 import type { VoxelApi } from './player';
 
 function floorDiv(a: number, b: number): number {
@@ -70,6 +79,35 @@ export function ChunkManager({
   const aimNdc = useMemo(() => new Vector2(0, 0), []);
   const aimVoxel = useRef<[number, number, number] | null>(null);
 
+  // Hold-to-mine: a darkening "crack" box over the targeted voxel whose opacity
+  // and scale track break progress, plus a small one-shot debris burst on break.
+  const crack = useMemo(() => {
+    const m = new Mesh(
+      new BoxGeometry(1, 1, 1),
+      new MeshBasicMaterial({ color: 0x110d0a, transparent: true, opacity: 0, depthTest: true }),
+    );
+    m.visible = false;
+    m.renderOrder = 2;
+    return m;
+  }, []);
+  const burst = useMemo(() => {
+    const inst = new InstancedMesh(
+      new BoxGeometry(0.14, 0.14, 0.14),
+      new MeshBasicMaterial({ vertexColors: false, toneMapped: false }),
+      BURST_MAX,
+    );
+    inst.frustumCulled = false;
+    inst.count = BURST_MAX;
+    return inst;
+  }, []);
+  // Live debris particles (CPU-animated; matrices written each frame).
+  const debris = useRef<Debris[]>([]);
+  const mineState = useRef<{ key: string | null; progress: number; tickAcc: number }>({
+    key: null,
+    progress: 0,
+    tickAcc: 0,
+  });
+
   const params = useMemo(() => getVoxelTerrain(planet), [planet]);
   const seed = useMemo(() => seedFromName(planet), [planet]);
   const palette = useMemo(() => getVoxelPalette(planet), [planet]);
@@ -90,6 +128,9 @@ export function ChunkManager({
   const chunks = useRef(new Map<string, Chunk>());
   const meshes = useRef(new Map<string, Mesh>());
   const inFlight = useRef(new Set<string>());
+  // Saved per-chunk edit overlays for this body, loaded from IndexedDB; applied
+  // to chunks as they're (re)generated so a dug-out world persists across loads.
+  const savedEdits = useRef<BodyEdits>({});
   const poolRef = useRef<MesherPool | null>(null);
   const padScratch = useRef(new Uint32Array(PADDED_VOLUME));
 
@@ -103,6 +144,54 @@ export function ChunkManager({
     };
   }, [q.voxelWorkers]);
 
+  // --- persistence: load this body's saved edits; save on leave / app-hide ---
+  useEffect(() => {
+    let alive = true;
+    savedEdits.current = {};
+    loadBodyEdits(planet).then((map) => {
+      if (!alive) return;
+      savedEdits.current = map;
+      // Hydrate any chunks already created before the load resolved.
+      for (const key in map) {
+        const c = chunks.current.get(key);
+        if (!c) continue;
+        const [idx, val] = map[key];
+        for (let i = 0; i < idx.length; i++) c.edits.set(idx[i], val[i]);
+        if (c.generated) {
+          c.reapplyEdits();
+          c.refreshEmpty();
+          c.meshedRev = -1; // force a re-mesh with the restored voxels
+        }
+      }
+    });
+
+    const saveNow = () => {
+      const out: BodyEdits = {};
+      for (const [key, c] of chunks.current) {
+        if (c.edits.size === 0) continue;
+        const idx: number[] = [];
+        const val: number[] = [];
+        for (const [i, v] of c.edits) {
+          idx.push(i);
+          val.push(v);
+        }
+        out[key] = [idx, val];
+      }
+      void saveBodyEdits(planet, out);
+      void saveInventory(useStore.getState().inventory);
+    };
+
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') saveNow();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onHide);
+      saveNow();
+    };
+  }, [planet]);
+
   // --- chunk helpers ---
   /** Get (or create, empty) the chunk; null if outside the vertical span. */
   const getOrCreate = (cx: number, cy: number, cz: number): Chunk | null => {
@@ -111,6 +200,12 @@ export function ChunkManager({
     let c = chunks.current.get(key);
     if (!c) {
       c = new Chunk(cx, cy, cz);
+      // Seed any persisted edits so generateChunk's reapplyEdits restores them.
+      const saved = savedEdits.current[key];
+      if (saved) {
+        const [idx, val] = saved;
+        for (let i = 0; i < idx.length; i++) c.edits.set(idx[i], val[i]);
+      }
       chunks.current.set(key, c);
     }
     return c;
@@ -244,15 +339,86 @@ export function ChunkManager({
     return voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE));
   };
 
-  /** Break the voxel currently under the crosshair (driven by tap/click). */
-  const digApi = () => {
+  /** Spawn a small debris burst at a voxel centre, tinted by the broken block. */
+  const spawnBurst = (cx: number, cy: number, cz: number, block: number) => {
+    const o = block * PALETTE_STRIDE;
+    const r = palette[o] ?? 0.6;
+    const g = palette[o + 1] ?? 0.6;
+    const b = palette[o + 2] ?? 0.6;
+    const n = 8;
+    const list = debris.current;
+    for (let i = 0; i < n && list.length < BURST_MAX; i++) {
+      list.push({
+        x: cx,
+        y: cy,
+        z: cz,
+        vx: (Math.random() - 0.5) * 4,
+        vy: 2 + Math.random() * 3,
+        vz: (Math.random() - 0.5) * 4,
+        life: 0,
+        max: 0.45 + Math.random() * 0.3,
+        r,
+        g,
+        b,
+      });
+    }
+  };
+
+  /** Continuous hold-to-mine at the crosshair. Accumulates progress against the
+   *  block's hardness; on break, yields any resource, removes the voxel, and
+   *  fires audio + a debris burst. Resets when the aim moves or mining stops. */
+  const mineTick = (dt: number, active: boolean) => {
+    const ms = mineState.current;
     const a = aimVoxel.current;
-    if (a) editVoxel(a[0], a[1], a[2], BLOCK.AIR);
+    if (!active || !a) {
+      ms.key = null;
+      ms.progress = 0;
+      crack.visible = false;
+      return;
+    }
+    const block = blockAtApi(a[0], a[1], a[2]);
+    if (block === BLOCK.AIR) {
+      crack.visible = false;
+      return;
+    }
+    const key = `${a[0]},${a[1]},${a[2]}`;
+    if (key !== ms.key) {
+      ms.key = key;
+      ms.progress = 0;
+    }
+    ms.progress += dt;
+    ms.tickAcc += dt;
+    const frac = Math.min(ms.progress / blockHardness(block), 1);
+
+    crack.position.set(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5);
+    crack.scale.setScalar(1.002);
+    (crack.material as MeshBasicMaterial).opacity = 0.1 + frac * 0.55;
+    crack.visible = true;
+
+    if (ms.tickAcc >= 0.16) {
+      ms.tickAcc = 0;
+      audio.playMineTick();
+    }
+
+    if (frac >= 1) {
+      const res = ORE_TO_RESOURCE[block];
+      if (res) {
+        useStore
+          .getState()
+          .mineResource(res, 1, planet, [a[0] + 0.5, a[1] + 0.5, a[2] + 0.5]);
+      }
+      spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
+      audio.playMineBreak();
+      editVoxel(a[0], a[1], a[2], BLOCK.AIR);
+      ms.key = null;
+      ms.progress = 0;
+      crack.visible = false;
+    }
   };
 
   // Publish the surface API for the player controller.
   useEffect(() => {
-    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel, dig: digApi };
+    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel, mineTick };
     return () => {
       apiRef.current = null;
     };
@@ -271,13 +437,18 @@ export function ChunkManager({
       material.dispose();
       highlight.geometry.dispose();
       (highlight.material as LineBasicMaterial).dispose();
+      crack.geometry.dispose();
+      (crack.material as MeshBasicMaterial).dispose();
+      burst.geometry.dispose();
+      (burst.material as MeshBasicMaterial).dispose();
     };
-  }, [material, highlight]);
+  }, [material, highlight, crack, burst]);
 
   // --- per-frame streaming ---
   const camChunk = useRef({ x: NaN, z: NaN });
-  useFrame(() => {
+  useFrame((_, dtRaw) => {
     if (useStore.getState().sceneMode.type !== 'voxel') return;
+    const dt = Math.min(dtRaw, 0.05);
     const pool = poolRef.current;
     if (!pool) return;
 
@@ -329,6 +500,8 @@ export function ChunkManager({
     camChunk.current.x = ccx;
     camChunk.current.z = ccz;
 
+    updateDebris(burst, debris.current, dt, _burstM, _burstC);
+
     // Aim: raycast from the crosshair to find the targeted voxel (within reach)
     // for the highlight + dig.
     aimRay.setFromCamera(aimNdc, camera);
@@ -351,8 +524,63 @@ export function ChunkManager({
     <>
       <primitive object={group} />
       <primitive object={highlight} />
+      <primitive object={crack} />
+      <primitive object={burst} />
     </>
   );
 }
 
 const REACH = 6; // max dig/highlight distance in voxels
+
+/** Max simultaneous debris cubes across all active bursts. */
+const BURST_MAX = 64;
+const BURST_GRAVITY = 16;
+const _burstM = new Matrix4();
+const _burstC = new Color();
+
+interface Debris {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  life: number;
+  max: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** Integrate + render the live debris cubes into the shared InstancedMesh.
+ *  Dead particles are swap-removed; unused instances are scaled to zero. */
+function updateDebris(inst: InstancedMesh, list: Debris[], dt: number, m: Matrix4, c: Color): void {
+  for (let i = list.length - 1; i >= 0; i--) {
+    const d = list[i];
+    d.life += dt;
+    if (d.life >= d.max) {
+      list[i] = list[list.length - 1];
+      list.pop();
+      continue;
+    }
+    d.vy -= BURST_GRAVITY * dt;
+    d.x += d.vx * dt;
+    d.y += d.vy * dt;
+    d.z += d.vz * dt;
+  }
+  for (let i = 0; i < BURST_MAX; i++) {
+    const d = list[i];
+    if (d) {
+      const s = 1 - d.life / d.max; // shrink as it fades
+      m.makeScale(s, s, s);
+      m.setPosition(d.x, d.y, d.z);
+      inst.setMatrixAt(i, m);
+      inst.setColorAt(i, c.setRGB(d.r, d.g, d.b));
+    } else {
+      m.makeScale(0, 0, 0);
+      inst.setMatrixAt(i, m);
+    }
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+}

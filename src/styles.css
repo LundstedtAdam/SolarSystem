@@ -876,6 +876,61 @@ canvas {
   font-size: 18px;
 }
 
+/* On-foot backpack readout — top-left, non-interactive, clear of the thumbs. */
+.voxel-backpack {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  width: 168px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+.voxel-backpack-head {
+  letter-spacing: 1px;
+  font-size: 11px;
+  opacity: 0.8;
+  margin-bottom: 5px;
+}
+.voxel-backpack-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.voxel-backpack-fill {
+  height: 100%;
+  background: rgba(147, 173, 136, 0.85);
+  transition: width 0.15s ease;
+}
+.voxel-backpack-empty {
+  opacity: 0.5;
+  font-size: 11px;
+}
+.voxel-backpack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.voxel-backpack-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.voxel-backpack-warn {
+  margin-top: 6px;
+  color: #ff9a7a;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 /* On-foot aiming crosshair */
 .voxel-crosshair {
   position: fixed;

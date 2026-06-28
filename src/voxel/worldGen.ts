@@ -106,6 +106,28 @@ function columnHeight(wx: number, wz: number, p: VoxelTerrainParams, seed: numbe
   return Math.floor(h);
 }
 
+/** Ore vein for a stone voxel at (wx,wy,wz) and surface-relative depth, or -1.
+ *  First matching vein wins; rarer/deeper veins are listed later so they don't
+ *  shadow the common ones. Only host stone is replaced (caller decides). */
+function oreAt(
+  depth: number,
+  wx: number,
+  wy: number,
+  wz: number,
+  p: VoxelTerrainParams,
+  seed: number,
+): number {
+  const veins = p.resources;
+  for (let i = 0; i < veins.length; i++) {
+    const v = veins[i];
+    if (depth < v.minDepth || depth > v.maxDepth) continue;
+    if (valueNoise3(wx * v.freq, wy * v.freq, wz * v.freq, seed + v.salt) > v.threshold) {
+      return v.block;
+    }
+  }
+  return -1;
+}
+
 /** Pick the solid block for a voxel below the surface. */
 function layerBlock(
   arche: VoxelTerrainParams['archetype'],
@@ -116,6 +138,12 @@ function layerBlock(
   p: VoxelTerrainParams,
   seed: number,
 ): number {
+  // Ore veins replace host stone/subsoil below the immediate topsoil so the
+  // surface still reads as its biome but digging in reveals deposits.
+  if (depth > 1) {
+    const ore = oreAt(depth, wx, wy, wz, p, seed);
+    if (ore >= 0) return ore;
+  }
   switch (arche) {
     case 'earth':
       if (depth <= 0) return BLOCK.GRASS;
