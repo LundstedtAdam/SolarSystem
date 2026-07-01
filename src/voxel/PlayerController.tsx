@@ -22,6 +22,7 @@ import {
   voxelInput,
   voxelTelemetry,
   voxelSilo,
+  voxelStation,
   consumeLook,
   consumePlace,
   consumeDeposit,
@@ -37,6 +38,8 @@ const PICKUP_RANGE_SQ = 2.0 * 2.0;
 const SILO_ABSORB_SQ = 5.0 * 5.0;
 /** Squared range within which the player can manually deposit into a silo. */
 const DEPOSIT_SQ = 3.5 * 3.5;
+/** Squared range within which the player can craft at a station. */
+const CRAFT_SQ = 3.5 * 3.5;
 
 /** Builds the visible first-person hand + tool, parented to the camera. */
 function makeHand(biome: ReturnType<typeof getBiome>): Group {
@@ -178,15 +181,25 @@ export function PlayerController({
       }
     }
 
-    // Silos: pull in nearby ground drops, and expose a deposit affordance.
+    // Silos: pull in nearby ground drops + deposit affordance. Stations: expose
+    // a craft affordance when the player is close enough.
     let siloNear = -1;
     let siloNearSq = DEPOSIT_SQ;
+    let stationNear = -1;
+    let stationNearSq = CRAFT_SQ;
     for (const s of st.structures) {
       if (s.planet !== planet) continue;
       const sx = s.pos[0] - px;
       const sy = s.pos[1] - py;
       const sz = s.pos[2] - pz;
       const sq = sx * sx + sy * sy + sz * sz;
+      if (s.type === 'station') {
+        if (sq < stationNearSq) {
+          stationNearSq = sq;
+          stationNear = s.id;
+        }
+        continue; // stations don't store/absorb
+      }
       if (sq < siloNearSq) {
         siloNearSq = sq;
         siloNear = s.id;
@@ -203,6 +216,8 @@ export function PlayerController({
       }
     }
     voxelSilo.available = siloNear >= 0;
+    voxelStation.available = stationNear >= 0;
+    voxelStation.id = stationNear;
     if (consumeDeposit() && siloNear >= 0) st.depositToStructure(siloNear);
 
     // Footsteps: accrue ground distance, fire one per stride with the material

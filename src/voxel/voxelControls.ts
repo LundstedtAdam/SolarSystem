@@ -41,6 +41,9 @@ export const voxelScan = { available: false };
  *  contextual Deposit button (non-reactive; polled). */
 export const voxelSilo = { available: false };
 
+/** Nearest crafting station within range (id, or -1) — drives the Craft button. */
+export const voxelStation = { available: false, id: -1 };
+
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
  *  the compass never forces a 60fps React re-render). Updated by the
  *  PlayerController each frame; the ship sits at the world origin. */

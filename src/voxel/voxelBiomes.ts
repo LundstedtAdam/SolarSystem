@@ -123,6 +123,8 @@ export function getVoxelPalette(planet: string): Float32Array {
   // Phase 11.1 — player-placed build materials (read clearly as artificial).
   rgb(pal, BLOCK.BUILD, 0.62, 0.64, 0.68);
   rgb(pal, BLOCK.SILO, 0.4, 0.62, 0.72, 0.15);
+  // Phase 11.2 — crafting station core (warm self-lit fabricator).
+  rgb(pal, BLOCK.STATION, 0.7, 0.5, 0.3, 0.2);
   return pal;
 }
 

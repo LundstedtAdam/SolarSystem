@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './store';
-import { loadInventory } from './voxel/persistence';
+import { loadInventory, loadItems, loadSeen } from './voxel/persistence';
 import { SolarSystem } from './scene/SolarSystem';
 import { HUD } from './ui/HUD';
 import { InfoPanel } from './ui/InfoPanel';
@@ -27,6 +27,12 @@ export default function App() {
   useEffect(() => {
     loadInventory().then((inv) => {
       if (inv) useStore.getState().setInventory(inv);
+    });
+    loadItems().then((items) => {
+      if (items) useStore.getState().setItems(items);
+    });
+    loadSeen().then((seen) => {
+      if (seen) useStore.getState().setSeenResources(seen);
     });
   }, []);
 

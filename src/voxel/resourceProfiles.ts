@@ -7,6 +7,23 @@
 import { BLOCK, type ResourceType } from './voxelTypes';
 import type { Archetype } from './voxelBiomes';
 
+/** Display name per resource — shared by the backpack, silos and crafting UI. */
+export const RESOURCE_LABEL: Record<ResourceType, string> = {
+  carbon: 'Carbon',
+  silicon: 'Silicon',
+  iron: 'Iron',
+  copper: 'Copper',
+  zinc: 'Zinc',
+  wolframite: 'Wolframite',
+  sphalerite: 'Sphalerite',
+  malachite: 'Malachite',
+  tungsten: 'Tungsten',
+  titanite: 'Titanite',
+  hematite: 'Hematite',
+  lithium: 'Lithium',
+  artifact: 'Artifact',
+};
+
 /** Display colour per resource — shared by ground drops and silo stacks. */
 export const RESOURCE_COLOR: Record<ResourceType, [number, number, number]> = {
   carbon: [0.2, 0.2, 0.22],

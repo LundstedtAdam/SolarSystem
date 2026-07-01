@@ -5,7 +5,7 @@
 
 import { BLOCK, type ResourceType } from './voxelTypes';
 
-export type BuildableId = 'block' | 'silo';
+export type BuildableId = 'block' | 'silo' | 'station';
 
 export interface StampVoxel {
   dx: number;
@@ -20,6 +20,8 @@ export interface Buildable {
   cost: Partial<Record<ResourceType, number>>;
   /** Voxels written relative to the target cell. */
   stamp: StampVoxel[];
+  /** Structure entity kind to register on placement (undefined = plain voxels). */
+  structureType?: 'silo' | 'station';
   /** For silos: storage capacity (total units). */
   capacity?: number;
 }
@@ -33,6 +35,7 @@ export const BUILDABLES: Record<BuildableId, Buildable> = {
   silo: {
     id: 'silo',
     cost: { silicon: 12 },
+    structureType: 'silo',
     // A short post: SILO core at the base (entity anchor), metal mid, glass cap.
     // The visible resource stack (SiloVisuals) grows above the cap.
     stamp: [
@@ -42,6 +45,17 @@ export const BUILDABLES: Record<BuildableId, Buildable> = {
     ],
     capacity: 240,
   },
+  station: {
+    id: 'station',
+    cost: { iron: 10, silicon: 8 },
+    structureType: 'station',
+    // A fabricator post: STATION core at the base (anchor), panel mid. A
+    // holographic blueprint (StationVisuals) floats above it.
+    stamp: [
+      { dx: 0, dy: 0, dz: 0, block: BLOCK.STATION },
+      { dx: 0, dy: 1, dz: 0, block: BLOCK.PANEL },
+    ],
+  },
 };
 
-export const BUILDABLE_IDS: BuildableId[] = ['block', 'silo'];
+export const BUILDABLE_IDS: BuildableId[] = ['block', 'silo', 'station'];

@@ -4,6 +4,17 @@ import { daysSinceJ2000, periodDays } from './systems/ephemeris';
 import { PLANETS, isLandable, WORLD_SCALE, type PlanetData } from './systems/bodies';
 import type { ResourceType } from './voxel/voxelTypes';
 import type { BuildableId } from './voxel/buildables';
+import { recipeById, type CraftedItem } from './voxel/recipes';
+
+/** Radius (voxels) within which a crafting station pulls from nearby silos. */
+const PULL_RADIUS_SQ = 12 * 12;
+
+function dist2(a: [number, number, number], b: [number, number, number]): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  return dx * dx + dy * dy + dz * dz;
+}
 import { detectQuality, type Quality } from './systems/quality';
 import type { Lang } from './i18n';
 
@@ -75,8 +86,8 @@ export function backpackUsed(inv: Partial<Record<ResourceType, number>>): number
 export interface Structure {
   id: number;
   planet: string;
-  type: 'silo';
-  /** World voxel of the SILO core (anchor). */
+  type: 'silo' | 'station';
+  /** World voxel of the core (anchor). */
   pos: [number, number, number];
   stored: Partial<Record<ResourceType, number>>;
   capacity: number;
@@ -243,10 +254,13 @@ interface SimState {
   backpackCapacity: number;
   /** Resources dropped on the ground (overflow) awaiting pickup. */
   drops: ResourceDrop[];
-  /** Phase 11.1 placed structures (silos) across all bodies. */
+  /** Phase 11.1 placed structures (silos + stations) across all bodies. */
   structures: Structure[];
   /** Currently selected buildable for the Place action. */
   activeBuildable: BuildableId;
+  /** Phase 11.2 crafted items, and the resources ever discovered (recipe reveal). */
+  items: Partial<Record<CraftedItem, number>>;
+  seenResources: Partial<Record<ResourceType, true>>;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -323,6 +337,16 @@ interface SimState {
   /** Move a ground drop into a silo (up to capacity); reduces/removes the drop. */
   absorbDropIntoSilo: (siloId: number, dropId: number) => void;
   setStructures: (structures: Structure[]) => void;
+
+  /** Phase 11.2 crafting. */
+  /** Combined resource availability = backpack + silos within pull radius of the
+   *  station. Used by the blueprint to show have/need. */
+  craftAvailability: (stationId: number) => Partial<Record<ResourceType, number>>;
+  /** Craft a recipe at a station: consumes inputs (backpack first, then nearby
+   *  silos) and yields the output item. Returns false if unaffordable. */
+  craft: (recipeId: string, stationId: number) => boolean;
+  setItems: (items: Partial<Record<CraftedItem, number>>) => void;
+  setSeenResources: (seen: Partial<Record<ResourceType, true>>) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -368,6 +392,8 @@ export const useStore = create<SimState>((set, get) => ({
   drops: [],
   structures: [],
   activeBuildable: 'block',
+  items: {},
+  seenResources: {},
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -517,8 +543,13 @@ export const useStore = create<SimState>((set, get) => ({
     const space = Math.max(0, s.backpackCapacity - backpackUsed(s.inventory));
     const added = Math.min(amount, space);
     const overflow = amount - added;
+    // Mark the resource discovered (reveals its gated recipes), even if the pack
+    // is full and the yield overflows — you've still seen it.
+    const seenResources = s.seenResources[type] ? s.seenResources : { ...s.seenResources, [type]: true as const };
     if (added > 0) {
-      set({ inventory: { ...s.inventory, [type]: (s.inventory[type] ?? 0) + added } });
+      set({ inventory: { ...s.inventory, [type]: (s.inventory[type] ?? 0) + added }, seenResources });
+    } else if (seenResources !== s.seenResources) {
+      set({ seenResources });
     }
     if (overflow > 0) {
       const drop: ResourceDrop = { id: nextDropId++, planet, pos, type, amount: overflow };
@@ -657,6 +688,73 @@ export const useStore = create<SimState>((set, get) => ({
     for (const s of structures) if (s.id >= nextDropId) nextDropId = s.id + 1;
     set({ structures });
   },
+
+  craftAvailability: (stationId) => {
+    const s = get();
+    const station = s.structures.find((x) => x.id === stationId);
+    const out: Partial<Record<ResourceType, number>> = { ...s.inventory };
+    if (!station) return out;
+    for (const silo of s.structures) {
+      if (silo.type !== 'silo' || silo.planet !== station.planet) continue;
+      if (dist2(silo.pos, station.pos) >= PULL_RADIUS_SQ) continue;
+      for (const k in silo.stored) {
+        const res = k as ResourceType;
+        out[res] = (out[res] ?? 0) + (silo.stored[res] ?? 0);
+      }
+    }
+    return out;
+  },
+  craft: (recipeId, stationId) => {
+    const s = get();
+    const recipe = recipeById(recipeId);
+    const station = s.structures.find((x) => x.id === stationId && x.type === 'station');
+    if (!recipe || !station) return false;
+    const silos = s.structures.filter(
+      (x) =>
+        x.type === 'silo' &&
+        x.planet === station.planet &&
+        dist2(x.pos, station.pos) < PULL_RADIUS_SQ,
+    );
+    // Affordability across backpack + nearby silos.
+    for (const k in recipe.inputs) {
+      const res = k as ResourceType;
+      let have = s.inventory[res] ?? 0;
+      for (const silo of silos) have += silo.stored[res] ?? 0;
+      if (have < (recipe.inputs[res] ?? 0)) return false;
+    }
+    // Consume: backpack first, then silos in order.
+    const inventory = { ...s.inventory };
+    const siloStored = new Map(silos.map((x) => [x.id, { ...x.stored }]));
+    for (const k in recipe.inputs) {
+      const res = k as ResourceType;
+      let need = recipe.inputs[res] ?? 0;
+      const fromPack = Math.min(need, inventory[res] ?? 0);
+      inventory[res] = (inventory[res] ?? 0) - fromPack;
+      if ((inventory[res] ?? 0) <= 0) delete inventory[res];
+      need -= fromPack;
+      for (const silo of silos) {
+        if (need <= 0) break;
+        const stored = siloStored.get(silo.id)!;
+        const take = Math.min(need, stored[res] ?? 0);
+        if (take > 0) {
+          stored[res] = (stored[res] ?? 0) - take;
+          if ((stored[res] ?? 0) <= 0) delete stored[res];
+          need -= take;
+        }
+      }
+    }
+    const structures = s.structures.map((x) =>
+      siloStored.has(x.id) ? { ...x, stored: siloStored.get(x.id)! } : x,
+    );
+    const items = {
+      ...s.items,
+      [recipe.output]: (s.items[recipe.output] ?? 0) + recipe.qty,
+    };
+    set({ inventory, structures, items });
+    return true;
+  },
+  setItems: (items) => set({ items }),
+  setSeenResources: (seenResources) => set({ seenResources }),
 }));
 
 /** Monotonic id source for ground drops + structures. */

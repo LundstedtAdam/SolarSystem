@@ -51,6 +51,8 @@ import {
   saveInventory,
   loadStructures,
   saveStructures,
+  saveItems,
+  saveSeen,
   type BodyEdits,
 } from './persistence';
 import type { VoxelApi } from './player';
@@ -196,6 +198,8 @@ export function ChunkManager({
       void saveBodyEdits(planet, out);
       void saveInventory(useStore.getState().inventory);
       void saveStructures(planet, useStore.getState().structures);
+      void saveItems(useStore.getState().items);
+      void saveSeen(useStore.getState().seenResources);
     };
 
     const onHide = () => {
@@ -426,8 +430,8 @@ export function ChunkManager({
       }
       spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
       audio.playMineBreak();
-      // Mining a silo core removes the entity and spills its stored contents.
-      if (block === BLOCK.SILO) {
+      // Mining a structure core (silo/station) removes the entity (silos spill).
+      if (block === BLOCK.SILO || block === BLOCK.STATION) {
         const st = useStore
           .getState()
           .structures.find((s) => s.pos[0] === a[0] && s.pos[1] === a[1] && s.pos[2] === a[2]);
@@ -449,14 +453,14 @@ export function ChunkManager({
     const b = BUILDABLES[store.activeBuildable];
     if (!store.spendResources(b.cost)) return; // can't afford
     for (const v of b.stamp) editVoxel(p[0] + v.dx, p[1] + v.dy, p[2] + v.dz, v.block);
-    if (b.id === 'silo' && store.sceneMode.type === 'voxel') {
+    if (b.structureType && store.sceneMode.type === 'voxel') {
       const structure: Structure = {
         id: nextStructureId(),
         planet: store.sceneMode.planet,
-        type: 'silo',
+        type: b.structureType,
         pos: [p[0], p[1], p[2]],
         stored: {},
-        capacity: b.capacity ?? 240,
+        capacity: b.capacity ?? 0,
       };
       store.addStructure(structure);
     }

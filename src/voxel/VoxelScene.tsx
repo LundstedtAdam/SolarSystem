@@ -11,6 +11,7 @@ import { VoxelScatter } from './VoxelScatter';
 import { Emitters } from './Emitters';
 import { DropItems } from './DropItems';
 import { SiloVisuals } from './SiloVisuals';
+import { StationVisuals } from './StationVisuals';
 import { PlayerController } from './PlayerController';
 import type { VoxelApi } from './player';
 
@@ -91,6 +92,7 @@ export function VoxelScene() {
       <Emitters planet={planet} />
       <DropItems planet={planet} />
       <SiloVisuals planet={planet} />
+      <StationVisuals planet={planet} />
       <VoxelWeather planet={planet} />
       <ambientLight intensity={ambientIntensity} color={ambientColor} />
       <SunLight planet={planet} />

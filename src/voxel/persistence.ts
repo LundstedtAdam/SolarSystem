@@ -9,6 +9,7 @@
 
 import localforage from 'localforage';
 import type { ResourceType } from './voxelTypes';
+import type { CraftedItem } from './recipes';
 import type { Structure } from '../store';
 
 const SCHEMA = 'v1';
@@ -60,6 +61,38 @@ export async function loadInventory(): Promise<Partial<Record<ResourceType, numb
 export async function saveInventory(inv: Partial<Record<ResourceType, number>>): Promise<void> {
   try {
     await store.setItem(INVENTORY_KEY, inv);
+  } catch {
+    /* ignore */
+  }
+}
+
+const ITEMS_KEY = `items.${SCHEMA}`;
+const SEEN_KEY = `seen.${SCHEMA}`;
+
+export async function loadItems(): Promise<Partial<Record<CraftedItem, number>> | null> {
+  try {
+    return (await store.getItem<Partial<Record<CraftedItem, number>>>(ITEMS_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+export async function saveItems(items: Partial<Record<CraftedItem, number>>): Promise<void> {
+  try {
+    await store.setItem(ITEMS_KEY, items);
+  } catch {
+    /* ignore */
+  }
+}
+export async function loadSeen(): Promise<Partial<Record<ResourceType, true>> | null> {
+  try {
+    return (await store.getItem<Partial<Record<ResourceType, true>>>(SEEN_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+export async function saveSeen(seen: Partial<Record<ResourceType, true>>): Promise<void> {
+  try {
+    await store.setItem(SEEN_KEY, seen);
   } catch {
     /* ignore */
   }

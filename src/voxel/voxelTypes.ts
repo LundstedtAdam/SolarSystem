@@ -62,10 +62,12 @@ export const BLOCK = {
   // Phase 11.1 — player-placed build materials.
   BUILD: 27, // generic structural block
   SILO: 28, // storage-silo core (entity anchor)
+  // Phase 11.2 — crafting station core (entity anchor).
+  STATION: 29,
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 29;
+export const BLOCK_COUNT = 30;
 
 /** Floats per palette entry: r, g, b, emissive. */
 export const PALETTE_STRIDE = 4;
@@ -128,6 +130,7 @@ const HOST_RESOURCE: Partial<Record<number, ResourceType>> = {
   [BLOCK.BUILD]: 'silicon',
   [BLOCK.METAL]: 'iron',
   [BLOCK.SILO]: 'iron',
+  [BLOCK.STATION]: 'iron',
 };
 
 /** The resource a mined block yields, or undefined if it yields nothing.
@@ -168,6 +171,7 @@ const HARDNESS: Partial<Record<number, number>> = {
   [BLOCK.ARTIFACT]: 2.4,
   [BLOCK.BUILD]: 0.9,
   [BLOCK.SILO]: 1.2,
+  [BLOCK.STATION]: 1.3,
 };
 
 /** Seconds of continuous mining required to break the given block. */

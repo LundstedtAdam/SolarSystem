@@ -1,27 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, backpackUsed } from '../store';
 import { useT } from '../i18n';
-import { voxelTelemetry, isTouchDevice } from '../voxel/voxelControls';
+import { voxelTelemetry, voxelStation, isTouchDevice } from '../voxel/voxelControls';
 import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
+import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
+import { CRAFTED_LABEL, type CraftedItem } from '../voxel/recipes';
+import { CraftMenu } from './CraftMenu';
 import type { ResourceType } from '../voxel/voxelTypes';
 
-const RESOURCE_LABEL: Record<ResourceType, string> = {
-  carbon: 'Carbon',
-  silicon: 'Silicon',
-  iron: 'Iron',
-  copper: 'Copper',
-  zinc: 'Zinc',
-  wolframite: 'Wolframite',
-  sphalerite: 'Sphalerite',
-  malachite: 'Malachite',
-  tungsten: 'Tungsten',
-  titanite: 'Titanite',
-  hematite: 'Hematite',
-  lithium: 'Lithium',
-  artifact: 'Artifact',
-};
-
-type Menu = 'none' | 'backpack' | 'build';
+type Menu = 'none' | 'backpack' | 'build' | 'craft';
 
 function costLabel(cost: Partial<Record<ResourceType, number>>): string {
   return (Object.keys(cost) as ResourceType[])
@@ -40,8 +27,10 @@ function BackpackSheet({ onClose }: { onClose: () => void }) {
   const { t } = useT();
   const inventory = useStore((s) => s.inventory);
   const capacity = useStore((s) => s.backpackCapacity);
+  const items = useStore((s) => s.items);
   const discardResource = useStore((s) => s.discardResource);
   const used = backpackUsed(inventory);
+  const itemEntries = (Object.keys(items) as CraftedItem[]).filter((k) => (items[k] ?? 0) > 0);
   const full = used >= capacity;
   const entries = (Object.keys(inventory) as ResourceType[])
     .filter((k) => (inventory[k] ?? 0) > 0)
@@ -84,6 +73,19 @@ function BackpackSheet({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
+        )}
+        {itemEntries.length > 0 && (
+          <>
+            <div className="voxel-sheet-subhead">Items</div>
+            <div className="voxel-sheet-list">
+              {itemEntries.map((k) => (
+                <div key={k} className="voxel-pack-row">
+                  <span className="voxel-pack-name">{CRAFTED_LABEL[k]}</span>
+                  <span className="voxel-pack-amount">{items[k]}</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -145,6 +147,7 @@ export function VoxelHUD() {
   const { t } = useT();
   const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0 });
   const [menu, setMenu] = useState<Menu>('none');
+  const [stationAvail, setStationAvail] = useState(false);
   const raf = useRef(0);
 
   // Opening a menu frees the desktop cursor (pointer-lock) so it can click.
@@ -156,7 +159,7 @@ export function VoxelHUD() {
     });
   };
 
-  // Desktop keys: Tab → backpack, B → build, Esc → close.
+  // Desktop keys: Tab → backpack, B → build, C → craft (near a station), Esc → close.
   useEffect(() => {
     if (sceneMode.type !== 'voxel') return;
     const onKey = (e: KeyboardEvent) => {
@@ -165,12 +168,25 @@ export function VoxelHUD() {
         openMenu('backpack');
       } else if (e.code === 'KeyB') {
         openMenu('build');
+      } else if (e.code === 'KeyC') {
+        if (voxelStation.available) openMenu('craft');
       } else if (e.code === 'Escape') {
         setMenu('none');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, [sceneMode.type]);
+
+  // Poll station proximity for the contextual Craft button (and auto-close the
+  // craft menu when the player walks away).
+  useEffect(() => {
+    if (sceneMode.type !== 'voxel') return;
+    const id = setInterval(() => {
+      setStationAvail(voxelStation.available);
+      if (!voxelStation.available) setMenu((m) => (m === 'craft' ? 'none' : m));
+    }, 150);
+    return () => clearInterval(id);
   }, [sceneMode.type]);
 
   // Close menus when leaving the voxel world.
@@ -233,8 +249,18 @@ export function VoxelHUD() {
         </button>
       </div>
 
+      {/* Contextual Craft opener — shown when standing at a station. */}
+      {stationAvail && menu === 'none' && (
+        <button className="voxel-craft-open" onClick={() => openMenu('craft')}>
+          {t('craft')}
+        </button>
+      )}
+
       {menu === 'backpack' && <BackpackSheet onClose={() => setMenu('none')} />}
       {menu === 'build' && <BuildSheet onClose={() => setMenu('none')} />}
+      {menu === 'craft' && voxelStation.id >= 0 && (
+        <CraftMenu stationId={voxelStation.id} onClose={() => setMenu('none')} />
+      )}
 
       <div className="surface-hud-top">
         <div className="surface-hud-name">{sceneMode.planet.toUpperCase()} — ON FOOT</div>
