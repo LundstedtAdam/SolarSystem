@@ -21,7 +21,7 @@ import {
 } from 'three';
 import { useStore } from '../store';
 
-/** Engine glow: color/intensity climbs with hyperdrive tier, from a dim ember
+/** Engine glow: color/intensity climbs with quantum-drive tier, from a dim ember
  *  to a bright violet-white flare. */
 const ENGINE_GLOW = [
   { color: new Color(0.3, 0.45, 0.9), intensity: 0.5, scale: 0.7 },
@@ -153,7 +153,7 @@ export function ShipUpgradeVisuals() {
 
   return (
     <group>
-      <EngineGlow tier={upgrades.hyperdrive} />
+      <EngineGlow tier={upgrades.quantumDrive} />
       {upgrades.shielding > 0 && <ShieldShell tier={upgrades.shielding} />}
       {upgrades.cargo > 0 && <CargoContainers tier={upgrades.cargo} />}
       {upgrades.scanner > 0 && <ScannerDish tier={upgrades.scanner} />}

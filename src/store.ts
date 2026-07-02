@@ -83,6 +83,22 @@ export interface JournalEntry {
   speculative?: boolean;
 }
 
+/** Phase 10.5 — Mystery & Narrative System. A recorded war-lore discovery.
+ *  Deliberately does NOT store rendered text: the journal re-renders
+ *  corruptedText/trueMeaning live off the current translation tier (see
+ *  translationTier() below), so a fragment unlock is a re-render, not a data
+ *  migration. Wholly separate from JournalEntry/DiscoveryStory above. */
+export interface WarLoreEntry {
+  key: string;
+  planet: string;
+  name: string;
+  act: number;
+  ts: number;
+  /** Flagged true on discovery and again, retroactively, whenever a new
+   *  Translation Fragment raises the tier past this entry's requirement. */
+  unread: boolean;
+}
+
 /** A resource dropped on the terrain when the backpack overflows. Re-collected
  *  by walking over it once there's space (Phase 11). */
 export interface ResourceDrop {
@@ -181,6 +197,65 @@ function saveDiscovery(d: DiscoveryState): void {
     window.localStorage.setItem(DISCOVERY_KEY, JSON.stringify(d));
   } catch {
     /* storage full / unavailable — discovery just won't persist this session */
+  }
+}
+
+// --- Phase 10.5 — Mystery & Narrative System (war-lore thread) -------------
+// Persisted separately from DiscoveryState above: a distinct narrative thread
+// with its own journal, its own discovery set, and a translation-tier gate
+// that DiscoveryState has no concept of.
+interface NarrativeState {
+  warLoreDiscovered: Record<string, true>;
+  warLoreJournal: WarLoreEntry[];
+  /** Ids of collected Translation Fragments (not crafted/purchased — found). */
+  translationFragmentsFound: string[];
+  /** Set once the player finds either Act 8 Hidden Exodus Cache (Pluto or
+   *  Charon). Distinct from the ship's Quantum Drive propulsion upgrade
+   *  (ship/upgrades.ts) — this flag is the story's FTL-drive/quarantine
+   *  resolution and must never be conflated with it. */
+  ftlUnlocked: boolean;
+}
+
+const NARRATIVE_KEY = 'solarsystem.narrative.v1';
+/** Fragments needed before the Xenolinguistic Decoder reaches tier 2 (full
+ *  translation). Matches MYSTERY_THRESHOLD's convention of "3 finds". */
+export const TRANSLATION_FRAGMENT_THRESHOLD = 3;
+
+/** Derived, not stored: the decoder's tier is always a pure function of which
+ *  fragments have been found, so nothing can desync from it. */
+export function translationTier(fragmentsFound: string[]): number {
+  return fragmentsFound.length >= TRANSLATION_FRAGMENT_THRESHOLD ? 2 : 1;
+}
+
+function loadNarrative(): NarrativeState {
+  const empty: NarrativeState = {
+    warLoreDiscovered: {},
+    warLoreJournal: [],
+    translationFragmentsFound: [],
+    ftlUnlocked: false,
+  };
+  if (typeof window === 'undefined') return empty;
+  try {
+    const raw = window.localStorage.getItem(NARRATIVE_KEY);
+    if (!raw) return empty;
+    const p = JSON.parse(raw) as Partial<NarrativeState>;
+    return {
+      warLoreDiscovered: p.warLoreDiscovered ?? {},
+      warLoreJournal: p.warLoreJournal ?? [],
+      translationFragmentsFound: p.translationFragmentsFound ?? [],
+      ftlUnlocked: p.ftlUnlocked ?? false,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function saveNarrative(n: NarrativeState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(NARRATIVE_KEY, JSON.stringify(n));
+  } catch {
+    /* storage full / unavailable — narrative progress just won't persist */
   }
 }
 
@@ -307,12 +382,12 @@ interface SimState {
    *  Cleared on dismiss. Distances are metres from the nearest safety point. */
   survivalDeath: { dist: number; anchor: 'habitat' | 'ship' } | null;
 
-  /** Phase 11.5 ship upgrades — tiers 0-3, gate hyperdrive range/shielding and
+  /** Phase 11.5 ship upgrades — tiers 0-3, gate quantum-drive range/shielding and
    *  scale scanner/cargo. */
   shipUpgrades: ShipUpgrades;
   /** Set for a few seconds when Land is pressed but a gate blocks it, so the
    *  HUD can explain why instead of the button silently doing nothing. */
-  descentBlocked: { reason: 'hyperdrive' | 'shielding'; neededTier?: number } | null;
+  descentBlocked: { reason: 'quantumDrive' | 'shielding'; neededTier?: number } | null;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -363,6 +438,29 @@ interface SimState {
     mysteryId?: string;
     speculative?: boolean;
   }) => boolean;
+
+  // --- Phase 10.5 — Mystery & Narrative System (separate from the discovery
+  // journal above; see WarLoreEntry). ---
+  warLoreDiscovered: Record<string, true>;
+  warLoreJournal: WarLoreEntry[];
+  translationFragmentsFound: string[];
+  /** Story-level FTL unlock (Act 8) — distinct from the ship's Quantum Drive
+   *  propulsion upgrade. */
+  ftlUnlocked: boolean;
+  /** Transient toast shown on a Translation Fragment find; the UI clears it
+   *  after display via dismissWarLoreToast. */
+  warLoreToast: { message: string; id: number } | null;
+  /** Record a scanned war-lore POI into the war-lore journal. Returns true if
+   *  newly discovered. Act 8 sets ftlUnlocked. */
+  recordWarLoreDiscovery: (e: { planet: string; id: string; name: string; act: number }) => boolean;
+  /** Collect a Translation Fragment. If this raises the global translation
+   *  tier, every existing journal entry is retroactively flagged unread (the
+   *  text itself re-renders live off the new tier — no journal rewrite here)
+   *  and a toast is queued. Returns true if newly collected. */
+  collectTranslationFragment: (id: string, act: number) => boolean;
+  /** Mark one war-lore entry (or, with no key, all of them) as read. */
+  markWarLoreRead: (key?: string) => void;
+  dismissWarLoreToast: () => void;
 
   /** Mine a resource: add what fits to the backpack, drop the overflow on the
    *  terrain at `pos`. Returns the amount that overflowed (0 if it all fit). */
@@ -416,7 +514,7 @@ interface SimState {
   upgradeShip: (kind: UpgradeKind) => boolean;
   /** Persistence hydration. */
   setShipUpgrades: (u: ShipUpgrades) => void;
-  setDescentBlocked: (b: { reason: 'hyperdrive' | 'shielding'; neededTier?: number } | null) => void;
+  setDescentBlocked: (b: { reason: 'quantumDrive' | 'shielding'; neededTier?: number } | null) => void;
 
   /** Phase 11.3 base building. */
   /** Deduct a crafted-item cost if affordable; returns true on success. */
@@ -463,6 +561,8 @@ export const useStore = create<SimState>((set, get) => ({
   },
 
   ...loadDiscovery(),
+  ...loadNarrative(),
+  warLoreToast: null,
 
   inventory: {},
   backpackCapacity: 50,
@@ -639,6 +739,75 @@ export const useStore = create<SimState>((set, get) => ({
     set({ discovered, journal, mysteryClues });
     return true;
   },
+
+  recordWarLoreDiscovery: (e) => {
+    const s = get();
+    const key = `${e.planet}:${e.id}`;
+    if (s.warLoreDiscovered[key]) return false;
+
+    const warLoreDiscovered: Record<string, true> = { ...s.warLoreDiscovered, [key]: true };
+    const warLoreJournal: WarLoreEntry[] = [
+      { key, planet: e.planet, name: e.name, act: e.act, ts: Date.now(), unread: true },
+      ...s.warLoreJournal,
+    ];
+    const ftlUnlocked = s.ftlUnlocked || e.act === 8;
+
+    saveNarrative({
+      warLoreDiscovered,
+      warLoreJournal,
+      translationFragmentsFound: s.translationFragmentsFound,
+      ftlUnlocked,
+    });
+    set({ warLoreDiscovered, warLoreJournal, ftlUnlocked });
+    return true;
+  },
+
+  collectTranslationFragment: (id) => {
+    const s = get();
+    if (s.translationFragmentsFound.includes(id)) return false;
+
+    const prevTier = translationTier(s.translationFragmentsFound);
+    const translationFragmentsFound = [...s.translationFragmentsFound, id];
+    const newTier = translationTier(translationFragmentsFound);
+
+    let warLoreJournal = s.warLoreJournal;
+    let warLoreToast = s.warLoreToast;
+    if (newTier > prevTier && warLoreJournal.length > 0) {
+      // Retroactive update: flag every already-scanned entry unread. The text
+      // itself is never rewritten here — the journal UI renders it live off
+      // the new tier, so this is purely a "you have something new to read" flag.
+      warLoreJournal = warLoreJournal.map((entry) => ({ ...entry, unread: true }));
+      warLoreToast = {
+        message: `Translation Matrix Updated — ${warLoreJournal.length} previous logs re-interpreted`,
+        id: Date.now(),
+      };
+    }
+
+    saveNarrative({
+      warLoreDiscovered: s.warLoreDiscovered,
+      warLoreJournal,
+      translationFragmentsFound,
+      ftlUnlocked: s.ftlUnlocked,
+    });
+    set({ translationFragmentsFound, warLoreJournal, warLoreToast });
+    return true;
+  },
+
+  markWarLoreRead: (key) => {
+    const s = get();
+    const warLoreJournal = s.warLoreJournal.map((entry) =>
+      key === undefined || entry.key === key ? { ...entry, unread: false } : entry,
+    );
+    saveNarrative({
+      warLoreDiscovered: s.warLoreDiscovered,
+      warLoreJournal,
+      translationFragmentsFound: s.translationFragmentsFound,
+      ftlUnlocked: s.ftlUnlocked,
+    });
+    set({ warLoreJournal });
+  },
+
+  dismissWarLoreToast: () => set({ warLoreToast: null }),
 
   mineResource: (type, amount, planet, pos) => {
     const s = get();

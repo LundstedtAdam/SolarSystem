@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useStore } from '../store';
+import { useStore, translationTier } from '../store';
 import { useT } from '../i18n';
 import { voxelTelemetry, voxelScan, consumeScan } from '../voxel/voxelControls';
 import { getVoxelTerrain } from '../voxel/voxelBiomes';
 import { seedFromName } from '../voxel/noise';
-import { findNearbyPOI, findNearbyScienceNote, findNearbyDeepSite, scanOreDirection } from '../voxel/worldGen';
+import {
+  findNearbyPOI,
+  findNearbyScienceNote,
+  findNearbyDeepSite,
+  findNearbyWarLorePOI,
+  findNearbyTranslationFragment,
+  scanOreDirection,
+} from '../voxel/worldGen';
+import { WAR_LORE_ACTS } from '../voxel/contentProfiles';
 import { SCANNER_SAMPLE_RADIUS } from '../ship/upgrades';
 import { ORE_TO_RESOURCE } from '../voxel/voxelTypes';
 import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
+import { pingProximity } from '../audio/narrativeAudio';
 
 // Phase 10.4 — the discovery loop. No quest markers: a short-range sensor only
 // hints that *something* is near, and walking up to it lets you scan its layered
@@ -44,6 +53,22 @@ interface Nearby {
   speculative: boolean;
 }
 
+// --- Phase 10.5 — Mystery & Narrative System --------------------------------
+// A wholly separate discovery thread from Nearby/Candidate above: war-lore
+// POIs and Translation Fragments are never mixed into the Layer 1/2 sensor.
+// Undiscovered targets get an imprecise compass pulse + proximity audio cue
+// (no exact marker) per the surface-scale navigation spec; the moment one is
+// scanned it becomes a "confirmed/owned" journal entry instead.
+interface WarLoreNearby {
+  id: string;
+  name: string;
+  dist: number;
+  bearing: number;
+  act: number;
+  isFragment: boolean;
+  flavorText?: string;
+}
+
 export function DiscoveryPanel() {
   const sceneMode = useStore((s) => s.sceneMode);
   const planet = sceneMode.type === 'voxel' ? sceneMode.planet : '';
@@ -53,16 +78,34 @@ export function DiscoveryPanel() {
   const scannerTier = useStore((s) => s.shipUpgrades.scanner);
   const { t } = useT();
 
+  // Phase 10.5 narrative state.
+  const warLoreDiscovered = useStore((s) => s.warLoreDiscovered);
+  const warLoreJournal = useStore((s) => s.warLoreJournal);
+  const translationFragmentsFound = useStore((s) => s.translationFragmentsFound);
+  const recordWarLoreDiscovery = useStore((s) => s.recordWarLoreDiscovery);
+  const collectTranslationFragment = useStore((s) => s.collectTranslationFragment);
+  const markWarLoreRead = useStore((s) => s.markWarLoreRead);
+  const warLoreToast = useStore((s) => s.warLoreToast);
+  const dismissWarLoreToast = useStore((s) => s.dismissWarLoreToast);
+  const tier = translationTier(translationFragmentsFound);
+  const warLoreUnread = warLoreJournal.filter((e) => e.unread).length;
+
   const [nearby, setNearby] = useState<Nearby | null>(null);
   const [readout, setReadout] = useState<Nearby | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [oreHeat, setOreHeat] = useState<{ bearing: number; label: string; strength: number } | null>(
     null,
   );
+  const [warLoreNearby, setWarLoreNearby] = useState<WarLoreNearby | null>(null);
+  const [warLoreReadout, setWarLoreReadout] = useState<WarLoreNearby | null>(null);
   const oreTickCount = useRef(0);
   const readoutTimer = useRef<ReturnType<typeof setTimeout>>();
+  const warLoreReadoutTimer = useRef<ReturnType<typeof setTimeout>>();
+  const warLoreToastTimer = useRef<ReturnType<typeof setTimeout>>();
   const nearbyRef = useRef<Nearby | null>(null);
   nearbyRef.current = nearby;
+  const warLoreNearbyRef = useRef<WarLoreNearby | null>(null);
+  warLoreNearbyRef.current = warLoreNearby;
   // Stable handle to the latest scan() so the poll loop (which doesn't depend on
   // scan in its deps) never calls a stale closure.
   const scanRef = useRef<() => void>(() => {});
@@ -161,33 +204,102 @@ export function DiscoveryPanel() {
         null,
       );
 
+      const fx = -Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      let legacyAvailable = false;
+      let legacyBearing = 0;
       if (candidate) {
         const dx = candidate.ax - x;
         const dz = candidate.az - z;
-        const fx = -Math.sin(yaw);
-        const fz = -Math.cos(yaw);
         const len = Math.hypot(dx, dz) || 1;
         const tx = dx / len;
         const tz = dz / len;
-        const bearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
+        legacyBearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
         const isDiscovered = !!discovered[`${planet}:${candidate.id}`];
         setNearby({
           id: candidate.id,
           name: candidate.name,
           dist: candidate.dist,
-          bearing,
+          bearing: legacyBearing,
           story: candidate.story,
           clue: candidate.clue,
           mysteryId: candidate.mysteryId,
           discovered: isDiscovered,
           speculative: candidate.speculative,
         });
-        voxelScan.available =
-          !isDiscovered && candidate.dist <= SCAN_RANGE && Math.abs(bearing) <= CROSSHAIR_CONE;
+        legacyAvailable =
+          !isDiscovered && candidate.dist <= SCAN_RANGE && Math.abs(legacyBearing) <= CROSSHAIR_CONE;
       } else {
         setNearby(null);
-        voxelScan.available = false;
       }
+
+      // Phase 10.5 — war-lore POIs + Translation Fragments: a wholly separate
+      // sensor from the Layer 1/2 candidates above (never mixed together).
+      const warLorePoiHit = findNearbyWarLorePOI(params, seed, x, z, SENSOR_RANGE);
+      const fragmentHit = findNearbyTranslationFragment(params, seed, x, z, SENSOR_RANGE);
+      const warLoreCandidate =
+        warLorePoiHit && (!fragmentHit || warLorePoiHit.dist <= fragmentHit.dist)
+          ? {
+              id: warLorePoiHit.spec.id,
+              name: warLorePoiHit.spec.name,
+              dist: warLorePoiHit.dist,
+              ax: warLorePoiHit.ax,
+              az: warLorePoiHit.az,
+              act: warLorePoiHit.spec.act as number,
+              isFragment: false,
+              flavorText: undefined as string | undefined,
+            }
+          : fragmentHit
+            ? {
+                id: fragmentHit.spec.id,
+                name: fragmentHit.spec.name,
+                dist: fragmentHit.dist,
+                ax: fragmentHit.ax,
+                az: fragmentHit.az,
+                act: fragmentHit.spec.act,
+                isFragment: true,
+                flavorText: fragmentHit.spec.flavorText as string | undefined,
+              }
+            : null;
+
+      let warLoreAvailable = false;
+      let warLoreBearing = 0;
+      if (warLoreCandidate) {
+        const isDiscovered = warLoreCandidate.isFragment
+          ? translationFragmentsFound.includes(warLoreCandidate.id)
+          : !!warLoreDiscovered[`${planet}:${warLoreCandidate.id}`];
+        const dx = warLoreCandidate.ax - x;
+        const dz = warLoreCandidate.az - z;
+        const len = Math.hypot(dx, dz) || 1;
+        const tx = dx / len;
+        const tz = dz / len;
+        const trueBearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
+        // Undiscovered: imprecise compass pulse, not an exact heading — a slow
+        // per-target jitter so the needle wanders rather than pointing exactly.
+        const jitter = isDiscovered
+          ? 0
+          : Math.sin(performance.now() / 900 + seedFromName(warLoreCandidate.id)) * 18;
+        warLoreBearing = trueBearing + jitter;
+        if (!isDiscovered) {
+          setWarLoreNearby({
+            id: warLoreCandidate.id,
+            name: warLoreCandidate.name,
+            dist: warLoreCandidate.dist,
+            bearing: warLoreBearing,
+            act: warLoreCandidate.act,
+            isFragment: warLoreCandidate.isFragment,
+            flavorText: warLoreCandidate.flavorText,
+          });
+          warLoreAvailable = warLoreCandidate.dist <= SCAN_RANGE && Math.abs(trueBearing) <= CROSSHAIR_CONE;
+          pingProximity(warLoreCandidate.dist, SENSOR_RANGE);
+        } else {
+          setWarLoreNearby(null);
+        }
+      } else {
+        setWarLoreNearby(null);
+      }
+
+      voxelScan.available = legacyAvailable || warLoreAvailable;
       if (consumeScan()) scanRef.current();
     };
     const iv = setInterval(tick, 120);
@@ -197,27 +309,51 @@ export function DiscoveryPanel() {
       voxelScan.available = false;
       clearInterval(iv);
     };
-  }, [sceneMode.type, planet, discovered, scannerTier]);
+  }, [sceneMode.type, planet, discovered, scannerTier, warLoreDiscovered, translationFragmentsFound]);
 
   const scan = useCallback(() => {
+    // Legacy (Layer 1/2) candidate takes priority when both are in range —
+    // matches the existing single-scan-button UX; the war-lore sensor rarely
+    // overlaps it in practice since the two threads use different POI pools.
     const n = nearbyRef.current;
-    if (!n || n.dist > SCAN_RANGE || n.discovered) return;
-    const isNew = recordDiscovery({
-      planet,
-      id: n.id,
-      name: n.name,
-      story: n.story,
-      clue: n.clue,
-      mysteryId: n.mysteryId,
-      speculative: n.speculative,
-    });
-    if (isNew) {
-      setReadout(n);
-      if (readoutTimer.current) clearTimeout(readoutTimer.current);
-      readoutTimer.current = setTimeout(() => setReadout(null), 9000);
+    if (n && n.dist <= SCAN_RANGE && !n.discovered) {
+      const isNew = recordDiscovery({
+        planet,
+        id: n.id,
+        name: n.name,
+        story: n.story,
+        clue: n.clue,
+        mysteryId: n.mysteryId,
+        speculative: n.speculative,
+      });
+      if (isNew) {
+        setReadout(n);
+        if (readoutTimer.current) clearTimeout(readoutTimer.current);
+        readoutTimer.current = setTimeout(() => setReadout(null), 9000);
+      }
+      return;
     }
-  }, [planet, recordDiscovery]);
+
+    const w = warLoreNearbyRef.current;
+    if (!w || w.dist > SCAN_RANGE) return;
+    const isNew = w.isFragment
+      ? collectTranslationFragment(w.id, w.act)
+      : recordWarLoreDiscovery({ planet, id: w.id, name: w.name, act: w.act });
+    if (isNew) {
+      setWarLoreReadout(w);
+      if (warLoreReadoutTimer.current) clearTimeout(warLoreReadoutTimer.current);
+      warLoreReadoutTimer.current = setTimeout(() => setWarLoreReadout(null), 9000);
+    }
+  }, [planet, recordDiscovery, recordWarLoreDiscovery, collectTranslationFragment]);
   scanRef.current = scan;
+
+  // Auto-dismiss the "Translation Matrix Updated" toast a few seconds after
+  // the store raises it.
+  useEffect(() => {
+    if (!warLoreToast) return;
+    if (warLoreToastTimer.current) clearTimeout(warLoreToastTimer.current);
+    warLoreToastTimer.current = setTimeout(() => dismissWarLoreToast(), 6000);
+  }, [warLoreToast, dismissWarLoreToast]);
 
   // Keyboard: E to scan, J to toggle the journal.
   useEffect(() => {
@@ -236,6 +372,7 @@ export function DiscoveryPanel() {
 
   return (
     <div style={panelRoot}>
+      <style>{'@keyframes warLoreCompassPulse{0%,100%{opacity:0.35;transform:scale(0.9)}50%{opacity:1;transform:scale(1.15)}}'}</style>
       {/* Sensor hint — direction + distance only, never a map waypoint. The
           actual Scan action lives in the bottom thumb-reach cluster. */}
       {nearby && !readout && (
@@ -249,6 +386,16 @@ export function DiscoveryPanel() {
       {oreHeat && (
         <div style={oreHeatSensor}>
           ⛏ {bearingArrow(oreHeat.bearing)} {oreHeat.label}
+        </div>
+      )}
+
+      {/* Phase 10.5 — undiscovered war-lore target: a pulsing compass needle
+          + proximity audio only, deliberately no exact distance/marker. Once
+          scanned it moves into the journal below as a confirmed discovery. */}
+      {warLoreNearby && !warLoreReadout && (
+        <div style={warLoreSensor}>
+          <span style={compassPulse}>{bearingArrow(warLoreNearby.bearing)}</span>
+          {warLoreNearby.isFragment ? t('translationFragmentNearby') : t('signalNearby')}
         </div>
       )}
 
@@ -270,8 +417,30 @@ export function DiscoveryPanel() {
         </div>
       )}
 
+      {/* War-lore scan readout: fragments show their flavor text once; POIs
+          show the current-tier reading (corrupted or true, per translationTier). */}
+      {warLoreReadout && (
+        <div style={warLoreReadoutBox}>
+          <div style={readoutTitle}>
+            {warLoreReadout.name}
+            <span style={warLoreTag}>
+              {warLoreReadout.isFragment ? '◆ TRANSLATION FRAGMENT' : `ACT ${warLoreReadout.act}`}
+            </span>
+          </div>
+          {warLoreReadout.isFragment ? (
+            <p style={layerHuman}>{warLoreReadout.flavorText}</p>
+          ) : (
+            <p style={layerBase}>{warLoreText(warLoreReadout.act, tier)}</p>
+          )}
+        </div>
+      )}
+
+      {/* Toast — no forced interaction, just a brief on-screen note. */}
+      {warLoreToast && <div style={toastBanner}>{warLoreToast.message}</div>}
+
       <button className="voxel-journal-toggle" onClick={() => setJournalOpen((o) => !o)}>
         {t('journal')} (J) · {journal.length}
+        {warLoreUnread > 0 && <span style={unreadBadge}>{warLoreUnread}</span>}
       </button>
 
       {journalOpen && (
@@ -288,10 +457,39 @@ export function DiscoveryPanel() {
               {e.clue && <p style={clueLine}>“{e.clue}”</p>}
             </div>
           ))}
+
+          {warLoreJournal.length > 0 && (
+            <>
+              <div style={{ ...journalHead, marginTop: 12 }}>{t('mysteryLog')}</div>
+              {warLoreJournal.map((e) => (
+                <div
+                  key={e.key + e.ts}
+                  style={warLoreJournalEntry}
+                  onClick={() => e.unread && markWarLoreRead(e.key)}
+                >
+                  <div style={journalName}>
+                    {e.name}
+                    {e.unread && <span style={unreadTag}>● NEW</span>}
+                    <span style={warLoreTag}>ACT {e.act}</span>
+                  </div>
+                  <p style={journalStory}>{warLoreText(e.act, tier)}</p>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+/** Renders a war-lore act's scanner text at the given translation tier — a
+ *  pure re-render, never baked in at scan time, so a new fragment retroac­
+ *  tively "updates" every prior entry for free. */
+function warLoreText(act: number, tier: number): string {
+  const a = WAR_LORE_ACTS[act];
+  if (!a) return '';
+  return tier >= 2 ? a.trueMeaning : a.corruptedText;
 }
 
 function bearingArrow(deg: number): string {
@@ -421,3 +619,75 @@ const journalName: React.CSSProperties = {
   gap: 8,
 };
 const journalStory: React.CSSProperties = { margin: '4px 0 0', fontSize: 13, opacity: 0.85 };
+
+// --- Phase 10.5 — Mystery & Narrative System styles -------------------------
+// A distinct amber/verdigris accent (never the blue Layer 1 or violet Layer 2
+// tints) so the war-lore thread always reads as its own, separate system.
+const warLoreSensor: React.CSSProperties = {
+  position: 'absolute',
+  top: 'calc(14% + 78px)',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: 'rgba(30,26,10,0.45)',
+  border: '1px solid rgba(210,170,60,0.4)',
+  padding: '6px 12px',
+  borderRadius: 8,
+  fontSize: 13,
+  letterSpacing: 0.4,
+  color: '#e8cf8a',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+};
+// The needle pulses (opacity breathing) rather than pointing exactly — a
+// diegetic "getting warmer" cue, never an exact marker.
+const compassPulse: React.CSSProperties = {
+  fontSize: 18,
+  animation: 'warLoreCompassPulse 1.4s ease-in-out infinite',
+};
+const warLoreReadoutBox: React.CSSProperties = {
+  ...readoutBox,
+  border: '1px solid rgba(210,170,60,0.45)',
+  boxShadow: '0 0 24px rgba(210,170,60,0.12)',
+};
+const warLoreTag: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: 0.5,
+  color: '#e8cf8a',
+  border: '1px solid rgba(210,170,60,0.5)',
+  borderRadius: 4,
+  padding: '2px 6px',
+};
+const toastBanner: React.CSSProperties = {
+  position: 'absolute',
+  top: '8%',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: 'rgba(30,26,10,0.85)',
+  border: '1px solid rgba(210,170,60,0.5)',
+  color: '#f0e0a8',
+  padding: '8px 16px',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+};
+const unreadBadge: React.CSSProperties = {
+  marginLeft: 6,
+  background: '#d9a83c',
+  color: '#1a1608',
+  borderRadius: 10,
+  fontSize: 11,
+  fontWeight: 700,
+  padding: '1px 6px',
+};
+const unreadTag: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  color: '#d9a83c',
+};
+const warLoreJournalEntry: React.CSSProperties = {
+  ...journalEntry,
+  borderTop: '1px solid rgba(210,170,60,0.3)',
+  cursor: 'pointer',
+};

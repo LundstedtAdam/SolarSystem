@@ -51,6 +51,30 @@ export interface POISpec {
   clue?: string;
   /** Mystery this clue belongs to; clues sharing an id converge to a resolution. */
   mysteryId?: string;
+  /** Phase 10.5 — Mystery & Narrative System: which of the 8 war-lore acts
+   *  this POI belongs to. A wholly distinct thread from `story`/`clue` above;
+   *  a POI never carries both. See WAR_LORE_ACTS for the act's scanner text. */
+  act?: number;
+  /** Minimum Xenolinguistic Decoder tier required before the scan reads as
+   *  `WAR_LORE_ACTS[act].trueMeaning` instead of `.corruptedText`. Always 2 for
+   *  now (only two tiers exist), kept as data rather than a hardcoded literal
+   *  so a future tier 3+ language family doesn't need a schema change. */
+  translationTierRequired?: number;
+}
+
+/** A discoverable Translation Fragment (Phase 10.5): found in the world like a
+ *  POI (same deterministic cell-hash placement), never crafted or purchased.
+ *  Collecting one raises the player's global translation tier once enough are
+ *  found — see TRANSLATION_FRAGMENT_THRESHOLD in store.ts. */
+export interface TranslationFragmentSpec {
+  id: string;
+  name: string;
+  /** Which act this fragment is found within (flavor/placement only). */
+  act: number;
+  cell: number;
+  density: number;
+  /** Shown once, at the moment of discovery. */
+  flavorText: string;
 }
 
 /** A world-anchored particle emitter (dust devil, fumarole, geyser, bubbles…)
@@ -115,6 +139,8 @@ export interface ContentProfile {
   scienceNotes: ScienceNoteSpec[];
   /** Layer 2 — fictional deep discoveries (Europa/Titan/Mars/Pluto/Moon only). */
   deepSites: DeepDiscoverySpec[];
+  /** Phase 10.5 — discoverable Translation Fragments (war-lore thread only). */
+  translationFragments: TranslationFragmentSpec[];
 }
 
 const EMPTY: ContentProfile = {
@@ -124,6 +150,104 @@ const EMPTY: ContentProfile = {
   emitters: [],
   scienceNotes: [],
   deepSites: [],
+  translationFragments: [],
+};
+
+// --- Phase 10.5 — Mystery & Narrative System --------------------------------
+// The 8-act Junta/Coalition/Exodus war story. Entirely separate from the Layer
+// 1/2 astrobiology content above: war-lore POIs carry `act` + no `story`, and
+// are read through the Xenolinguistic Decoder (store.ts translationTier)
+// rather than shown directly. Text below is verbatim from the approved story
+// bible — do not paraphrase when wiring it into per-body POIs.
+export interface WarLoreAct {
+  act: number;
+  location: string;
+  poiTypeLabel: string;
+  corruptedText: string;
+  trueMeaning: string;
+}
+
+export const WAR_LORE_ACTS: Record<number, WarLoreAct> = {
+  1: {
+    act: 1,
+    location: 'Earth & Moon',
+    poiTypeLabel: 'Deep Crater Excavation',
+    corruptedText: 'Analyzing alloy... Origin: Human. Age: ~200,000 years. Purpose: Unknown.',
+    trueMeaning:
+      "Remnants of the Exodus faction's initial landing craft before they destroyed their technology.",
+  },
+  2: {
+    act: 2,
+    location: 'Mars',
+    poiTypeLabel: 'Vitrified City Ruins',
+    corruptedText:
+      'Structural analysis: Organic harmony architecture shattered by extreme, exogenous thermal bombardment.',
+    trueMeaning:
+      'The Junta built brutalist military structures over the original peaceful architecture, and the ' +
+      'Coalition burned it all during the final strike.',
+  },
+  3: {
+    act: 3,
+    location: 'Phobos & Deimos',
+    poiTypeLabel: 'Orbital Defense Platforms',
+    corruptedText:
+      'Defensive grid offline. Massive incoming fire detected from outer system. Holding the line.',
+    trueMeaning:
+      "These were not defensive grids; they were the Junta's primary staging grounds for galactic invasion.",
+  },
+  4: {
+    act: 4,
+    location: 'Jupiter System',
+    poiTypeLabel: 'Alien Wreckage & Bio-Anomalies',
+    corruptedText:
+      'Warning: Non-human biological signatures detected. Hull configurations optimized for chaotic ' +
+      'assault. Extreme threat.',
+    trueMeaning:
+      "These are Coalition terraforming and science vessels, desperately retrofitted with weapons to " +
+      "survive the Junta's slaughter.",
+  },
+  5: {
+    act: 5,
+    location: 'Saturn (Titan)',
+    poiTypeLabel: 'Frozen Command Center',
+    corruptedText:
+      '[Partial Translation] ...Alliance formed... Target: Sol System... Total containment required...',
+    trueMeaning:
+      'The logs are expressions of grief. The Coalition allied solely to contain the Junta, mourning the ' +
+      'loss of their former human mentors.',
+  },
+  6: {
+    act: 6,
+    location: 'Uranus (Miranda)',
+    poiTypeLabel: 'Spacetime Fracture Zone',
+    corruptedText:
+      'Extreme sub-space anomalies detected. Planetary crust shattered by localized spacetime inversion weapon.',
+    trueMeaning:
+      'The sheer force of the Quarantine weapon tearing spacetime to lock the Solar System away from the ' +
+      'galaxy.',
+  },
+  7: {
+    act: 7,
+    location: 'Neptune (Triton)',
+    poiTypeLabel: 'Quarantine Lock Generator',
+    corruptedText:
+      "[Translation Matrix Restored] 'Our guides have gone mad... The Junta slaughters our worlds... We " +
+      "must lock them away to save the galaxy. Forgive us, humans.'",
+    trueMeaning:
+      'Humanity was the aggressor. The Quarantine is a pacifist measure to stop a genocide without ' +
+      'committing one.',
+  },
+  8: {
+    act: 8,
+    location: 'Pluto & Charon',
+    poiTypeLabel: 'Hidden Exodus Cache',
+    corruptedText:
+      "Log: 'We flee to the blue world. We leave our tech behind so the Junta cannot find us. We will " +
+      "preserve the soul of humanity in the dirt.' FTL drive schematics unlocked.",
+    trueMeaning:
+      'The player is not the heir of the Junta, but of the peaceful resistance. Breaking the quarantine ' +
+      '(FTL) is an act of reconciliation, not war.',
+  },
 };
 
 // --- Authored content -------------------------------------------------------
@@ -195,6 +319,15 @@ const CONTENT: Record<string, ContentProfile> = {
     ],
     pois: [
       {
+        id: 'mars_vitrified_ruins',
+        name: 'Vitrified City Ruins',
+        type: 'processor',
+        cell: 180,
+        density: 0.06,
+        act: 2,
+        translationTierRequired: 2,
+      },
+      {
         id: 'mars_processor',
         name: 'Atmospheric processor',
         type: 'processor',
@@ -263,6 +396,18 @@ const CONTENT: Record<string, ContentProfile> = {
         },
       },
     ],
+    translationFragments: [
+      {
+        id: 'fragment_act2',
+        name: 'Translation Fragment — Vitrified Script',
+        act: 2,
+        cell: 200,
+        density: 0.03,
+        flavorText:
+          'A shard of glazed tile, its surface etched with a script that partially resolves against the ' +
+          'decoder’s existing language model. Xenolinguistic Decoder: language family expanded.',
+      },
+    ],
   },
 
   Io: {
@@ -278,19 +423,17 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     pois: [
+      // Phase 10.5 — Act 4 (Jupiter System): rewritten from the original
+      // standalone geothermal-tap ruin to carry the war-lore thread. Layer 1
+      // scienceNotes below is untouched and coexists as a separate discovery.
       {
-        id: 'io_geothermal',
-        name: 'Geothermal tap',
+        id: 'io_bio_anomaly',
+        name: 'Bio-Anomaly Cluster',
         type: 'geothermal',
-        cell: 100,
-        density: 0.45,
-        story: {
-          base: 'A geothermal tap drawing power from Io’s endless volcanism.',
-          disruption: 'A resurfacing event buried the vents; the blast doors fused shut in the heat.',
-          human: 'The maintenance logs still blink in warning amber, talking to no one.',
-        },
-        clue: 'Buried in the logs: the same signal, the same bearing as somewhere far colder.',
-        mysteryId: 'signal',
+        cell: 180,
+        density: 0.06,
+        act: 4,
+        translationTierRequired: 2,
       },
     ],
     emitters: [{ kind: 'fumarole', density: 0.18, cell: 24 }],
@@ -313,6 +456,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Pluto: {
@@ -336,6 +480,15 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     pois: [
+      {
+        id: 'pluto_exodus_cache',
+        name: 'Hidden Exodus Cache',
+        type: 'dome',
+        cell: 180,
+        density: 0.06,
+        act: 8,
+        translationTierRequired: 2,
+      },
       {
         id: 'pluto_relay',
         name: 'Interstellar launch relay',
@@ -393,6 +546,7 @@ const CONTENT: Record<string, ContentProfile> = {
         },
       },
     ],
+    translationFragments: [],
   },
 
   Triton: {
@@ -401,6 +555,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Cantaloupe Terrain', kind: 'basin', position: [0, 480], radius: 440, amplitude: 12, description: 'Dimpled, melon-rind terrain unique to Triton.' },
     ],
     pois: [
+      {
+        id: 'triton_lock_generator',
+        name: 'Quarantine Lock Generator',
+        type: 'relay',
+        cell: 180,
+        density: 0.06,
+        act: 7,
+        translationTierRequired: 2,
+      },
       {
         id: 'triton_listening',
         name: 'Listening post',
@@ -436,6 +599,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Titan: {
@@ -444,6 +608,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Kraken Mare', kind: 'lake', position: [0, 520], radius: 480, amplitude: 16, description: 'Titan’s largest methane sea.' },
     ],
     pois: [
+      {
+        id: 'titan_command_center',
+        name: 'Frozen Command Center',
+        type: 'processor',
+        cell: 180,
+        density: 0.06,
+        act: 5,
+        translationTierRequired: 2,
+      },
       {
         id: 'titan_aerostat',
         name: 'Aerostat wreck',
@@ -501,6 +674,7 @@ const CONTENT: Record<string, ContentProfile> = {
         },
       },
     ],
+    translationFragments: [],
   },
 
   // Airless Moon: dust kicked up by the player's footsteps falls in a perfect
@@ -516,6 +690,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Tycho', kind: 'crater', position: [400, 360], radius: 240, amplitude: 30, description: 'A young crater with brilliant rays.' },
     ],
     pois: [
+      {
+        id: 'moon_crater_dig',
+        name: 'Deep Crater Excavation',
+        type: 'dome',
+        cell: 180,
+        density: 0.06,
+        act: 1,
+        translationTierRequired: 2,
+      },
       {
         id: 'moon_dome',
         name: 'Heritage dome',
@@ -572,6 +755,7 @@ const CONTENT: Record<string, ContentProfile> = {
         },
       },
     ],
+    translationFragments: [],
   },
 
   Merkurius: {
@@ -618,6 +802,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Venus: {
@@ -659,6 +844,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Jorden: {
@@ -667,6 +853,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Elevator Anchor', kind: 'ridge', position: [0, 400], radius: 50, amplitude: 60, length: 200, angleDeg: 0, description: 'The ruined ground anchor of a space elevator.' },
     ],
     pois: [
+      {
+        id: 'earth_crater_dig',
+        name: 'Deep Crater Excavation',
+        type: 'dome',
+        cell: 180,
+        density: 0.06,
+        act: 1,
+        translationTierRequired: 2,
+      },
       {
         id: 'earth_transit',
         name: 'Flooded transit hub',
@@ -700,6 +895,18 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [
+      {
+        id: 'fragment_act1',
+        name: 'Translation Fragment — Landing Craft Log',
+        act: 1,
+        cell: 200,
+        density: 0.03,
+        flavorText:
+          'A cracked data core, ~200,000 years old, its contents almost entirely unreadable. Xenolinguistic ' +
+          'Decoder: language family established.',
+      },
+    ],
   },
 
   Phobos: {
@@ -708,6 +915,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Stickney', kind: 'crater', position: [0, 300], radius: 220, amplitude: 24, description: 'The great crater that nearly shattered Phobos.' },
     ],
     pois: [
+      {
+        id: 'phobos_defense_platform',
+        name: 'Orbital Defense Platform',
+        type: 'relay',
+        cell: 180,
+        density: 0.06,
+        act: 3,
+        translationTierRequired: 2,
+      },
       {
         id: 'phobos_tether',
         name: 'Orbital tether station',
@@ -743,12 +959,33 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [
+      {
+        id: 'fragment_act3',
+        name: 'Translation Fragment — Staging Ground Manifest',
+        act: 3,
+        cell: 200,
+        density: 0.03,
+        flavorText:
+          'A cargo manifest, half its glyphs still opaque. Xenolinguistic Decoder: language family ' +
+          'complete — full translation online.',
+      },
+    ],
   },
 
   Deimos: {
     props: [],
     landmarks: [],
     pois: [
+      {
+        id: 'deimos_defense_platform',
+        name: 'Orbital Defense Platform',
+        type: 'relay',
+        cell: 180,
+        density: 0.06,
+        act: 3,
+        translationTierRequired: 2,
+      },
       {
         id: 'deimos_cache',
         name: 'Buried cache',
@@ -782,6 +1019,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Europa: {
@@ -795,17 +1033,18 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Conamara Chaos', kind: 'basin', position: [0, 460], radius: 420, amplitude: 14, description: 'A jumble of ice rafts over a buried ocean.' },
     ],
     pois: [
+      // Phase 10.5 — Act 4 (Jupiter System): rewritten from the original
+      // standalone drilling-platform ruin to carry the war-lore thread. Layer
+      // 1/2 content below (scienceNotes/deepSites) is untouched and coexists
+      // as a separate discovery on the same body.
       {
-        id: 'europa_drill',
-        name: 'Sub-ice drilling platform',
+        id: 'europa_alien_wreckage',
+        name: 'Alien Wreckage Site',
         type: 'geothermal',
-        cell: 120,
-        density: 0.4,
-        story: {
-          base: 'A platform drilling toward the ocean beneath the ice.',
-          disruption: 'The ice shifted and swallowed the shaft whole.',
-          human: 'Two submersibles hang frozen in the wall where the crack closed.',
-        },
+        cell: 180,
+        density: 0.06,
+        act: 4,
+        translationTierRequired: 2,
       },
     ],
     emitters: [],
@@ -851,6 +1090,7 @@ const CONTENT: Record<string, ContentProfile> = {
         },
       },
     ],
+    translationFragments: [],
   },
 
   Ganymede: {
@@ -859,19 +1099,16 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Galileo Regio', kind: 'basin', position: [0, 500], radius: 460, amplitude: 12, description: 'An ancient dark-terrain province.' },
     ],
     pois: [
+      // Phase 10.5 — Act 4 (Jupiter System): rewritten from the original
+      // standalone magnetics-station ruin to carry the war-lore thread.
       {
-        id: 'ganymede_magnetics',
-        name: 'Magnetic field station',
+        id: 'ganymede_alien_wreckage',
+        name: 'Alien Wreckage Site',
         type: 'relay',
-        cell: 120,
-        density: 0.4,
-        story: {
-          base: 'A station studying Ganymede’s own magnetic field.',
-          disruption: 'Shifting ice grooves tore the building cleanly in half.',
-          human: 'The two halves drifted apart, instruments still reaching for each other.',
-        },
-        clue: 'A half-corrupted log repeats one bearing before the data ends.',
-        mysteryId: 'signal',
+        cell: 180,
+        density: 0.06,
+        act: 4,
+        translationTierRequired: 2,
       },
     ],
     emitters: [],
@@ -894,6 +1131,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Callisto: {
@@ -902,17 +1140,16 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Valhalla', kind: 'crater', position: [0, 520], radius: 500, amplitude: 18, description: 'A vast multi-ring impact structure.' },
     ],
     pois: [
+      // Phase 10.5 — Act 4 (Jupiter System): rewritten from the original
+      // standalone cryogenic-facility ruin to carry the war-lore thread.
       {
-        id: 'callisto_cryo',
-        name: 'Cryogenic facility',
+        id: 'callisto_alien_wreckage',
+        name: 'Alien Wreckage Site',
         type: 'dome',
-        cell: 130,
-        density: 0.36,
-        story: {
-          base: 'A fully operational cryogenic sleep facility.',
-          disruption: 'Nothing went wrong here. No breach, no fire, no fault.',
-          human: 'Every sleep pod is open, powered, and empty. Just absence.',
-        },
+        cell: 180,
+        density: 0.06,
+        act: 4,
+        translationTierRequired: 2,
       },
     ],
     emitters: [],
@@ -935,6 +1172,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Miranda: {
@@ -943,6 +1181,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Verona Rupes', kind: 'ridge', position: [-260, 0], radius: 70, amplitude: 80, length: 700, angleDeg: 90, description: 'The tallest known cliff in the Solar System.' },
     ],
     pois: [
+      {
+        id: 'miranda_fracture_zone',
+        name: 'Spacetime Fracture Zone',
+        type: 'geothermal',
+        cell: 180,
+        density: 0.06,
+        act: 6,
+        translationTierRequired: 2,
+      },
       {
         id: 'miranda_outpost',
         name: 'Cliffside outpost',
@@ -976,6 +1223,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 
   Charon: {
@@ -984,6 +1232,15 @@ const CONTENT: Record<string, ContentProfile> = {
       { name: 'Serenity Chasma', kind: 'canyon', position: [0, 200], radius: 70, amplitude: 60, length: 1100, angleDeg: 8, description: 'A rift canyon that splits Charon’s face.' },
     ],
     pois: [
+      {
+        id: 'charon_exodus_cache',
+        name: 'Hidden Exodus Cache',
+        type: 'dome',
+        cell: 180,
+        density: 0.06,
+        act: 8,
+        translationTierRequired: 2,
+      },
       {
         id: 'charon_facility',
         name: 'Seismic facility',
@@ -1017,6 +1274,7 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     deepSites: [],
+    translationFragments: [],
   },
 };
 

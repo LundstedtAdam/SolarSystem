@@ -134,7 +134,7 @@ export function ShipHUD() {
         </div>
       )}
 
-      {/* Ship-upgrades sheet — resource-gated tiers for hyperdrive/scanner/
+      {/* Ship-upgrades sheet — resource-gated tiers for quantum drive/scanner/
           shielding/cargo (Phase 11.5). Reuses the nav-sheet bottom-sheet
           pattern so it's a consistent, thumb-reachable overlay. */}
       {upgradesOpen && (
@@ -191,7 +191,7 @@ export function ShipHUD() {
           upgrade they need instead of the Land button silently doing nothing. */}
       {descentBlocked && (
         <div className="descent-blocked-toast">
-          {descentBlocked.reason === 'hyperdrive' ? t('blockedHyperdrive') : t('blockedShielding')}
+          {descentBlocked.reason === 'quantumDrive' ? t('blockedQuantumDrive') : t('blockedShielding')}
         </div>
       )}
 

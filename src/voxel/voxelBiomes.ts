@@ -11,6 +11,7 @@ import {
   type POISpec,
   type ScienceNoteSpec,
   type DeepDiscoverySpec,
+  type TranslationFragmentSpec,
 } from './contentProfiles';
 import { getBodyResources, type ResourceVein } from './resourceProfiles';
 
@@ -72,6 +73,8 @@ export interface VoxelTerrainParams {
   scienceNotes: ScienceNoteSpec[];
   /** Layer 2 fictional deep discoveries. */
   deepSites: DeepDiscoverySpec[];
+  /** Phase 10.5 — discoverable Translation Fragments (war-lore thread). */
+  translationFragments: TranslationFragmentSpec[];
 }
 
 function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emissive = 0) {
@@ -173,6 +176,7 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     resources: getBodyResources(arche),
     scienceNotes: getContent(planet).scienceNotes,
     deepSites: getContent(planet).deepSites,
+    translationFragments: getContent(planet).translationFragments,
   };
 
   switch (arche) {
