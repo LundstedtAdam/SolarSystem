@@ -7,6 +7,7 @@
 // and the prop layer falls back to the archetype scatter, so nothing regresses.
 
 import type { ScatterProfile } from './scatterProfiles';
+import { assertNoLifeClaim } from './contentValidation';
 
 /** A surface scatter prop. Same shape as the archetype ScatterProfile, but
  *  authored explicitly per body so a world can mix several distinct, science-
@@ -61,15 +62,69 @@ export interface EmitterSpec {
   cell: number;
 }
 
+// --- Two-layer biome/life content (post-Phase-11) --------------------------
+// Layer 1 ("science notes"): cautious, real-world-grounded scanner text on
+// every landable body. `lifeStatus` has no 'confirmed' member — a content
+// author cannot claim confirmed extraterrestrial life here even by mistake;
+// it's a compile error, not a convention. See contentValidation.ts for the
+// secondary free-text guard.
+export type LifeStatus = 'not_detected' | 'theoretical' | 'inconclusive';
+
+export interface ScienceNoteSpec {
+  id: string;
+  name: string;
+  /** Always false — literal type, cannot be omitted or flipped to true. This
+   *  is what structurally separates Layer 1 from Layer 2 in the data itself. */
+  readonly speculative: false;
+  lifeStatus: LifeStatus;
+  /** 'needs-citation-review' flags a claim that hasn't been independently
+   *  verified — surfaced by a dev-only content audit, never shown in-game. */
+  confidence: 'established' | 'needs-citation-review';
+  text: { headline: string; detail: string };
+  /** Same deterministic cell-hash placement model as POISpec. */
+  cell: number;
+  density: number;
+}
+
+// Layer 2 ("deep sites"): explicit, deliberate FICTION — hidden hand-placed
+// chambers on exactly 5 bodies, reachable only by digging/descending through
+// real overburden. Confirmed-within-the-fiction language is intentional and
+// expected here; `speculative: true` is what makes that safe.
+export interface DeepDiscoverySpec {
+  id: string;
+  name: string;
+  readonly speculative: true;
+  /** true = an actual (fictional) lifeform; false = inanimate/pre-biotic. */
+  isLife: boolean;
+  /** Fixed (x, z) world-voxel anchor — deterministic, not procedural. */
+  position: [number, number];
+  /** Voxels below the surface column where the chamber begins/ends. */
+  depthMin: number;
+  depthMax: number;
+  radius: number;
+  story: { base: string; disruption?: string; human: string };
+}
+
 export interface ContentProfile {
   /** Surface scatter props. Empty → fall back to the archetype scatter. */
   props: PropSpec[];
   landmarks: LandmarkSpec[];
   pois: POISpec[];
   emitters: EmitterSpec[];
+  /** Layer 1 — real-science scanner notes (every body). */
+  scienceNotes: ScienceNoteSpec[];
+  /** Layer 2 — fictional deep discoveries (Europa/Titan/Mars/Pluto/Moon only). */
+  deepSites: DeepDiscoverySpec[];
 }
 
-const EMPTY: ContentProfile = { props: [], landmarks: [], pois: [], emitters: [] };
+const EMPTY: ContentProfile = {
+  props: [],
+  landmarks: [],
+  pois: [],
+  emitters: [],
+  scienceNotes: [],
+  deepSites: [],
+};
 
 // --- Authored content -------------------------------------------------------
 // Mars (canonical name "Mars"): wind-sculpted ventifacts, layered sedimentary
@@ -167,6 +222,47 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [{ kind: 'dust_devil', density: 0.12, cell: 40 }],
+    scienceNotes: [
+      {
+        id: 'mars_regolith',
+        name: 'Regolith scan',
+        speculative: false,
+        lifeStatus: 'theoretical',
+        confidence: 'established',
+        text: {
+          headline: 'Iron-oxide regolith, seasonal dust transport.',
+          detail:
+            'The rust-red surface is iron oxide dust. Confirmed subsurface and polar water ice make Mars ' +
+            'a long-standing focus of astrobiology, but no organism, past or present, has been detected. ' +
+            'Any biosignature here remains an open research question.',
+        },
+        cell: 100,
+        density: 0.5,
+      },
+    ],
+    deepSites: [
+      {
+        id: 'mars_lava_tube',
+        name: 'Sealed lava tube',
+        speculative: true,
+        isLife: true,
+        position: [180, -260],
+        depthMin: 22,
+        depthMax: 40,
+        radius: 14,
+        story: {
+          base:
+            'A collapsed lava tube, sealed by a dust fall long after the flow cooled. The air inside is ' +
+            'dead still.',
+          disruption:
+            'Frost rimes a cluster of dormant, extremophile-like organisms clinging to the tube wall — ' +
+            'inert, but not dead. A thermal source might change that.',
+          human:
+            'This is fiction, not a real discovery: no confirmed life exists on Mars. In-story, a focused ' +
+            'thermal tool could reactivate whatever this is. Nobody has tried yet.',
+        },
+      },
+    ],
   },
 
   Io: {
@@ -198,6 +294,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [{ kind: 'fumarole', density: 0.18, cell: 24 }],
+    scienceNotes: [
+      {
+        id: 'io_volcanism',
+        name: 'Volcanic survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: "The Solar System's most volcanically active body.",
+          detail:
+            'Io is wracked by intense tidal heating from Jupiter, driving hundreds of active volcanoes ' +
+            'and constant resurfacing. Surface temperatures, radiation, and sulfur chemistry make it one ' +
+            'of the least hospitable bodies known — no habitability interest here.',
+        },
+        cell: 100,
+        density: 0.45,
+      },
+    ],
+    deepSites: [],
   },
 
   Pluto: {
@@ -237,6 +352,47 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'pluto_ices',
+        name: 'Ice-plain composition',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'A nitrogen-ice surface over a suspected subsurface ocean.',
+          detail:
+            'Sputnik Planitia is a vast plain of nitrogen, methane, and carbon-monoxide ice. Evidence ' +
+            'suggests a liquid water layer deep beneath the crust, but at these temperatures and this ' +
+            'depth there is no evidence of biological activity.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [
+      {
+        id: 'pluto_crystal_chamber',
+        name: 'Crystalline chamber',
+        speculative: true,
+        isLife: false,
+        position: [-120, 340],
+        depthMin: 12,
+        depthMax: 26,
+        radius: 12,
+        story: {
+          base:
+            'A cavity beneath the nitrogen ice, its walls lined with geometrically regular crystal growth ' +
+            '— too ordered to be a simple freeze pattern.',
+          disruption:
+            'The formations branch and repeat with an almost deliberate symmetry. They do not move, ' +
+            'react, or show any sign of metabolism.',
+          human:
+            'This is fiction: explicitly not life, not even in-story. It reads as unusually organized ' +
+            'pre-biotic chemistry — chemistry on the road to something, that never got there.',
+        },
+      },
+    ],
   },
 
   Triton: {
@@ -261,6 +417,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [{ kind: 'geyser', density: 0.1, cell: 50 }], // nitrogen cryo-plumes
+    scienceNotes: [
+      {
+        id: 'triton_cryovolcanism',
+        name: 'Cryovolcanic survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'Active nitrogen-gas geysers, a retrograde captured orbit.',
+          detail:
+            "Triton's dimpled cantaloupe terrain and observed geyser plumes suggest ongoing surface " +
+            'activity for a body this cold. Its retrograde orbit suggests it is a captured Kuiper Belt ' +
+            'object rather than a native Neptunian moon. No biological indicators found.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Titan: {
@@ -285,6 +460,47 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [{ kind: 'methane_bubble', density: 0.3, cell: 14 }],
+    scienceNotes: [
+      {
+        id: 'titan_methane_cycle',
+        name: 'Hydrocarbon-lake survey',
+        speculative: false,
+        lifeStatus: 'theoretical',
+        confidence: 'established',
+        text: {
+          headline: 'A methane/ethane hydrological cycle, a thick nitrogen atmosphere.',
+          detail:
+            'Titan is the only body besides Earth known to have stable liquid on its surface — lakes and ' +
+            'seas of liquid methane and ethane. Its rich organic chemistry has made it a serious target ' +
+            'for astrobiology research, but this refers to prebiotic chemistry, not detected life.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [
+      {
+        id: 'titan_lake_vents',
+        name: 'Kraken Mare depths',
+        speculative: true,
+        isLife: true,
+        position: [0, 460],
+        depthMin: 6,
+        depthMax: 16,
+        radius: 16,
+        story: {
+          base:
+            'Beneath the methane surface of Kraken Mare, the cold thickens into something closer to gel ' +
+            'than liquid.',
+          disruption:
+            'Something moves down here — barely. Pale, membranous forms drift and contract on a timescale ' +
+            'of minutes, an alien metabolism running at cryogenic speed.',
+          human:
+            'This is fiction: no life has been found on Titan. In-story it is deliberately non-Earth-like ' +
+            '— slow, cold-adapted, built from a chemistry that would be inert anywhere warmer.',
+        },
+      },
+    ],
   },
 
   // Airless Moon: dust kicked up by the player's footsteps falls in a perfect
@@ -314,6 +530,48 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [{ kind: 'vacuum_dust', density: 0, cell: 0 }],
+    scienceNotes: [
+      {
+        id: 'moon_regolith',
+        name: 'Regolith survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'Airless, ancient, and geologically largely inert.',
+          detail:
+            'The lunar surface has been battered by impacts for billions of years with no atmosphere or ' +
+            'weather to erase the record. It carries no habitability interest — no atmosphere, no liquid ' +
+            'water at the surface, no known biosignature.',
+        },
+        cell: 100,
+        density: 0.45,
+      },
+    ],
+    deepSites: [
+      {
+        id: 'moon_impact_pocket',
+        name: 'Anomalous impact pocket',
+        speculative: true,
+        isLife: false,
+        position: [420, 340],
+        depthMin: 4,
+        depthMax: 10,
+        radius: 8,
+        story: {
+          base:
+            'A shallow pocket near Tycho, fused glass on one side, ordinary regolith on the other — the ' +
+            'signature of a very old, very fast impact.',
+          disruption:
+            'Embedded in the glass are fossilized fragments unlike anything native to the Moon: layered, ' +
+            'organic-looking structures, long since mineralized.',
+          human:
+            'This is fiction: a mystery object, not indigenous lunar life. In-story it plays on ' +
+            'lithopanspermia — the idea that impact ejecta can carry biological material between worlds. ' +
+            'Whatever it is, it did not originate here.',
+        },
+      },
+    ],
   },
 
   Merkurius: {
@@ -341,6 +599,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'mercury_extremes',
+        name: 'Thermal survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'Extreme day/night temperature swings, permanently shadowed polar craters.',
+          detail:
+            "Mercury's surface swings from scorching to frigid between day and night. Permanently " +
+            'shadowed polar craters are cold enough to host water ice, but the planet has no atmosphere ' +
+            'and no known biosignature.',
+        },
+        cell: 100,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Venus: {
@@ -363,6 +640,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'venus_atmosphere',
+        name: 'Atmospheric survey',
+        speculative: false,
+        lifeStatus: 'inconclusive',
+        confidence: 'needs-citation-review',
+        text: {
+          headline: 'A crushing, superheated, sulfuric-acid atmosphere.',
+          detail:
+            'Surface conditions on Venus are lethal to any known organism. Some researchers have proposed ' +
+            'that the temperate cloud layer, tens of kilometres up, could theoretically support ' +
+            'microbial-scale chemistry; this remains unconfirmed and contested, not a detection.',
+        },
+        cell: 100,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Jorden: {
@@ -385,6 +681,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'earth_baseline',
+        name: 'Biosphere baseline',
+        speculative: false,
+        lifeStatus: 'theoretical',
+        confidence: 'established',
+        text: {
+          headline: 'The only confirmed life-bearing world known.',
+          detail:
+            "Earth remains the sole confirmed example of a life-bearing planet. Everything else in this " +
+            'survey is measured against this one baseline — real or speculative, nothing found elsewhere ' +
+            'has yet met the same bar of evidence.',
+        },
+        cell: 100,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Phobos: {
@@ -409,6 +724,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'phobos_orbit',
+        name: 'Orbital decay survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'A captured body on a slowly decaying orbit.',
+          detail:
+            'Phobos is likely a captured asteroid, heavily cratered and riddled with grooves from tidal ' +
+            'stress. Its orbit is decaying and it will eventually break up or impact Mars. No atmosphere, ' +
+            'no biosignature.',
+        },
+        cell: 90,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Deimos: {
@@ -429,6 +763,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'deimos_composition',
+        name: 'Composition survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'A small, smooth, carbon-rich captured moonlet.',
+          detail:
+            'Deimos is smaller and smoother than Phobos, with a thicker regolith blanket muting its ' +
+            'crater relief. Its composition resembles a carbonaceous asteroid. No atmosphere, no ' +
+            'biosignature.',
+        },
+        cell: 90,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Europa: {
@@ -456,6 +809,48 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'europa_ocean',
+        name: 'Subsurface-ocean survey',
+        speculative: false,
+        lifeStatus: 'theoretical',
+        confidence: 'established',
+        text: {
+          headline: 'An ice shell over a global liquid-water ocean.',
+          detail:
+            "Europa's fractured ice surface and magnetic-field signature strongly indicate a salty liquid " +
+            'ocean beneath the crust, kept warm by tidal flexing. This makes it one of the leading ' +
+            'astrobiology targets in the Solar System — a theoretical possibility, not a detection.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [
+      {
+        id: 'europa_vent',
+        name: 'Sub-ice hydrothermal vent',
+        speculative: true,
+        isLife: true,
+        position: [40, 300],
+        depthMin: 34,
+        depthMax: 58,
+        radius: 18,
+        story: {
+          base:
+            'The drill shaft breaks through the ice shell into open water — dark, pressurized, and ' +
+            'shockingly warm near a vent field on the ocean floor.',
+          disruption:
+            'Faint bioluminescent pulses ripple across clusters of vent-dwelling organisms, feeding on ' +
+            'mineral-rich plumes in total darkness.',
+          human:
+            'This is fiction: no life has actually been confirmed at Europa. In-story, this is exactly ' +
+            'what decades of "theoretical" habitability speculation imagined finding — an entire ' +
+            'ecosystem, never touched by sunlight.',
+        },
+      },
+    ],
   },
 
   Ganymede: {
@@ -480,6 +875,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'ganymede_magnetosphere',
+        name: 'Magnetosphere survey',
+        speculative: false,
+        lifeStatus: 'theoretical',
+        confidence: 'established',
+        text: {
+          headline: "The only moon known to generate its own magnetic field.",
+          detail:
+            "Ganymede is the Solar System's largest moon and the only one with an internally generated " +
+            'magnetic field, evidence of a molten metallic core. It is also thought to hold a subsurface ' +
+            'saltwater ocean, of theoretical astrobiological interest — no life has been detected.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Callisto: {
@@ -502,6 +916,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'callisto_cratering',
+        name: 'Cratering survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'One of the most heavily cratered surfaces known.',
+          detail:
+            "Callisto's ancient, saturated surface has seen little geological activity since its " +
+            'formation. A subsurface ocean is suspected but unconfirmed, and there is no known ' +
+            'biosignature.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Miranda: {
@@ -524,6 +957,25 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'miranda_geology',
+        name: 'Coronae survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: 'Extreme, jumbled terrain and the tallest known cliff face.',
+          detail:
+            "Miranda's coronae — huge, oddly patterned terrain blocks — suggest a violent geological " +
+            'history, possibly partial disruption and reassembly. It is airless and has no known ' +
+            'biosignature.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 
   Charon: {
@@ -546,8 +998,31 @@ const CONTENT: Record<string, ContentProfile> = {
       },
     ],
     emitters: [],
+    scienceNotes: [
+      {
+        id: 'charon_composition',
+        name: 'Composition survey',
+        speculative: false,
+        lifeStatus: 'not_detected',
+        confidence: 'established',
+        text: {
+          headline: "Pluto's tidally locked, canyon-scarred companion.",
+          detail:
+            "Charon is roughly half Pluto's diameter and tidally locked to it. Its dark polar cap and " +
+            'giant canyon system point to an ancient, possibly episodic, subsurface-ocean history. No ' +
+            'atmosphere, no known biosignature.',
+        },
+        cell: 110,
+        density: 0.4,
+      },
+    ],
+    deepSites: [],
   },
 };
+
+for (const body of Object.values(CONTENT)) {
+  for (const note of body.scienceNotes) assertNoLifeClaim(note);
+}
 
 export function getContent(planet: string): ContentProfile {
   return CONTENT[planet] ?? EMPTY;

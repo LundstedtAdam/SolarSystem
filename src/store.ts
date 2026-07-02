@@ -55,7 +55,7 @@ export interface ControlConfig {
 /** Layered narrative-stratigraphy text for a discovered point of interest. */
 export interface DiscoveryStory {
   base: string;
-  disruption: string;
+  disruption?: string;
   human: string;
 }
 
@@ -67,6 +67,10 @@ export interface JournalEntry {
   story?: DiscoveryStory;
   clue?: string;
   ts: number;
+  /** True for Layer 2 (fictional deep-discovery) entries — read directly off
+   *  the data, never inferred, so the UI can never blur real science with
+   *  invented sci-fi content. */
+  speculative?: boolean;
 }
 
 /** A resource dropped on the terrain when the backpack overflows. Re-collected
@@ -329,6 +333,7 @@ interface SimState {
     story?: DiscoveryStory;
     clue?: string;
     mysteryId?: string;
+    speculative?: boolean;
   }) => boolean;
 
   /** Mine a resource: add what fits to the backpack, drop the overflow on the
@@ -544,7 +549,15 @@ export const useStore = create<SimState>((set, get) => ({
 
     const discovered: Record<string, true> = { ...s.discovered, [key]: true };
     let journal: JournalEntry[] = [
-      { key, planet: e.planet, name: e.name, story: e.story, clue: e.clue, ts: Date.now() },
+      {
+        key,
+        planet: e.planet,
+        name: e.name,
+        story: e.story,
+        clue: e.clue,
+        ts: Date.now(),
+        speculative: e.speculative,
+      },
       ...s.journal,
     ];
     let mysteryClues = s.mysteryClues;

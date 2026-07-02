@@ -5,7 +5,13 @@
 
 import { getBiome } from '../terrain/biomes';
 import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
-import { getContent, type LandmarkSpec, type POISpec } from './contentProfiles';
+import {
+  getContent,
+  type LandmarkSpec,
+  type POISpec,
+  type ScienceNoteSpec,
+  type DeepDiscoverySpec,
+} from './contentProfiles';
 import { getBodyResources, type ResourceVein } from './resourceProfiles';
 
 export type Archetype = 'rock' | 'regolith' | 'earth' | 'ice' | 'lava' | 'dune';
@@ -62,6 +68,10 @@ export interface VoxelTerrainParams {
   pois: POISpec[];
   /** Mineable ore veins for this body (Phase 11). */
   resources: ResourceVein[];
+  /** Layer 1 real-science scanner notes. */
+  scienceNotes: ScienceNoteSpec[];
+  /** Layer 2 fictional deep discoveries. */
+  deepSites: DeepDiscoverySpec[];
 }
 
 function rgb(pal: Float32Array, id: number, r: number, g: number, b: number, emissive = 0) {
@@ -158,6 +168,8 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     landmarks: getContent(planet).landmarks,
     pois: getContent(planet).pois,
     resources: getBodyResources(arche),
+    scienceNotes: getContent(planet).scienceNotes,
+    deepSites: getContent(planet).deepSites,
   };
 
   switch (arche) {

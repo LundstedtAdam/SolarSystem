@@ -8,7 +8,7 @@ import { CHUNK_SIZE, chunkIndex, packVoxel, BLOCK } from './voxelTypes';
 import { fbm2, valueNoise3, valueNoise2, cellHash, seedFromName } from './noise';
 import type { Chunk } from './chunk';
 import { getVoxelTerrain, type VoxelTerrainParams } from './voxelBiomes';
-import type { LandmarkSpec, POISpec } from './contentProfiles';
+import type { LandmarkSpec, POISpec, ScienceNoteSpec, DeepDiscoverySpec } from './contentProfiles';
 import { generatePOI, POI_MAX_HALF_EXTENT } from './structures';
 
 /** Crater bowl + rim height delta (regolith bodies). */
@@ -224,6 +224,7 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
   }
 
   stampPOIs(chunk, params, seed);
+  carveDeepSites(chunk, params, seed);
 
   chunk.reapplyEdits();
   chunk.refreshEmpty();
@@ -266,6 +267,45 @@ function stampPOIs(chunk: Chunk, params: VoxelTerrainParams, seed: number): void
           if (lx < 0 || lx >= CHUNK_SIZE || ly < 0 || ly >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
             continue;
           voxels[chunkIndex(lx, ly, lz)] = packVoxel(v.block);
+        }
+      }
+    }
+  }
+}
+
+/** Carve Layer 2 (fictional deep-discovery) chambers: hollow voids hand-anchored
+ *  at a fixed (x, z, depth) per body, not left to procedural cave-noise chance.
+ *  The player must still physically dig/descend through real terrain to reach
+ *  one — this only clears the interior, not the overburden above it. */
+function carveDeepSites(chunk: Chunk, params: VoxelTerrainParams, seed: number): void {
+  if (params.deepSites.length === 0) return;
+  const { voxels } = chunk;
+  const baseX = chunk.cx * CHUNK_SIZE;
+  const baseY = chunk.cy * CHUNK_SIZE;
+  const baseZ = chunk.cz * CHUNK_SIZE;
+
+  for (const site of params.deepSites) {
+    const [ax, az] = site.position;
+    if (
+      Math.abs(ax - (baseX + CHUNK_SIZE / 2)) > site.radius + CHUNK_SIZE ||
+      Math.abs(az - (baseZ + CHUNK_SIZE / 2)) > site.radius + CHUNK_SIZE
+    ) {
+      continue; // chamber footprint can't overlap this chunk
+    }
+    const surface = columnHeight(ax, az, params, seed);
+    const yTop = surface - site.depthMin;
+    const yBot = surface - site.depthMax;
+    for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+      const wx = baseX + lx;
+      const dx = wx - ax;
+      for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+        const wz = baseZ + lz;
+        const dz = wz - az;
+        if (dx * dx + dz * dz > site.radius * site.radius) continue;
+        for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+          const wy = baseY + ly;
+          if (wy > yTop || wy < yBot) continue;
+          voxels[chunkIndex(lx, ly, lz)] = 0; // BLOCK.AIR
         }
       }
     }
@@ -329,6 +369,74 @@ export function findNearbyPOI(
         if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
       }
     }
+  }
+  return best;
+}
+
+export interface NearbyScienceNote {
+  spec: ScienceNoteSpec;
+  ax: number;
+  az: number;
+  dist: number;
+}
+
+/** Nearest Layer 1 science note to (px, pz) within maxDist — a normal surface
+ *  feature, same deterministic cell-hash placement as findNearbyPOI, no depth
+ *  gate. */
+export function findNearbyScienceNote(
+  params: VoxelTerrainParams,
+  seed: number,
+  px: number,
+  pz: number,
+  maxDist: number,
+): NearbyScienceNote | null {
+  let best: NearbyScienceNote | null = null;
+  for (const spec of params.scienceNotes) {
+    const cell = spec.cell;
+    const sSeed = seed + (seedFromName(spec.id) % 100000);
+    const gx0 = Math.floor((px - maxDist) / cell);
+    const gx1 = Math.floor((px + maxDist) / cell);
+    const gz0 = Math.floor((pz - maxDist) / cell);
+    const gz1 = Math.floor((pz + maxDist) / cell);
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
+        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
+        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
+        const dist = Math.hypot(px - ax, pz - az);
+        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
+      }
+    }
+  }
+  return best;
+}
+
+export interface NearbyDeepSite {
+  spec: DeepDiscoverySpec;
+  dist: number;
+}
+
+/** Nearest Layer 2 deep site to (px, py, pz) within maxDist — 3D distance to
+ *  the fixed chamber anchor AND the player must be below the surface column by
+ *  at least depthMin (i.e. actually down in the excavation). This is the
+ *  mechanical "hidden, hard to reach" enforcement, not just a narrative one:
+ *  standing on the surface directly above a chamber never finds it. */
+export function findNearbyDeepSite(
+  params: VoxelTerrainParams,
+  seed: number,
+  px: number,
+  py: number,
+  pz: number,
+  maxDist: number,
+): NearbyDeepSite | null {
+  let best: NearbyDeepSite | null = null;
+  for (const spec of params.deepSites) {
+    const [ax, az] = spec.position;
+    const surface = columnHeight(ax, az, params, seed);
+    if (py > surface - spec.depthMin) continue; // not down in the excavation yet
+    const ay = surface - (spec.depthMin + spec.depthMax) / 2;
+    const dist = Math.hypot(px - ax, py - ay, pz - az);
+    if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, dist };
   }
   return best;
 }

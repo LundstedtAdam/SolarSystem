@@ -4,7 +4,7 @@ import { useT } from '../i18n';
 import { voxelTelemetry, voxelScan, consumeScan } from '../voxel/voxelControls';
 import { getVoxelTerrain } from '../voxel/voxelBiomes';
 import { seedFromName } from '../voxel/noise';
-import { findNearbyPOI } from '../voxel/worldGen';
+import { findNearbyPOI, findNearbyScienceNote, findNearbyDeepSite } from '../voxel/worldGen';
 
 // Phase 10.4 — the discovery loop. No quest markers: a short-range sensor only
 // hints that *something* is near, and walking up to it lets you scan its layered
@@ -15,15 +15,30 @@ const SCAN_RANGE = 14; // close enough to actually scan
 // up when the anomaly is roughly in front of the player, not merely nearby.
 const CROSSHAIR_CONE = 45;
 
+interface Candidate {
+  id: string;
+  name: string;
+  dist: number;
+  ax: number;
+  az: number;
+  speculative: boolean;
+  story?: { base: string; disruption?: string; human: string };
+  clue?: string;
+  mysteryId?: string;
+}
+
 interface Nearby {
   id: string;
   name: string;
   dist: number;
   bearing: number; // degrees relative to facing, 0 = ahead
-  story?: { base: string; disruption: string; human: string };
+  story?: { base: string; disruption?: string; human: string };
   clue?: string;
   mysteryId?: string;
   discovered: boolean;
+  /** True for Layer 2 (fictional deep-discovery) content — drives the
+   *  "SPECULATIVE" tag/accent so it can never be confused with real content. */
+  speculative: boolean;
 }
 
 export function DiscoveryPanel() {
@@ -59,30 +74,79 @@ export function DiscoveryPanel() {
     let running = true;
     const tick = () => {
       if (!running) return;
-      const { x, z, yaw } = voxelTelemetry;
-      const hit = findNearbyPOI(params, seed, x, z, SENSOR_RANGE);
-      if (hit) {
-        const dx = hit.ax - x;
-        const dz = hit.az - z;
+      const { x, y, z, yaw } = voxelTelemetry;
+
+      // Poll all three sources (POIs, Layer 1 science notes, Layer 2 deep
+      // sites) and keep only the single nearest — preserves the "one clear
+      // sensor hint, no quest markers" design.
+      const poiHit = findNearbyPOI(params, seed, x, z, SENSOR_RANGE);
+      const noteHit = findNearbyScienceNote(params, seed, x, z, SENSOR_RANGE);
+      const deepHit = findNearbyDeepSite(params, seed, x, y, z, SENSOR_RANGE);
+
+      const candidates: Candidate[] = [];
+      if (poiHit) {
+        candidates.push({
+          id: poiHit.spec.id,
+          name: poiHit.spec.name,
+          dist: poiHit.dist,
+          ax: poiHit.ax,
+          az: poiHit.az,
+          speculative: false,
+          story: poiHit.spec.story,
+          clue: poiHit.spec.clue,
+          mysteryId: poiHit.spec.mysteryId,
+        });
+      }
+      if (noteHit) {
+        candidates.push({
+          id: noteHit.spec.id,
+          name: noteHit.spec.name,
+          dist: noteHit.dist,
+          ax: noteHit.ax,
+          az: noteHit.az,
+          speculative: false,
+          story: { base: noteHit.spec.text.headline, human: noteHit.spec.text.detail },
+        });
+      }
+      if (deepHit) {
+        candidates.push({
+          id: deepHit.spec.id,
+          name: deepHit.spec.name,
+          dist: deepHit.dist,
+          ax: deepHit.spec.position[0],
+          az: deepHit.spec.position[1],
+          speculative: true,
+          story: deepHit.spec.story,
+        });
+      }
+      const candidate = candidates.reduce<Candidate | null>(
+        (best, c) => (best === null || c.dist < best.dist ? c : best),
+        null,
+      );
+
+      if (candidate) {
+        const dx = candidate.ax - x;
+        const dz = candidate.az - z;
         const fx = -Math.sin(yaw);
         const fz = -Math.cos(yaw);
         const len = Math.hypot(dx, dz) || 1;
         const tx = dx / len;
         const tz = dz / len;
         const bearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
-        const isDiscovered = !!discovered[`${planet}:${hit.spec.id}`];
+        const isDiscovered = !!discovered[`${planet}:${candidate.id}`];
         setNearby({
-          id: hit.spec.id,
-          name: hit.spec.name,
-          dist: hit.dist,
+          id: candidate.id,
+          name: candidate.name,
+          dist: candidate.dist,
           bearing,
-          story: hit.spec.story,
-          clue: hit.spec.clue,
-          mysteryId: hit.spec.mysteryId,
+          story: candidate.story,
+          clue: candidate.clue,
+          mysteryId: candidate.mysteryId,
           discovered: isDiscovered,
+          speculative: candidate.speculative,
         });
         voxelScan.available =
-          !isDiscovered && hit.dist <= SCAN_RANGE && Math.abs(bearing) <= CROSSHAIR_CONE;
+          !isDiscovered && candidate.dist <= SCAN_RANGE && Math.abs(bearing) <= CROSSHAIR_CONE;
       } else {
         setNearby(null);
         voxelScan.available = false;
@@ -108,6 +172,7 @@ export function DiscoveryPanel() {
       story: n.story,
       clue: n.clue,
       mysteryId: n.mysteryId,
+      speculative: n.speculative,
     });
     if (isNew) {
       setReadout(n);
@@ -137,19 +202,22 @@ export function DiscoveryPanel() {
       {/* Sensor hint — direction + distance only, never a map waypoint. The
           actual Scan action lives in the bottom thumb-reach cluster. */}
       {nearby && !readout && (
-        <div style={sensor}>
+        <div style={nearby.speculative ? sensorSpeculative : sensor}>
           {nearby.discovered ? '◇' : '◆'} {arrow} {t('anomaly')} · {nearby.dist.toFixed(0)}m
         </div>
       )}
 
       {/* Scan readout — the layered story, shown briefly after a scan. */}
       {readout && (
-        <div style={readoutBox}>
-          <div style={readoutTitle}>{readout.name}</div>
+        <div style={readout.speculative ? readoutBoxSpeculative : readoutBox}>
+          <div style={readoutTitle}>
+            {readout.name}
+            {readout.speculative && <span style={speculativeTag}>◈ SPECULATIVE — FICTION</span>}
+          </div>
           {readout.story && (
             <>
               <p style={layerBase}>{readout.story.base}</p>
-              <p style={layerMid}>{readout.story.disruption}</p>
+              {readout.story.disruption && <p style={layerMid}>{readout.story.disruption}</p>}
               <p style={layerHuman}>{readout.story.human}</p>
             </>
           )}
@@ -166,8 +234,11 @@ export function DiscoveryPanel() {
           <div style={journalHead}>{t('knowledge')}</div>
           {journal.length === 0 && <p style={emptyNote}>{t('noFindings')}</p>}
           {journal.map((e) => (
-            <div key={e.key + e.ts} style={journalEntry}>
-              <div style={journalName}>{e.name}</div>
+            <div key={e.key + e.ts} style={e.speculative ? journalEntrySpeculative : journalEntry}>
+              <div style={journalName}>
+                {e.name}
+                {e.speculative && <span style={speculativeTag}>◈ SPECULATIVE</span>}
+              </div>
               {e.story && <p style={journalStory}>{e.story.human}</p>}
               {e.clue && <p style={clueLine}>“{e.clue}”</p>}
             </div>
@@ -217,7 +288,31 @@ const readoutBox: React.CSSProperties = {
   borderRadius: 10,
   padding: '14px 18px',
 };
-const readoutTitle: React.CSSProperties = { fontSize: 17, fontWeight: 600, marginBottom: 8 };
+const sensorSpeculative: React.CSSProperties = { ...sensor, border: '1px solid rgba(180,120,255,0.55)' };
+// Layer 2 (fictional) accent — a violet/anomalous tint distinct from the
+// existing blue/amber Layer 1 & POI palette, so it never reads as real data.
+const readoutBoxSpeculative: React.CSSProperties = {
+  ...readoutBox,
+  border: '1px solid rgba(180,120,255,0.55)',
+  boxShadow: '0 0 24px rgba(150,80,255,0.15)',
+};
+const readoutTitle: React.CSSProperties = {
+  fontSize: 17,
+  fontWeight: 600,
+  marginBottom: 8,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+};
+const speculativeTag: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: 0.5,
+  color: '#c9a3ff',
+  border: '1px solid rgba(180,120,255,0.55)',
+  borderRadius: 4,
+  padding: '2px 6px',
+};
 const layerBase: React.CSSProperties = { margin: '6px 0', color: '#cfe6f2' };
 const layerMid: React.CSSProperties = { margin: '6px 0', color: '#e6c9a8' };
 const layerHuman: React.CSSProperties = { margin: '6px 0', color: '#cdbce0', fontStyle: 'italic' };
@@ -250,5 +345,15 @@ const journalEntry: React.CSSProperties = {
   borderTop: '1px solid rgba(255,255,255,0.08)',
   padding: '8px 0',
 };
-const journalName: React.CSSProperties = { fontWeight: 600, fontSize: 14 };
+const journalEntrySpeculative: React.CSSProperties = {
+  ...journalEntry,
+  borderTop: '1px solid rgba(180,120,255,0.35)',
+};
+const journalName: React.CSSProperties = {
+  fontWeight: 600,
+  fontSize: 14,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
 const journalStory: React.CSSProperties = { margin: '4px 0 0', fontSize: 13, opacity: 0.85 };
