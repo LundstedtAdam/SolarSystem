@@ -6,7 +6,14 @@
 
 import type { ResourceType } from './voxelTypes';
 
-export type CraftedItem = 'alloy' | 'circuit' | 'drill' | 'crate';
+export type CraftedItem =
+  | 'alloy'
+  | 'circuit'
+  | 'drill'
+  | 'crate'
+  // Phase 11.3 — refinery outputs (smelted while the base has surplus power).
+  | 'iron_ingot'
+  | 'copper_ingot';
 
 export interface Recipe {
   id: string;
@@ -23,6 +30,8 @@ export const CRAFTED_LABEL: Record<CraftedItem, string> = {
   circuit: 'Circuit',
   drill: 'Mining Drill',
   crate: 'Cargo Crate',
+  iron_ingot: 'Iron Ingot',
+  copper_ingot: 'Copper Ingot',
 };
 
 export const RECIPES: Recipe[] = [

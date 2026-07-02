@@ -125,6 +125,12 @@ export function getVoxelPalette(planet: string): Float32Array {
   rgb(pal, BLOCK.SILO, 0.4, 0.62, 0.72, 0.15);
   // Phase 11.2 — crafting station core (warm self-lit fabricator).
   rgb(pal, BLOCK.STATION, 0.7, 0.5, 0.3, 0.2);
+  // Phase 11.3 — base module cores, each with a distinct machine read.
+  rgb(pal, BLOCK.HABITAT, 0.75, 0.72, 0.65, 0.1);
+  rgb(pal, BLOCK.SOLAR, 0.2, 0.3, 0.55, 0.25);
+  rgb(pal, BLOCK.WIND, 0.7, 0.75, 0.8);
+  rgb(pal, BLOCK.THERMAL, 0.6, 0.28, 0.15, 0.3);
+  rgb(pal, BLOCK.REFINERY, 0.45, 0.4, 0.35, 0.12);
   return pal;
 }
 

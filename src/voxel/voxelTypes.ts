@@ -64,10 +64,28 @@ export const BLOCK = {
   SILO: 28, // storage-silo core (entity anchor)
   // Phase 11.2 — crafting station core (entity anchor).
   STATION: 29,
+  // Phase 11.3 — base module cores (entity anchors).
+  HABITAT: 30,
+  SOLAR: 31,
+  WIND: 32,
+  THERMAL: 33,
+  REFINERY: 34,
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 30;
+export const BLOCK_COUNT = 35;
+
+/** Block ids that anchor a placed Structure entity — mining one removes the
+ *  entity (silos spill their contents). */
+export const STRUCTURE_CORE_BLOCKS: ReadonlySet<number> = new Set([
+  BLOCK.SILO,
+  BLOCK.STATION,
+  BLOCK.HABITAT,
+  BLOCK.SOLAR,
+  BLOCK.WIND,
+  BLOCK.THERMAL,
+  BLOCK.REFINERY,
+]);
 
 /** Floats per palette entry: r, g, b, emissive. */
 export const PALETTE_STRIDE = 4;
@@ -131,6 +149,11 @@ const HOST_RESOURCE: Partial<Record<number, ResourceType>> = {
   [BLOCK.METAL]: 'iron',
   [BLOCK.SILO]: 'iron',
   [BLOCK.STATION]: 'iron',
+  [BLOCK.HABITAT]: 'iron',
+  [BLOCK.SOLAR]: 'silicon',
+  [BLOCK.WIND]: 'iron',
+  [BLOCK.THERMAL]: 'iron',
+  [BLOCK.REFINERY]: 'iron',
 };
 
 /** The resource a mined block yields, or undefined if it yields nothing.
@@ -172,6 +195,11 @@ const HARDNESS: Partial<Record<number, number>> = {
   [BLOCK.BUILD]: 0.9,
   [BLOCK.SILO]: 1.2,
   [BLOCK.STATION]: 1.3,
+  [BLOCK.HABITAT]: 1.5,
+  [BLOCK.SOLAR]: 1.1,
+  [BLOCK.WIND]: 1.1,
+  [BLOCK.THERMAL]: 1.3,
+  [BLOCK.REFINERY]: 1.4,
 };
 
 /** Seconds of continuous mining required to break the given block. */

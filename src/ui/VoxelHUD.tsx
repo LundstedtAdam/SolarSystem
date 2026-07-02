@@ -5,6 +5,7 @@ import { voxelTelemetry, voxelStation, isTouchDevice } from '../voxel/voxelContr
 import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
 import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
 import { CRAFTED_LABEL, type CraftedItem } from '../voxel/recipes';
+import { planetPower } from '../voxel/power';
 import { CraftMenu } from './CraftMenu';
 import type { ResourceType } from '../voxel/voxelTypes';
 
@@ -13,6 +14,12 @@ type Menu = 'none' | 'backpack' | 'build' | 'craft';
 function costLabel(cost: Partial<Record<ResourceType, number>>): string {
   return (Object.keys(cost) as ResourceType[])
     .map((k) => `${cost[k]} ${RESOURCE_LABEL[k]}`)
+    .join(' + ');
+}
+
+function itemCostLabel(cost: Partial<Record<CraftedItem, number>>): string {
+  return (Object.keys(cost) as CraftedItem[])
+    .map((k) => `${cost[k]} ${CRAFTED_LABEL[k]}`)
     .join(' + ');
 }
 
@@ -98,6 +105,7 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
   const active = useStore((s) => s.activeBuildable);
   const setActive = useStore((s) => s.setActiveBuildable);
   const inventory = useStore((s) => s.inventory);
+  const items = useStore((s) => s.items);
 
   return (
     <div className="voxel-sheet-backdrop" onClick={onClose}>
@@ -110,10 +118,16 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
         </div>
         <div className="voxel-sheet-list">
           {BUILDABLE_IDS.map((id) => {
-            const cost = BUILDABLES[id].cost;
-            const affordable = (Object.keys(cost) as ResourceType[]).every(
-              (k) => (inventory[k] ?? 0) >= (cost[k] ?? 0),
+            const b = BUILDABLES[id];
+            const resOk = (Object.keys(b.cost) as ResourceType[]).every(
+              (k) => (inventory[k] ?? 0) >= (b.cost[k] ?? 0),
             );
+            const itemOk = b.itemCost
+              ? (Object.keys(b.itemCost) as CraftedItem[]).every(
+                  (k) => (items[k] ?? 0) >= (b.itemCost?.[k] ?? 0),
+                )
+              : true;
+            const affordable = resOk && itemOk;
             return (
               <button
                 key={id}
@@ -125,7 +139,8 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
               >
                 <span>{t(id)}</span>
                 <span className={`voxel-build-cost${affordable ? '' : ' short'}`}>
-                  {costLabel(cost)}
+                  {costLabel(b.cost)}
+                  {b.itemCost ? ` + ${itemCostLabel(b.itemCost)}` : ''}
                 </span>
               </button>
             );
@@ -144,6 +159,7 @@ export function VoxelHUD() {
   const inventory = useStore((s) => s.inventory);
   const capacity = useStore((s) => s.backpackCapacity);
   const activeBuildable = useStore((s) => s.activeBuildable);
+  const structures = useStore((s) => s.structures);
   const { t } = useT();
   const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0 });
   const [menu, setMenu] = useState<Menu>('none');
@@ -228,6 +244,12 @@ export function VoxelHUD() {
   const mx = 24 + Math.sin(rad) * 17;
   const my = 24 - Math.cos(rad) * 17;
   const used = backpackUsed(inventory);
+  const power = planetPower(structures, sceneMode.planet);
+  const hasPowerStructures = structures.some(
+    (s) =>
+      s.planet === sceneMode.planet &&
+      (s.type === 'solar' || s.type === 'wind' || s.type === 'thermal' || s.type === 'refinery'),
+  );
 
   return (
     <div className="surface-hud">
@@ -235,6 +257,11 @@ export function VoxelHUD() {
 
       {/* Top-right menu toggles (also serve as compact indicators). */}
       <div className="voxel-menu-toggles">
+        {hasPowerStructures && (
+          <div className={`voxel-power-chip${power.generated >= power.consumed ? '' : ' short'}`}>
+            ⚡ {t('power')} {power.generated}/{power.consumed}
+          </div>
+        )}
         <button
           className={`voxel-toggle-btn${menu === 'backpack' ? ' active' : ''}`}
           onClick={() => openMenu('backpack')}

@@ -906,6 +906,21 @@ canvas {
   background: rgba(130, 200, 255, 0.22);
   border-color: rgba(160, 210, 255, 0.6);
 }
+.voxel-power-chip {
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(150, 255, 180, 0.4);
+  color: #d6ffe2;
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.voxel-power-chip.short {
+  border-color: rgba(255, 150, 120, 0.5);
+  color: #ffcdb8;
+}
 
 /* On-foot bottom sheet (backpack / build), thumb-reachable; mirrors ship-nav. */
 .voxel-sheet-backdrop {

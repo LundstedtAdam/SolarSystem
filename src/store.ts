@@ -5,6 +5,15 @@ import { PLANETS, isLandable, WORLD_SCALE, type PlanetData } from './systems/bod
 import type { ResourceType } from './voxel/voxelTypes';
 import type { BuildableId } from './voxel/buildables';
 import { recipeById, type CraftedItem } from './voxel/recipes';
+import { planetPower } from './voxel/power';
+
+/** Raw ore -> smelted ingot conversions the refinery performs. */
+const SMELT: Array<{ ore: ResourceType; ingot: CraftedItem }> = [
+  { ore: 'iron', ingot: 'iron_ingot' },
+  { ore: 'copper', ingot: 'copper_ingot' },
+];
+/** Raw units consumed per ingot. */
+const SMELT_RATIO = 2;
 
 /** Radius (voxels) within which a crafting station pulls from nearby silos. */
 const PULL_RADIUS_SQ = 12 * 12;
@@ -83,10 +92,19 @@ export function backpackUsed(inv: Partial<Record<ResourceType, number>>): number
 
 /** A placed storage structure (Phase 11.1). Its voxels persist via the chunk
  *  edit overlay; this entity tracks the stored contents + anchor. */
+export type StructureType =
+  | 'silo'
+  | 'station'
+  | 'habitat'
+  | 'solar'
+  | 'wind'
+  | 'thermal'
+  | 'refinery';
+
 export interface Structure {
   id: number;
   planet: string;
-  type: 'silo' | 'station';
+  type: StructureType;
   /** World voxel of the core (anchor). */
   pos: [number, number, number];
   stored: Partial<Record<ResourceType, number>>;
@@ -347,6 +365,13 @@ interface SimState {
   craft: (recipeId: string, stationId: number) => boolean;
   setItems: (items: Partial<Record<CraftedItem, number>>) => void;
   setSeenResources: (seen: Partial<Record<ResourceType, true>>) => void;
+
+  /** Phase 11.3 base building. */
+  /** Deduct a crafted-item cost if affordable; returns true on success. */
+  spendItems: (cost: Partial<Record<CraftedItem, number>>) => boolean;
+  /** One refinery cycle on a body: each POWERED refinery pulls raw ore from
+   *  silos within pull radius and smelts 2 ore -> 1 ingot. */
+  refineTick: (planet: string) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -755,6 +780,72 @@ export const useStore = create<SimState>((set, get) => ({
   },
   setItems: (items) => set({ items }),
   setSeenResources: (seenResources) => set({ seenResources }),
+
+  spendItems: (cost) => {
+    const s = get();
+    for (const k in cost) {
+      const item = k as CraftedItem;
+      if ((s.items[item] ?? 0) < (cost[item] ?? 0)) return false;
+    }
+    const items = { ...s.items };
+    for (const k in cost) {
+      const item = k as CraftedItem;
+      items[item] = (items[item] ?? 0) - (cost[item] ?? 0);
+      if ((items[item] ?? 0) <= 0) delete items[item];
+    }
+    set({ items });
+    return true;
+  },
+  refineTick: (planet) => {
+    const s = get();
+    const { poweredRefineries } = planetPower(s.structures, planet);
+    if (poweredRefineries <= 0) return;
+    const refineries = s.structures
+      .filter((x) => x.type === 'refinery' && x.planet === planet)
+      .slice(0, poweredRefineries);
+    if (refineries.length === 0) return;
+
+    const siloStored = new Map<number, Partial<Record<ResourceType, number>>>();
+    const items = { ...s.items };
+    let smelted = false;
+
+    for (const ref of refineries) {
+      const silos = s.structures.filter(
+        (x) => x.type === 'silo' && x.planet === planet && dist2(x.pos, ref.pos) < PULL_RADIUS_SQ,
+      );
+      // Smelt the first ore type this refinery can fully source this cycle.
+      outer: for (const { ore, ingot } of SMELT) {
+        let need = SMELT_RATIO;
+        // Dry-run availability across the silos (respecting earlier takes).
+        let have = 0;
+        for (const silo of silos) {
+          const stored = siloStored.get(silo.id) ?? silo.stored;
+          have += stored[ore] ?? 0;
+        }
+        if (have < need) continue;
+        for (const silo of silos) {
+          if (need <= 0) break;
+          const stored = siloStored.get(silo.id) ?? { ...silo.stored };
+          const take = Math.min(need, stored[ore] ?? 0);
+          if (take > 0) {
+            stored[ore] = (stored[ore] ?? 0) - take;
+            if ((stored[ore] ?? 0) <= 0) delete stored[ore];
+            siloStored.set(silo.id, stored);
+            need -= take;
+          }
+        }
+        items[ingot] = (items[ingot] ?? 0) + 1;
+        smelted = true;
+        break outer;
+      }
+    }
+
+    if (!smelted) return;
+    const structures = s.structures.map((x) =>
+      siloStored.has(x.id) ? { ...x, stored: siloStored.get(x.id)! } : x,
+    );
+    set({ items, structures });
+  },
 }));
 
 /** Monotonic id source for ground drops + structures. */

@@ -86,6 +86,7 @@ export function PlayerController({
   const ready = useRef(false);
   const stride = useRef(0); // accumulated walk distance for footsteps
   const lastCave = useRef(-1);
+  const refineAcc = useRef(0); // throttles refineTick to ~1/s
 
   // Camera setup + desktop input wiring.
   useEffect(() => {
@@ -219,6 +220,14 @@ export function PlayerController({
     voxelStation.available = stationNear >= 0;
     voxelStation.id = stationNear;
     if (consumeDeposit() && siloNear >= 0) st.depositToStructure(siloNear);
+
+    // Refineries: background simulation, throttled to ~1 cycle/second so it
+    // doesn't hammer the store every frame.
+    refineAcc.current += dt;
+    if (refineAcc.current >= 1) {
+      refineAcc.current = 0;
+      st.refineTick(planet);
+    }
 
     // Footsteps: accrue ground distance, fire one per stride with the material
     // of the block underfoot.

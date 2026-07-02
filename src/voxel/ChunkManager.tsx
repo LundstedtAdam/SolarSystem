@@ -37,6 +37,7 @@ import {
   BLOCK,
   blockHardness,
   blockToResource,
+  STRUCTURE_CORE_BLOCKS,
   type MeshRequest,
   type MeshResult,
 } from './voxelTypes';
@@ -430,8 +431,8 @@ export function ChunkManager({
       }
       spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
       audio.playMineBreak();
-      // Mining a structure core (silo/station) removes the entity (silos spill).
-      if (block === BLOCK.SILO || block === BLOCK.STATION) {
+      // Mining a structure core removes the entity (silos spill their contents).
+      if (STRUCTURE_CORE_BLOCKS.has(block)) {
         const st = useStore
           .getState()
           .structures.find((s) => s.pos[0] === a[0] && s.pos[1] === a[1] && s.pos[2] === a[2]);
@@ -451,7 +452,14 @@ export function ChunkManager({
     if (blockAtApi(p[0], p[1], p[2]) !== BLOCK.AIR) return; // cell occupied
     const store = useStore.getState();
     const b = BUILDABLES[store.activeBuildable];
+    // Afford-check both costs before deducting either (no partial spend).
+    if (b.itemCost) {
+      for (const k in b.itemCost) {
+        if ((store.items[k as keyof typeof store.items] ?? 0) < (b.itemCost[k as keyof typeof b.itemCost] ?? 0)) return;
+      }
+    }
     if (!store.spendResources(b.cost)) return; // can't afford
+    if (b.itemCost && !store.spendItems(b.itemCost)) return; // (checked above)
     for (const v of b.stamp) editVoxel(p[0] + v.dx, p[1] + v.dy, p[2] + v.dz, v.block);
     if (b.structureType && store.sceneMode.type === 'voxel') {
       const structure: Structure = {
