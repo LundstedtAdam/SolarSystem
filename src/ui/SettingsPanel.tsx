@@ -23,6 +23,8 @@ export function SettingsPanel() {
   const setQuality = useStore((s) => s.setQuality);
   const controls = useStore((s) => s.controls);
   const setControls = useStore((s) => s.setControls);
+  const creativeMode = useStore((s) => s.creativeMode);
+  const setCreativeMode = useStore((s) => s.setCreativeMode);
   const { t } = useT();
 
   if (!open) return null;
@@ -84,6 +86,17 @@ export function SettingsPanel() {
               onChange={(e) => setReducedMotion(e.target.checked)}
             />{' '}
             {t('reducedMotion')}
+          </label>
+        </div>
+
+        <div className="setting-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={creativeMode}
+              onChange={(e) => setCreativeMode(e.target.checked)}
+            />{' '}
+            {t('creativeMode')}
           </label>
         </div>
 

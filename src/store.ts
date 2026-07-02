@@ -279,6 +279,8 @@ interface SimState {
   /** Phase 11.2 crafted items, and the resources ever discovered (recipe reveal). */
   items: Partial<Record<CraftedItem, number>>;
   seenResources: Partial<Record<ResourceType, true>>;
+  /** Creative mode: placement ignores resource/item costs entirely. */
+  creativeMode: boolean;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -369,6 +371,7 @@ interface SimState {
   craft: (recipeId: string, stationId: number) => boolean;
   setItems: (items: Partial<Record<CraftedItem, number>>) => void;
   setSeenResources: (seen: Partial<Record<ResourceType, true>>) => void;
+  setCreativeMode: (v: boolean) => void;
 
   /** Phase 11.3 base building. */
   /** Deduct a crafted-item cost if affordable; returns true on success. */
@@ -423,6 +426,7 @@ export const useStore = create<SimState>((set, get) => ({
   activeBuildable: 'block',
   items: {},
   seenResources: {},
+  creativeMode: false,
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -803,6 +807,7 @@ export const useStore = create<SimState>((set, get) => ({
   },
   setItems: (items) => set({ items }),
   setSeenResources: (seenResources) => set({ seenResources }),
+  setCreativeMode: (creativeMode) => set({ creativeMode }),
 
   spendItems: (cost) => {
     const s = get();

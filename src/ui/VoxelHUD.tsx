@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, backpackUsed, structureUsed } from '../store';
 import { useT } from '../i18n';
-import {
-  voxelTelemetry,
-  voxelStation,
-  voxelSilo,
-  consumeOpenSilo,
-  isTouchDevice,
-} from '../voxel/voxelControls';
+import { voxelTelemetry, voxelStation, voxelSilo, consumeOpenSilo } from '../voxel/voxelControls';
 import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
 import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
 import { CRAFTED_LABEL, type CraftedItem } from '../voxel/recipes';
@@ -112,6 +106,7 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
   const setActive = useStore((s) => s.setActiveBuildable);
   const inventory = useStore((s) => s.inventory);
   const items = useStore((s) => s.items);
+  const creativeMode = useStore((s) => s.creativeMode);
 
   return (
     <div className="voxel-sheet-backdrop" onClick={onClose}>
@@ -133,7 +128,7 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
                   (k) => (items[k] ?? 0) >= (b.itemCost?.[k] ?? 0),
                 )
               : true;
-            const affordable = resOk && itemOk;
+            const affordable = creativeMode || (resOk && itemOk);
             return (
               <button
                 key={id}
@@ -145,8 +140,9 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
               >
                 <span>{t(id)}</span>
                 <span className={`voxel-build-cost${affordable ? '' : ' short'}`}>
-                  {costLabel(b.cost)}
-                  {b.itemCost ? ` + ${itemCostLabel(b.itemCost)}` : ''}
+                  {creativeMode
+                    ? t('creativeMode')
+                    : `${costLabel(b.cost)}${b.itemCost ? ` + ${itemCostLabel(b.itemCost)}` : ''}`}
                 </span>
               </button>
             );
@@ -232,8 +228,38 @@ function SiloSheet({ structureId, onClose }: { structureId: number; onClose: () 
   );
 }
 
+/** Returning to the ship ends the on-foot exploration, so it needs a deliberate
+ *  action, not a single stray tap. Placed away from the joystick/action cluster
+ *  entirely (top-left) and requires two taps: the first arms a brief "Confirm?"
+ *  state, the second (within the window) actually boards the ship. Used for both
+ *  touch and desktop — the relocation+confirm applies universally. */
+function BackToShipButton({ boardShip }: { boardShip: () => void }) {
+  const { t } = useT();
+  const [armed, setArmed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const press = () => {
+    if (armed) {
+      clearTimeout(timer.current);
+      setArmed(false);
+      boardShip();
+    } else {
+      setArmed(true);
+      timer.current = setTimeout(() => setArmed(false), 2200);
+    }
+  };
+
+  return (
+    <button className={`voxel-back-confirm${armed ? ' armed' : ''}`} onClick={press}>
+      {armed ? t('confirmExit') : t('boardShip')}
+    </button>
+  );
+}
+
 // On-foot HUD: compass + ship beacon, the open/close Backpack & Build menus, and
-// (desktop) the Board-ship action.
+// the (relocated, confirm-tap) Board-ship action.
 export function VoxelHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
   const boardShip = useStore((s) => s.boardShip);
@@ -329,7 +355,6 @@ export function VoxelHUD() {
 
   const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const cardinal = cardinals[Math.round(hud.heading / 45) % 8];
-  const touch = isTouchDevice();
   const rad = (hud.shipAngle * Math.PI) / 180;
   const mx = 24 + Math.sin(rad) * 17;
   const my = 24 - Math.cos(rad) * 17;
@@ -405,14 +430,7 @@ export function VoxelHUD() {
         </div>
       </div>
 
-      {!touch && (
-        <div className="surface-hud-actions">
-          <button className="button surface-hud-action" onClick={boardShip}>
-            <span className="actual-text">&nbsp;Board ship&nbsp;</span>
-            <span aria-hidden="true" className="hover-text">&nbsp;Board ship&nbsp;</span>
-          </button>
-        </div>
-      )}
+      <BackToShipButton boardShip={boardShip} />
     </div>
   );
 }

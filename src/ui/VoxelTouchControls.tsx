@@ -193,22 +193,6 @@ function DepositButton() {
   );
 }
 
-// Return to the Phase 8 surface view (out of the on-foot voxel world).
-function BackButton() {
-  const boardShip = useStore((s) => s.boardShip);
-  return (
-    <button
-      className="voxel-back-btn"
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        boardShip();
-      }}
-    >
-      BACK
-    </button>
-  );
-}
-
 export function VoxelTouchControls() {
   const mode = useStore((s) => s.sceneMode.type);
   const [touch] = useState(() => isTouchDevice());
@@ -223,7 +207,6 @@ export function VoxelTouchControls() {
     <div className="voxel-touch">
       <LookLayer />
       <Joystick />
-      <BackButton />
       <DepositButton />
       <PlaceButton />
       <ScanButton />

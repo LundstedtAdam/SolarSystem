@@ -157,7 +157,7 @@ export function DiscoveryPanel() {
         </div>
       )}
 
-      <button style={journalToggle} onClick={() => setJournalOpen((o) => !o)}>
+      <button className="voxel-journal-toggle" onClick={() => setJournalOpen((o) => !o)}>
         {t('journal')} (J) · {journal.length}
       </button>
 
@@ -222,24 +222,14 @@ const layerBase: React.CSSProperties = { margin: '6px 0', color: '#cfe6f2' };
 const layerMid: React.CSSProperties = { margin: '6px 0', color: '#e6c9a8' };
 const layerHuman: React.CSSProperties = { margin: '6px 0', color: '#cdbce0', fontStyle: 'italic' };
 const clueLine: React.CSSProperties = { margin: '8px 0 0', color: '#9fd0ff' };
-const journalToggle: React.CSSProperties = {
-  pointerEvents: 'auto',
-  position: 'absolute',
-  bottom: 16,
-  left: 16,
-  background: 'rgba(0,0,0,0.4)',
-  border: '1px solid rgba(255,255,255,0.2)',
-  color: '#e8f0f4',
-  padding: '8px 12px',
-  borderRadius: 8,
-  fontSize: 13,
-  cursor: 'pointer',
-};
+// Opens below the top-left Journal/Board-ship cluster (top:12 + top:64, each
+// ~44px tall) — well clear of the joystick, which owns the bottom-left corner.
 const journalBox: React.CSSProperties = {
   pointerEvents: 'auto',
-  position: 'absolute',
-  bottom: 58,
-  left: 16,
+  position: 'fixed',
+  top: 116,
+  left: 12,
+  zIndex: 11,
   width: 'min(360px, 80vw)',
   maxHeight: '46vh',
   overflowY: 'auto',
