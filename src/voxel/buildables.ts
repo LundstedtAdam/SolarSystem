@@ -14,7 +14,8 @@ export type BuildableId =
   | 'solar'
   | 'wind'
   | 'thermal'
-  | 'refinery';
+  | 'refinery'
+  | 'tether';
 
 export interface StampVoxel {
   dx: number;
@@ -32,7 +33,15 @@ export interface Buildable {
   /** Voxels written relative to the target cell. */
   stamp: StampVoxel[];
   /** Structure entity kind to register on placement (undefined = plain voxels). */
-  structureType?: 'silo' | 'station' | 'habitat' | 'solar' | 'wind' | 'thermal' | 'refinery';
+  structureType?:
+    | 'silo'
+    | 'station'
+    | 'habitat'
+    | 'solar'
+    | 'wind'
+    | 'thermal'
+    | 'refinery'
+    | 'tether';
   /** For silos: storage capacity (total units). */
   capacity?: number;
 }
@@ -136,6 +145,14 @@ export const BUILDABLES: Record<BuildableId, Buildable> = {
       { dx: 0, dy: 2, dz: 0, block: BLOCK.PANEL },
     ],
   },
+  tether: {
+    id: 'tether',
+    // Deliberately cheap — a tether line into a cave should never be a
+    // resource decision, only a planning one (Phase 11.4 survival).
+    cost: { carbon: 2 },
+    structureType: 'tether',
+    stamp: [{ dx: 0, dy: 0, dz: 0, block: BLOCK.TETHER }],
+  },
 };
 
 export const BUILDABLE_IDS: BuildableId[] = [
@@ -147,4 +164,5 @@ export const BUILDABLE_IDS: BuildableId[] = [
   'wind',
   'thermal',
   'refinery',
+  'tether',
 ];

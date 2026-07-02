@@ -260,6 +260,52 @@ function BackToShipButton({ boardShip }: { boardShip: () => void }) {
 
 // On-foot HUD: compass + ship beacon, the open/close Backpack & Build menus, and
 // the (relocated, confirm-tap) Board-ship action.
+/** Phase 11.4 — oxygen meter chip (survival only) + blackout overlay. */
+function OxygenChip() {
+  const oxygen = useStore((s) => s.oxygen);
+  const safe = useStore((s) => s.oxygenSafe);
+  const { t } = useT();
+  const pct = Math.round(oxygen * 100);
+  const low = oxygen <= 0.25;
+  const mid = oxygen <= 0.5 && !low;
+  return (
+    <div className={`voxel-o2-chip${low ? ' low' : mid ? ' mid' : ''}${safe ? ' safe' : ''}`}>
+      O₂ {pct}%{safe && oxygen < 1 ? ` · ${t('refilling')}` : ''}
+      <span className="voxel-o2-bar" aria-hidden="true">
+        <span style={{ width: `${pct}%` }} />
+      </span>
+    </div>
+  );
+}
+
+/** What happened + why + where you woke up; keeps death a lesson, not a maze. */
+function BlackoutOverlay() {
+  const death = useStore((s) => s.survivalDeath);
+  const setSurvivalDeath = useStore((s) => s.setSurvivalDeath);
+  const { t } = useT();
+  // Auto-dismiss after 8s (also tappable) so it never traps the player.
+  useEffect(() => {
+    if (!death) return;
+    const id = setTimeout(() => setSurvivalDeath(null), 8000);
+    return () => clearTimeout(id);
+  }, [death, setSurvivalDeath]);
+  if (!death) return null;
+  return (
+    <div className="voxel-blackout" onPointerDown={() => setSurvivalDeath(null)}>
+      <div className="voxel-blackout-card">
+        <div className="voxel-blackout-title">{t('blackout')}</div>
+        <p>
+          {t('blackoutCause')}
+          {death.dist > 0 ? ` — ${death.dist} ${t('blackoutDist')}` : '.'}
+        </p>
+        <p className="voxel-blackout-recover">
+          {death.anchor === 'habitat' ? t('recoveredHabitat') : t('recoveredShip')}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function VoxelHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
   const boardShip = useStore((s) => s.boardShip);
@@ -267,6 +313,7 @@ export function VoxelHUD() {
   const capacity = useStore((s) => s.backpackCapacity);
   const activeBuildable = useStore((s) => s.activeBuildable);
   const structures = useStore((s) => s.structures);
+  const creativeMode = useStore((s) => s.creativeMode);
   const { t } = useT();
   const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0 });
   const [menu, setMenu] = useState<Menu>('none');
@@ -372,6 +419,7 @@ export function VoxelHUD() {
 
       {/* Top-right menu toggles (also serve as compact indicators). */}
       <div className="voxel-menu-toggles">
+        {!creativeMode && <OxygenChip />}
         {hasPowerStructures && (
           <div className={`voxel-power-chip${power.generated >= power.consumed ? '' : ' short'}`}>
             ⚡ {t('power')} {power.generated}/{power.consumed}
@@ -431,6 +479,7 @@ export function VoxelHUD() {
       </div>
 
       <BackToShipButton boardShip={boardShip} />
+      {!creativeMode && <BlackoutOverlay />}
     </div>
   );
 }

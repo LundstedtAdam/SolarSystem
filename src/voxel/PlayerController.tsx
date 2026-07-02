@@ -7,6 +7,7 @@ import {
   BoxGeometry,
   MeshStandardMaterial,
   Color,
+  Vector3,
   type PerspectiveCamera,
 } from 'three';
 import { useStore } from '../store';
@@ -18,6 +19,14 @@ import { voxelSpawnCenter, surfaceHeightAt } from './worldGen';
 import { getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
 import { footstepFor } from './voxelAudio';
+import {
+  computeSafety,
+  respawnAnchor,
+  O2_MAX_SECONDS,
+  O2_REFILL_RATE,
+  O2_WARN_HALF,
+  O2_WARN_LOW,
+} from './survival';
 import {
   voxelInput,
   voxelTelemetry,
@@ -87,6 +96,20 @@ export function PlayerController({
   const stride = useRef(0); // accumulated walk distance for footsteps
   const lastCave = useRef(-1);
   const refineAcc = useRef(0); // throttles refineTick to ~1/s
+
+  // Phase 11.4 survival — simulated here (the frame loop owns dt + player pos);
+  // the store only mirrors a throttled fraction for the HUD. All of it is
+  // gated on !creativeMode: in creative none of this runs at all.
+  const o2 = useRef(O2_MAX_SECONDS);
+  const o2Hud = useRef(0); // throttle accumulator for store mirrors
+  const warnedHalf = useRef(false);
+  const warnedLow = useRef(false);
+  const heartbeat = useRef(0);
+  const wasCreative = useRef(true);
+  const shipPos = useMemo<[number, number, number]>(() => {
+    const s = voxelSpawnCenter(planet);
+    return [s.x, s.y, s.z];
+  }, [planet]);
 
   // Camera setup + desktop input wiring.
   useEffect(() => {
@@ -229,6 +252,75 @@ export function PlayerController({
     if (refineAcc.current >= 1) {
       refineAcc.current = 0;
       st.refineTick(planet);
+    }
+
+    // --- Phase 11.4 survival: oxygen / tethers / death ---------------------
+    // Entirely inert in creative mode (the default): no drain, no warnings,
+    // no audio, no store writes beyond the one reset on mode transition.
+    if (st.creativeMode) {
+      wasCreative.current = true;
+    } else {
+      const sdt = Math.min(dt, 0.05);
+      if (wasCreative.current) {
+        // Just entered survival: start on a full supply, clean warning state.
+        wasCreative.current = false;
+        o2.current = O2_MAX_SECONDS;
+        warnedHalf.current = false;
+        warnedLow.current = false;
+      }
+
+      const safety = computeSafety(st.structures, planet, shipPos, px, py, pz);
+      if (safety.safe) {
+        o2.current = Math.min(O2_MAX_SECONDS, o2.current + sdt * O2_REFILL_RATE);
+      } else {
+        o2.current = Math.max(0, o2.current - sdt);
+      }
+      const frac = o2.current / O2_MAX_SECONDS;
+
+      // Tiered warnings: one cue crossing 50%, an urgent one crossing 25%
+      // (which is exactly the final ~60 seconds), then a heartbeat that
+      // quickens/loudens until death. Flags re-arm once the supply recovers.
+      if (frac <= O2_WARN_HALF && !warnedHalf.current) {
+        warnedHalf.current = true;
+        audio.playOxygenWarning(false);
+      } else if (frac > O2_WARN_HALF) {
+        warnedHalf.current = false;
+      }
+      if (frac <= O2_WARN_LOW && !warnedLow.current) {
+        warnedLow.current = true;
+        audio.playOxygenWarning(true);
+      } else if (frac > O2_WARN_LOW) {
+        warnedLow.current = false;
+      }
+      if (frac <= O2_WARN_LOW && frac > 0 && !safety.safe) {
+        heartbeat.current += sdt;
+        const period = 0.6 + 0.5 * (frac / O2_WARN_LOW); // quickens toward 0
+        if (heartbeat.current >= period) {
+          heartbeat.current = 0;
+          audio.playHeartbeat(1 - frac / O2_WARN_LOW);
+        }
+      }
+
+      // Death: black out, wake at the nearest powered habitat (else the ship)
+      // with everything kept — the setback is the walk, not lost progress. The
+      // overlay explains exactly why it happened and how far safety was.
+      if (o2.current <= 0) {
+        const anchor = respawnAnchor(st.structures, planet, shipPos, px, py, pz);
+        const dist = Number.isFinite(safety.nearestDist) ? Math.round(safety.nearestDist) : 0;
+        player.spawnAt(new Vector3(anchor.pos[0], anchor.pos[1], anchor.pos[2]));
+        o2.current = O2_MAX_SECONDS;
+        warnedHalf.current = false;
+        warnedLow.current = false;
+        st.setSurvivalDeath({ dist, anchor: anchor.kind });
+      }
+
+      // Mirror a throttled fraction into the store for the HUD meter (4 Hz).
+      o2Hud.current += sdt;
+      if (o2Hud.current >= 0.25) {
+        o2Hud.current = 0;
+        if (Math.abs(st.oxygen - frac) > 0.002) st.setOxygen(frac);
+        if (st.oxygenSafe !== safety.safe) st.setOxygenSafe(safety.safe);
+      }
     }
 
     // Footsteps: accrue ground distance, fire one per stride with the material

@@ -6,6 +6,7 @@ import type { ResourceType } from './voxel/voxelTypes';
 import type { BuildableId } from './voxel/buildables';
 import { recipeById, type CraftedItem } from './voxel/recipes';
 import { planetPower } from './voxel/power';
+import { saveMode } from './voxel/persistence';
 
 /** Raw ore -> smelted ingot conversions the refinery performs. */
 const SMELT: Array<{ ore: ResourceType; ingot: CraftedItem }> = [
@@ -103,7 +104,8 @@ export type StructureType =
   | 'solar'
   | 'wind'
   | 'thermal'
-  | 'refinery';
+  | 'refinery'
+  | 'tether';
 
 export interface Structure {
   id: number;
@@ -283,8 +285,18 @@ interface SimState {
   /** Phase 11.2 crafted items, and the resources ever discovered (recipe reveal). */
   items: Partial<Record<CraftedItem, number>>;
   seenResources: Partial<Record<ResourceType, true>>;
-  /** Creative mode: placement ignores resource/item costs entirely. */
+  /** Creative mode (the default): placement ignores resource/item costs and no
+   *  survival mechanics (oxygen/tethers/death) apply. Survival is opt-in. */
   creativeMode: boolean;
+  /** Phase 11.4 survival — oxygen supply as a 0..1 fraction of O2_MAX_SECONDS.
+   *  Only simulated (and only shown) in survival mode. */
+  oxygen: number;
+  /** Whether the player currently stands in a safe zone (ship / powered
+   *  habitat / connected tether) — drives the HUD refill indicator. */
+  oxygenSafe: boolean;
+  /** Set when the player blacks out; the HUD renders the explanation overlay.
+   *  Cleared on dismiss. Distances are metres from the nearest safety point. */
+  survivalDeath: { dist: number; anchor: 'habitat' | 'ship' } | null;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -378,6 +390,11 @@ interface SimState {
   setSeenResources: (seen: Partial<Record<ResourceType, true>>) => void;
   setCreativeMode: (v: boolean) => void;
 
+  /** Phase 11.4 survival. */
+  setOxygen: (v: number) => void;
+  setOxygenSafe: (v: boolean) => void;
+  setSurvivalDeath: (d: { dist: number; anchor: 'habitat' | 'ship' } | null) => void;
+
   /** Phase 11.3 base building. */
   /** Deduct a crafted-item cost if affordable; returns true on success. */
   spendItems: (cost: Partial<Record<CraftedItem, number>>) => boolean;
@@ -431,7 +448,12 @@ export const useStore = create<SimState>((set, get) => ({
   activeBuildable: 'block',
   items: {},
   seenResources: {},
-  creativeMode: false,
+  // Creative is the default experience; survival is an explicit opt-in
+  // (Settings). Hydrated from persistence in App so the choice sticks.
+  creativeMode: true,
+  oxygen: 1,
+  oxygenSafe: true,
+  survivalDeath: null,
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -820,7 +842,19 @@ export const useStore = create<SimState>((set, get) => ({
   },
   setItems: (items) => set({ items }),
   setSeenResources: (seenResources) => set({ seenResources }),
-  setCreativeMode: (creativeMode) => set({ creativeMode }),
+  setCreativeMode: (creativeMode) => {
+    // Entering survival always starts with a full supply; leaving it clears any
+    // lingering death overlay so creative shows zero survival UI.
+    set(
+      creativeMode
+        ? { creativeMode, survivalDeath: null }
+        : { creativeMode, oxygen: 1, oxygenSafe: true, survivalDeath: null },
+    );
+    void saveMode(creativeMode);
+  },
+  setOxygen: (oxygen) => set({ oxygen }),
+  setOxygenSafe: (oxygenSafe) => set({ oxygenSafe }),
+  setSurvivalDeath: (survivalDeath) => set({ survivalDeath }),
 
   spendItems: (cost) => {
     const s = get();

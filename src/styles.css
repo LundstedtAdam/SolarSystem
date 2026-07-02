@@ -935,6 +935,107 @@ button {
   color: #ffcdb8;
 }
 
+/* Phase 11.4 — oxygen meter (survival mode only). Sibling of the power chip. */
+.voxel-o2-chip {
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(140, 210, 255, 0.45);
+  color: #d8f0ff;
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.voxel-o2-chip .voxel-o2-bar {
+  display: block;
+  margin-top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.voxel-o2-chip .voxel-o2-bar > span {
+  display: block;
+  height: 100%;
+  background: #7fd0ff;
+  transition: width 0.3s linear;
+}
+.voxel-o2-chip.mid {
+  border-color: rgba(255, 210, 120, 0.55);
+  color: #ffe9c2;
+}
+.voxel-o2-chip.mid .voxel-o2-bar > span {
+  background: #ffcf7d;
+}
+.voxel-o2-chip.low {
+  border-color: rgba(255, 110, 100, 0.75);
+  color: #ffd2cc;
+  animation: o2-flash 0.9s ease-in-out infinite;
+}
+.voxel-o2-chip.low .voxel-o2-bar > span {
+  background: #ff6e64;
+}
+.voxel-o2-chip.safe {
+  border-color: rgba(140, 255, 190, 0.55);
+}
+@keyframes o2-flash {
+  0%,
+  100% {
+    background: rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    background: rgba(120, 20, 15, 0.6);
+  }
+}
+
+/* Phase 11.4 — blackout (death) overlay: explains cause + where you woke up. */
+.voxel-blackout {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  animation: blackout-in 0.6s ease-out;
+}
+.voxel-blackout-card {
+  max-width: min(420px, 84vw);
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgba(8, 10, 14, 0.92);
+  border: 1px solid rgba(255, 120, 110, 0.4);
+  color: #f0e8e8;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+.voxel-blackout-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ff9c92;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.voxel-blackout-card p {
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.voxel-blackout-recover {
+  color: #a9d8b8;
+}
+@keyframes blackout-in {
+  from {
+    background: rgba(0, 0, 0, 0.95);
+    opacity: 1;
+  }
+  to {
+    background: rgba(0, 0, 0, 0.55);
+  }
+}
+
 /* Top-left cluster: Journal (DiscoveryPanel) above, Board-ship below. Mirrors
    the top-right menu-toggles, and is deliberately far from the joystick/action
    cluster so neither can be pressed by accident during normal play. */

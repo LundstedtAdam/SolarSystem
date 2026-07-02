@@ -141,6 +141,9 @@ export function getVoxelPalette(planet: string): Float32Array {
   rgb(pal, BLOCK.WIND, 0.7, 0.75, 0.8);
   rgb(pal, BLOCK.THERMAL, 0.6, 0.28, 0.15, 0.3);
   rgb(pal, BLOCK.REFINERY, 0.45, 0.4, 0.35, 0.12);
+  // Phase 11.4 — oxygen tether: strongly self-lit cyan so a tether line reads
+  // clearly in dark caves (that's where lines get run).
+  rgb(pal, BLOCK.TETHER, 0.25, 0.85, 0.9, 0.6);
   return pal;
 }
 

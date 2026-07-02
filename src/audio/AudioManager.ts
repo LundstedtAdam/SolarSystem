@@ -363,6 +363,55 @@ class AudioManager {
     osc.stop(t + 0.14);
   }
 
+  /** Oxygen warning chirp (Phase 11.4). Soft double-beep at 50%, an urgent,
+   *  higher triple-beep at 25% when the final alarm takes over. */
+  playOxygenWarning(urgent: boolean) {
+    const bus = this.surfaceBus;
+    if (!this.ctx || !bus) return;
+    const ctx = this.ctx;
+    const beeps = urgent ? 3 : 2;
+    const freq = urgent ? 980 : 660;
+    for (let i = 0; i < beeps; i++) {
+      const t = ctx.currentTime + i * 0.18;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(urgent ? 0.09 : 0.06, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(g).connect(bus);
+      osc.start(t);
+      osc.stop(t + 0.14);
+    }
+  }
+
+  /** One low heartbeat thump (Phase 11.4 final-minute alarm); intensity 0..1
+   *  scales volume as the supply runs out. Called on a timer, not looped. */
+  playHeartbeat(intensity: number) {
+    const bus = this.surfaceBus;
+    if (!this.ctx || !bus) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const v = 0.04 + 0.08 * Math.max(0, Math.min(1, intensity));
+    for (const [dt, mul] of [
+      [0, 1],
+      [0.14, 0.6],
+    ] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(64, t + dt);
+      osc.frequency.exponentialRampToValueAtTime(40, t + dt + 0.1);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + dt);
+      g.gain.exponentialRampToValueAtTime(v * mul, t + dt + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.13);
+      osc.connect(g).connect(bus);
+      osc.start(t + dt);
+      osc.stop(t + dt + 0.16);
+    }
+  }
+
   /** Fade in the surface soundscape for a given body. */
   startSurface(profile: SurfaceAudioProfile) {
     if (!this.ctx) return;

@@ -68,6 +68,23 @@ export async function saveInventory(inv: Partial<Record<ResourceType, number>>):
 
 const ITEMS_KEY = `items.${SCHEMA}`;
 const SEEN_KEY = `seen.${SCHEMA}`;
+const MODE_KEY = `mode.${SCHEMA}`;
+
+/** Load the persisted game mode. null = never chosen (creative default). */
+export async function loadMode(): Promise<{ creative: boolean } | null> {
+  try {
+    return (await store.getItem<{ creative: boolean }>(MODE_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+export async function saveMode(creative: boolean): Promise<void> {
+  try {
+    await store.setItem(MODE_KEY, { creative });
+  } catch {
+    /* ignore */
+  }
+}
 
 export async function loadItems(): Promise<Partial<Record<CraftedItem, number>> | null> {
   try {

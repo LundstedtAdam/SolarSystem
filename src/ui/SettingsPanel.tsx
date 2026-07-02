@@ -90,14 +90,15 @@ export function SettingsPanel() {
         </div>
 
         <div className="setting-row">
-          <label>
-            <input
-              type="checkbox"
-              checked={creativeMode}
-              onChange={(e) => setCreativeMode(e.target.checked)}
-            />{' '}
-            {t('creativeMode')}
-          </label>
+          <span>{t('gameMode')}</span>
+          <div className="seg" role="group" aria-label={t('gameMode')}>
+            <button className={creativeMode ? 'active' : ''} onClick={() => setCreativeMode(true)}>
+              {t('creative')}
+            </button>
+            <button className={!creativeMode ? 'active' : ''} onClick={() => setCreativeMode(false)}>
+              {t('survival')}
+            </button>
+          </div>
         </div>
 
         <div className="setting-row">
