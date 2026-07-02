@@ -11,6 +11,7 @@ import {
   AdditiveBlending,
 } from 'three';
 import { useGLTF } from '@react-three/drei';
+import { ShipUpgradeVisuals } from './ShipUpgradeVisuals';
 
 const GLTF_PATH = '/models/spaceship.glb';
 const THRUSTER_NAMES = ['thruster', 'engine', 'exhaust', 'nozzle', 'jet'];
@@ -176,8 +177,10 @@ export function ShipModel() {
       });
   }, []);
 
-  if (useGltf) {
-    return <GLTFShip />;
-  }
-  return <FallbackShip />;
+  return (
+    <>
+      {useGltf ? <GLTFShip /> : <FallbackShip />}
+      <ShipUpgradeVisuals />
+    </>
+  );
 }

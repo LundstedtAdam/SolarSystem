@@ -6,7 +6,16 @@ import type { ResourceType } from './voxel/voxelTypes';
 import type { BuildableId } from './voxel/buildables';
 import { recipeById, type CraftedItem } from './voxel/recipes';
 import { planetPower } from './voxel/power';
-import { saveMode } from './voxel/persistence';
+import { saveMode, saveUpgrades } from './voxel/persistence';
+import {
+  UPGRADE_COSTS,
+  UPGRADE_MAX_TIER,
+  CARGO_CAPACITY_PER_TIER,
+  DEFAULT_UPGRADES,
+  canDescend,
+  type UpgradeKind,
+  type ShipUpgrades,
+} from './ship/upgrades';
 
 /** Raw ore -> smelted ingot conversions the refinery performs. */
 const SMELT: Array<{ ore: ResourceType; ingot: CraftedItem }> = [
@@ -298,6 +307,13 @@ interface SimState {
    *  Cleared on dismiss. Distances are metres from the nearest safety point. */
   survivalDeath: { dist: number; anchor: 'habitat' | 'ship' } | null;
 
+  /** Phase 11.5 ship upgrades — tiers 0-3, gate hyperdrive range/shielding and
+   *  scale scanner/cargo. */
+  shipUpgrades: ShipUpgrades;
+  /** Set for a few seconds when Land is pressed but a gate blocks it, so the
+   *  HUD can explain why instead of the button silently doing nothing. */
+  descentBlocked: { reason: 'hyperdrive' | 'shielding'; neededTier?: number } | null;
+
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
   select: (body: SelectedBody, object: Object3D) => void;
@@ -395,6 +411,13 @@ interface SimState {
   setOxygenSafe: (v: boolean) => void;
   setSurvivalDeath: (d: { dist: number; anchor: 'habitat' | 'ship' } | null) => void;
 
+  /** Phase 11.5. Spend the next tier's cost and advance one tier; returns
+   *  false (no change) if unaffordable or already at max. */
+  upgradeShip: (kind: UpgradeKind) => boolean;
+  /** Persistence hydration. */
+  setShipUpgrades: (u: ShipUpgrades) => void;
+  setDescentBlocked: (b: { reason: 'hyperdrive' | 'shielding'; neededTier?: number } | null) => void;
+
   /** Phase 11.3 base building. */
   /** Deduct a crafted-item cost if affordable; returns true on success. */
   spendItems: (cost: Partial<Record<CraftedItem, number>>) => boolean;
@@ -454,6 +477,8 @@ export const useStore = create<SimState>((set, get) => ({
   oxygen: 1,
   oxygenSafe: true,
   survivalDeath: null,
+  shipUpgrades: { ...DEFAULT_UPGRADES },
+  descentBlocked: null,
 
   setSpeed: (speed) => set({ speed }),
   toggleOrbits: () => set((s) => ({ showOrbits: !s.showOrbits })),
@@ -528,7 +553,16 @@ export const useStore = create<SimState>((set, get) => ({
     const s = get();
     if (s.sceneMode.type !== 'piloting') return false;
     if (!isLandable(target)) return false;
-    set({ sceneMode: { type: 'descending', target, phase: 'orbit' }, autopilotTarget: null });
+    const gate = canDescend(target, s.shipUpgrades);
+    if (!gate.ok) {
+      set({ descentBlocked: { reason: gate.reason!, neededTier: gate.neededTier } });
+      return false;
+    }
+    set({
+      sceneMode: { type: 'descending', target, phase: 'orbit' },
+      autopilotTarget: null,
+      descentBlocked: null,
+    });
     return true;
   },
   setDescentPhase: (phase) =>
@@ -855,6 +889,35 @@ export const useStore = create<SimState>((set, get) => ({
   setOxygen: (oxygen) => set({ oxygen }),
   setOxygenSafe: (oxygenSafe) => set({ oxygenSafe }),
   setSurvivalDeath: (survivalDeath) => set({ survivalDeath }),
+
+  upgradeShip: (kind) => {
+    const s = get();
+    const tier = s.shipUpgrades[kind];
+    if (tier >= UPGRADE_MAX_TIER) return false;
+    const cost = UPGRADE_COSTS[kind][tier]; // cost FROM `tier` TO `tier + 1`
+    // Afford-check both resources and items before deducting either, so an
+    // upgrade attempt never partially spends on failure.
+    for (const k in cost.resources) {
+      const t = k as ResourceType;
+      if ((s.inventory[t] ?? 0) < (cost.resources[t] ?? 0)) return false;
+    }
+    if (cost.items) {
+      for (const k in cost.items) {
+        const t = k as CraftedItem;
+        if ((s.items[t] ?? 0) < (cost.items[t] ?? 0)) return false;
+      }
+    }
+    if (!s.spendResources(cost.resources)) return false;
+    if (cost.items) s.spendItems(cost.items);
+    const shipUpgrades = { ...s.shipUpgrades, [kind]: tier + 1 };
+    const patch: Partial<SimState> =
+      kind === 'cargo' ? { backpackCapacity: s.backpackCapacity + CARGO_CAPACITY_PER_TIER } : {};
+    set({ shipUpgrades, ...patch });
+    void saveUpgrades(shipUpgrades);
+    return true;
+  },
+  setShipUpgrades: (shipUpgrades) => set({ shipUpgrades }),
+  setDescentBlocked: (descentBlocked) => set({ descentBlocked }),
 
   spendItems: (cost) => {
     const s = get();

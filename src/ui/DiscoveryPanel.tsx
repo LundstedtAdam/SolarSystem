@@ -4,7 +4,10 @@ import { useT } from '../i18n';
 import { voxelTelemetry, voxelScan, consumeScan } from '../voxel/voxelControls';
 import { getVoxelTerrain } from '../voxel/voxelBiomes';
 import { seedFromName } from '../voxel/noise';
-import { findNearbyPOI, findNearbyScienceNote, findNearbyDeepSite } from '../voxel/worldGen';
+import { findNearbyPOI, findNearbyScienceNote, findNearbyDeepSite, scanOreDirection } from '../voxel/worldGen';
+import { SCANNER_SAMPLE_RADIUS } from '../ship/upgrades';
+import { ORE_TO_RESOURCE } from '../voxel/voxelTypes';
+import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
 
 // Phase 10.4 — the discovery loop. No quest markers: a short-range sensor only
 // hints that *something* is near, and walking up to it lets you scan its layered
@@ -47,11 +50,16 @@ export function DiscoveryPanel() {
   const discovered = useStore((s) => s.discovered);
   const journal = useStore((s) => s.journal);
   const recordDiscovery = useStore((s) => s.recordDiscovery);
+  const scannerTier = useStore((s) => s.shipUpgrades.scanner);
   const { t } = useT();
 
   const [nearby, setNearby] = useState<Nearby | null>(null);
   const [readout, setReadout] = useState<Nearby | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [oreHeat, setOreHeat] = useState<{ bearing: number; label: string; strength: number } | null>(
+    null,
+  );
+  const oreTickCount = useRef(0);
   const readoutTimer = useRef<ReturnType<typeof setTimeout>>();
   const nearbyRef = useRef<Nearby | null>(null);
   nearbyRef.current = nearby;
@@ -66,6 +74,7 @@ export function DiscoveryPanel() {
   useEffect(() => {
     if (sceneMode.type !== 'voxel') {
       setNearby(null);
+      setOreHeat(null);
       voxelScan.available = false;
       return;
     }
@@ -75,6 +84,34 @@ export function DiscoveryPanel() {
     const tick = () => {
       if (!running) return;
       const { x, y, z, yaw } = voxelTelemetry;
+
+      // Orbital-scanner ore heat (Phase 11.5): a coarse directional ping, not
+      // a map marker — throttled to ~every 6th tick (~720ms) since the sample
+      // is noise-heavy, unlike the cheap cell-hash POI lookups below. Off
+      // entirely without the scanner upgrade.
+      if (scannerTier > 0) {
+        oreTickCount.current++;
+        if (oreTickCount.current % 6 === 0) {
+          const radius = SCANNER_SAMPLE_RADIUS[scannerTier];
+          const dirs = 8 + scannerTier * 4;
+          const heat = scanOreDirection(params, seed, x, y, z, radius, dirs);
+          if (heat) {
+            const tx = Math.sin(heat.bearingRad);
+            const tz = Math.cos(heat.bearingRad);
+            const fx = -Math.sin(yaw);
+            const fz = -Math.cos(yaw);
+            const bearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
+            const resource = ORE_TO_RESOURCE[heat.block];
+            setOreHeat(
+              resource ? { bearing, label: RESOURCE_LABEL[resource], strength: heat.strength } : null,
+            );
+          } else {
+            setOreHeat(null);
+          }
+        }
+      } else {
+        setOreHeat(null);
+      }
 
       // Poll all three sources (POIs, Layer 1 science notes, Layer 2 deep
       // sites) and keep only the single nearest — preserves the "one clear
@@ -160,7 +197,7 @@ export function DiscoveryPanel() {
       voxelScan.available = false;
       clearInterval(iv);
     };
-  }, [sceneMode.type, planet, discovered]);
+  }, [sceneMode.type, planet, discovered, scannerTier]);
 
   const scan = useCallback(() => {
     const n = nearbyRef.current;
@@ -204,6 +241,14 @@ export function DiscoveryPanel() {
       {nearby && !readout && (
         <div style={nearby.speculative ? sensorSpeculative : sensor}>
           {nearby.discovered ? '◇' : '◆'} {arrow} {t('anomaly')} · {nearby.dist.toFixed(0)}m
+        </div>
+      )}
+
+      {/* Orbital-scanner ore heat (Phase 11.5) — a directional ping toward
+          the strongest nearby vein signal, never an exact marker. */}
+      {oreHeat && (
+        <div style={oreHeatSensor}>
+          ⛏ {bearingArrow(oreHeat.bearing)} {oreHeat.label}
         </div>
       )}
 
@@ -276,6 +321,25 @@ const sensor: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
+};
+// Orbital-scanner ore-heat ping — parked just below the anomaly sensor so the
+// two never overlap when both are active; a distinct amber/mineral tint keeps
+// it visually separate from the discovery/mystery sensor line.
+const oreHeatSensor: React.CSSProperties = {
+  position: 'absolute',
+  top: 'calc(14% + 40px)',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: 'rgba(40,25,0,0.4)',
+  border: '1px solid rgba(230,180,90,0.35)',
+  padding: '5px 12px',
+  borderRadius: 8,
+  fontSize: 13,
+  letterSpacing: 0.5,
+  color: '#f0d090',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
 };
 const readoutBox: React.CSSProperties = {
   position: 'absolute',

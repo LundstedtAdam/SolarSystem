@@ -441,6 +441,65 @@ export function findNearbyDeepSite(
   return best;
 }
 
+export interface OreHeat {
+  /** Bearing (radians, 0 = +Z, matching the existing DiscoveryPanel convention). */
+  bearingRad: number;
+  /** Ore block id of the strongest signal in that direction. */
+  block: number;
+  /** 0..1 confidence, driven by hit density across the sampled rays. */
+  strength: number;
+}
+
+/** Orbital-scanner surface companion (Phase 11.5): samples a coarse ring of
+ *  directions around the player at the player's own depth for ore veins,
+ *  using the exact same deterministic `oreAt` worldgen uses — so the heat
+ *  reading always matches what's actually down there, never a fake hint.
+ *  Deliberately cheap (a few hundred noise samples) and meant to be polled a
+ *  few times a second, not every frame. `dirs` scales with scanner tier. */
+export function scanOreDirection(
+  params: VoxelTerrainParams,
+  seed: number,
+  px: number,
+  py: number,
+  pz: number,
+  radius: number,
+  dirs: number,
+): OreHeat | null {
+  const rings = [radius * 0.5, radius];
+  let bestScore = 0;
+  let bestAngle = 0;
+  let bestBlock = -1;
+  for (let i = 0; i < dirs; i++) {
+    const angle = (i / dirs) * Math.PI * 2;
+    const dx = Math.sin(angle);
+    const dz = Math.cos(angle);
+    let score = 0;
+    let block = -1;
+    for (const r of rings) {
+      const wx = Math.round(px + dx * r);
+      const wz = Math.round(pz + dz * r);
+      const h = columnHeight(wx, wz, params, seed);
+      for (let dy = -4; dy <= 4; dy += 2) {
+        const wy = Math.round(py) + dy;
+        const depth = h - wy;
+        if (depth < 1) continue;
+        const b = oreAt(depth, wx, wy, wz, params, seed);
+        if (b >= 0) {
+          score++;
+          if (block < 0) block = b;
+        }
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestAngle = angle;
+      bestBlock = block;
+    }
+  }
+  if (bestBlock < 0) return null;
+  return { bearingRad: bestAngle, block: bestBlock, strength: Math.min(1, bestScore / 6) };
+}
+
 /** Eye-height spawn position over the terrain at the world origin column. */
 export function voxelSpawn(planet: string): Vector3 {
   const params = getVoxelTerrain(planet);

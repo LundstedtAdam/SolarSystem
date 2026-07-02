@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useStore } from './store';
-import { loadInventory, loadItems, loadSeen, loadMode } from './voxel/persistence';
+import { loadInventory, loadItems, loadSeen, loadMode, loadUpgrades } from './voxel/persistence';
+import { DEFAULT_UPGRADES, type ShipUpgrades } from './ship/upgrades';
 import { SolarSystem } from './scene/SolarSystem';
 import { HUD } from './ui/HUD';
 import { InfoPanel } from './ui/InfoPanel';
@@ -37,6 +38,9 @@ export default function App() {
     loadMode().then((mode) => {
       // Only apply an explicit saved choice; the in-memory default is creative.
       if (mode) useStore.getState().setCreativeMode(mode.creative);
+    });
+    loadUpgrades().then((saved) => {
+      if (saved) useStore.getState().setShipUpgrades({ ...DEFAULT_UPGRADES, ...saved } as ShipUpgrades);
     });
   }, []);
 

@@ -86,6 +86,25 @@ export async function saveMode(creative: boolean): Promise<void> {
   }
 }
 
+const UPGRADES_KEY = `upgrades.${SCHEMA}`;
+
+/** Phase 11.5 ship upgrade tiers. Typed loosely here (persistence.ts doesn't
+ *  import from ship/) — the caller narrows to ShipUpgrades. */
+export async function loadUpgrades(): Promise<Record<string, number> | null> {
+  try {
+    return (await store.getItem<Record<string, number>>(UPGRADES_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+export async function saveUpgrades(upgrades: Record<string, number>): Promise<void> {
+  try {
+    await store.setItem(UPGRADES_KEY, upgrades);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function loadItems(): Promise<Partial<Record<CraftedItem, number>> | null> {
   try {
     return (await store.getItem<Partial<Record<CraftedItem, number>>>(ITEMS_KEY)) ?? null;

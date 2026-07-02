@@ -806,6 +806,78 @@ button {
   border-color: rgba(160, 210, 255, 0.5);
 }
 
+/* Ship upgrades sheet (Phase 11.5) — reuses .ship-nav-* for the backdrop/sheet
+   shell; these are the per-row internals. */
+.upgrades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upgrade-row {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.upgrade-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.upgrade-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8f0f4;
+}
+.upgrade-tier-dots {
+  display: flex;
+  gap: 5px;
+}
+.upgrade-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.upgrade-dot--on {
+  background: rgba(130, 220, 255, 0.9);
+  border-color: rgba(160, 230, 255, 0.9);
+}
+.upgrade-cost {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+.upgrade-btn {
+  min-height: 40px;
+  width: 100%;
+  font-size: 13px;
+}
+.upgrade-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* "Why can't I land" explanation toast (Phase 11.5) */
+.descent-blocked-toast {
+  position: fixed;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 13;
+  max-width: min(420px, 88vw);
+  text-align: center;
+  background: rgba(50, 10, 10, 0.85);
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  border-radius: 10px;
+  padding: 10px 16px;
+  color: #ffd8d8;
+  font-size: 14px;
+  pointer-events: none;
+}
+
 /* Descent overlay */
 .descent-overlay {
   position: fixed;
