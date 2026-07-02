@@ -1,15 +1,16 @@
-// Phase 11.5 — ship upgrades & interplanetary dependency. Four systems, each
-// gated by resources that only exist on specific body types, so progression
-// forces genuine travel across the solar system rather than a menu grind:
+// Phase 11.5 — ship upgrades. Three of the four systems are gated by
+// resources that only exist on specific body types, giving progression a
+// reason to travel; the fourth (Quantum Drive) is deliberately NOT a travel
+// gate — see the note below.
 //
-//   Quantum Drive (tiers 1-3)  — which distance band you can even fly to.
-//     T1 (home resources)   -> nearby moons (Månen, Phobos, Deimos)
-//     T2 (moon resources)   -> inner planets (Merkurius, Venus, Mars)
-//     T3 (arid resources)   -> the outer system (everything past Mars) —
-//       this is the "an arid-world resource unlocks the glacial worlds" step.
+//   Quantum Drive (tiers 1-3) — imposes no restriction anywhere within the
+//     solar system. All 16 landable bodies are reachable from the start,
+//     with zero ship upgrades. This tier only matters for the Phase 10.5
+//     story's Act 8 FTL resolution (departing the solar system entirely,
+//     paired with the narrative `ftlUnlocked` flag) — never for in-system
+//     travel. Do not reintroduce a distance/range gate keyed off this stat.
 //   Orbital scanner (tiers 1-3) — reveals ore veins as a directional heat
-//     cue instead of blind digging. Needs Tungsten (arid) — reachable once
-//     Quantum Drive T2 opens Mars.
+//     cue instead of blind digging. Needs Tungsten (arid).
 //   Environmental shielding (tier 1 is the hard gate) — required to land on
 //     Venus/Io/Europa/Ganymede/Callisto. Needs Titanite (glacial) — this is
 //     the "glacial world yields what's needed to survive the volcanic one"
@@ -18,7 +19,7 @@
 //     itself gates — using it would soft-lock the run. Titanite from the
 //     unshielded outer-ice worlds — Triton, Pluto/Charon — breaks the loop.)
 //   Cargo expansion (tiers 1-3) — +50 backpack capacity per tier. Needs
-//     Titanite + refined ingots — a payoff for reaching the glacial worlds.
+//     Titanite + refined ingots.
 
 import type { ResourceType } from '../voxel/voxelTypes';
 import type { CraftedItem } from '../voxel/recipes';
@@ -61,46 +62,11 @@ export const CARGO_CAPACITY_PER_TIER = 50;
 /** Extra units revealed by the orbital scanner's heat sample per tier. */
 export const SCANNER_SAMPLE_RADIUS = [0, 10, 16, 24];
 
-// --- Quantum Drive distance bands -----------------------------------------------
-
-export type DistanceBand = 'home' | 'near' | 'inner' | 'outer';
-
-/** Which quantum-drive tier is required to reach each band. 'home' needs none —
- *  Earth is always reachable, which is what makes the progression bootstrap
- *  (you can mine T1's cost without ever leaving). */
-export const BAND_REQUIRES_TIER: Record<DistanceBand, number> = {
-  home: 0,
-  near: 1,
-  inner: 2,
-  outer: 3,
-};
-
-const BAND_BY_BODY: Record<string, DistanceBand> = {
-  Jorden: 'home',
-  'Månen': 'near',
-  Phobos: 'near',
-  Deimos: 'near',
-  Merkurius: 'inner',
-  Venus: 'inner',
-  Mars: 'inner',
-  Io: 'outer',
-  Europa: 'outer',
-  Ganymede: 'outer',
-  Callisto: 'outer',
-  Titan: 'outer',
-  Miranda: 'outer',
-  Triton: 'outer',
-  Pluto: 'outer',
-  Charon: 'outer',
-};
-
-export function bodyBand(name: string): DistanceBand {
-  return BAND_BY_BODY[name] ?? 'outer';
-}
-
 /** Bodies whose environment is lethal without shielding — a hard descent gate,
  *  not a convenience. Venus (crushing acid atmosphere) + the Jovian system
- *  (Io's volcanism/radiation, and Jupiter's radiation belt for its moons). */
+ *  (Io's volcanism/radiation, and Jupiter's radiation belt for its moons).
+ *  This is the ONLY descent gate in the game — every other landable body is
+ *  reachable from the start, with zero ship upgrades. */
 const SHIELD_REQUIRED = new Set(['Venus', 'Io', 'Europa', 'Ganymede', 'Callisto']);
 
 export function requiresShielding(name: string): boolean {
@@ -119,16 +85,12 @@ export const DEFAULT_UPGRADES: ShipUpgrades = { quantumDrive: 0, scanner: 0, shi
 export interface DescentGate {
   ok: boolean;
   /** i18n-free reason code the HUD renders; null when ok. */
-  reason: 'quantumDrive' | 'shielding' | null;
-  /** For a quantum-drive block: the tier that's actually needed. */
-  neededTier?: number;
+  reason: 'shielding' | null;
 }
 
-/** Whether the ship's current upgrades allow descending to `name`. */
+/** Whether the ship's current upgrades allow descending to `name`. Quantum
+ *  Drive tier is deliberately not consulted here — see the file header. */
 export function canDescend(name: string, upgrades: ShipUpgrades): DescentGate {
-  const band = bodyBand(name);
-  const needed = BAND_REQUIRES_TIER[band];
-  if (upgrades.quantumDrive < needed) return { ok: false, reason: 'quantumDrive', neededTier: needed };
   if (requiresShielding(name) && upgrades.shielding < 1) return { ok: false, reason: 'shielding' };
   return { ok: true, reason: null };
 }

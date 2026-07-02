@@ -187,13 +187,9 @@ export function ShipHUD() {
         </div>
       )}
 
-      {/* Land-blocked explanation — brief, dismissible, tells the player which
-          upgrade they need instead of the Land button silently doing nothing. */}
-      {descentBlocked && (
-        <div className="descent-blocked-toast">
-          {descentBlocked.reason === 'quantumDrive' ? t('blockedQuantumDrive') : t('blockedShielding')}
-        </div>
-      )}
+      {/* Land-blocked explanation — brief, dismissible. Shielding is the only
+          descent gate left in the game (see ship/upgrades.ts). */}
+      {descentBlocked && <div className="descent-blocked-toast">{t('blockedShielding')}</div>}
 
       {/* Bottom-center action cluster — dedicated, always-visible buttons within
           thumb reach. Navigate and Exit are always shown; Land appears when a

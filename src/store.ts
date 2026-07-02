@@ -382,12 +382,13 @@ interface SimState {
    *  Cleared on dismiss. Distances are metres from the nearest safety point. */
   survivalDeath: { dist: number; anchor: 'habitat' | 'ship' } | null;
 
-  /** Phase 11.5 ship upgrades — tiers 0-3, gate quantum-drive range/shielding and
-   *  scale scanner/cargo. */
+  /** Phase 11.5 ship upgrades — tiers 0-3. Shielding hard-gates a handful of
+   *  hostile bodies; scanner/cargo scale a convenience. Quantum Drive imposes
+   *  no in-system restriction (see ship/upgrades.ts). */
   shipUpgrades: ShipUpgrades;
-  /** Set for a few seconds when Land is pressed but a gate blocks it, so the
+  /** Set for a few seconds when Land is pressed but shielding blocks it, so the
    *  HUD can explain why instead of the button silently doing nothing. */
-  descentBlocked: { reason: 'quantumDrive' | 'shielding'; neededTier?: number } | null;
+  descentBlocked: { reason: 'shielding' } | null;
 
   setSpeed: (speed: number) => void;
   toggleOrbits: () => void;
@@ -514,7 +515,7 @@ interface SimState {
   upgradeShip: (kind: UpgradeKind) => boolean;
   /** Persistence hydration. */
   setShipUpgrades: (u: ShipUpgrades) => void;
-  setDescentBlocked: (b: { reason: 'quantumDrive' | 'shielding'; neededTier?: number } | null) => void;
+  setDescentBlocked: (b: { reason: 'shielding' } | null) => void;
 
   /** Phase 11.3 base building. */
   /** Deduct a crafted-item cost if affordable; returns true on success. */
@@ -655,7 +656,7 @@ export const useStore = create<SimState>((set, get) => ({
     if (!isLandable(target)) return false;
     const gate = canDescend(target, s.shipUpgrades);
     if (!gate.ok) {
-      set({ descentBlocked: { reason: gate.reason!, neededTier: gate.neededTier } });
+      set({ descentBlocked: { reason: gate.reason! } });
       return false;
     }
     set({
