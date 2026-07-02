@@ -201,6 +201,7 @@ export function PlayerController({
         }
         continue; // stations don't store/absorb
       }
+      if (s.type !== 'silo') continue; // habitat/solar/wind/thermal/refinery don't store either
       if (sq < siloNearSq) {
         siloNearSq = sq;
         siloNear = s.id;
@@ -217,6 +218,7 @@ export function PlayerController({
       }
     }
     voxelSilo.available = siloNear >= 0;
+    voxelSilo.id = siloNear;
     voxelStation.available = stationNear >= 0;
     voxelStation.id = stationNear;
     if (consumeDeposit() && siloNear >= 0) st.depositToStructure(siloNear);

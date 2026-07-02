@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { useStore, backpackUsed } from '../store';
+import { useStore, backpackUsed, structureUsed } from '../store';
 import { useT } from '../i18n';
-import { voxelTelemetry, voxelStation, isTouchDevice } from '../voxel/voxelControls';
+import {
+  voxelTelemetry,
+  voxelStation,
+  voxelSilo,
+  consumeOpenSilo,
+  isTouchDevice,
+} from '../voxel/voxelControls';
 import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
 import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
 import { CRAFTED_LABEL, type CraftedItem } from '../voxel/recipes';
@@ -9,7 +15,7 @@ import { planetPower } from '../voxel/power';
 import { CraftMenu } from './CraftMenu';
 import type { ResourceType } from '../voxel/voxelTypes';
 
-type Menu = 'none' | 'backpack' | 'build' | 'craft';
+type Menu = 'none' | 'backpack' | 'build' | 'craft' | 'silo';
 
 function costLabel(cost: Partial<Record<ResourceType, number>>): string {
   return (Object.keys(cost) as ResourceType[])
@@ -151,6 +157,81 @@ function BuildSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** The silo contents as an open/close sheet: capacity, stacks, and a Take per
+ *  stack that pulls it back into the backpack (capped by free backpack space,
+ *  with clear feedback when a withdrawal is capped or blocked entirely). Also
+ *  offers the existing "deposit everything" action for convenience. */
+function SiloSheet({ structureId, onClose }: { structureId: number; onClose: () => void }) {
+  const { t } = useT();
+  const structures = useStore((s) => s.structures);
+  const inventory = useStore((s) => s.inventory);
+  const capacity = useStore((s) => s.backpackCapacity);
+  const withdrawFromStructure = useStore((s) => s.withdrawFromStructure);
+  const depositToStructure = useStore((s) => s.depositToStructure);
+  const [notice, setNotice] = useState<string | null>(null);
+  const silo = structures.find((s) => s.id === structureId);
+
+  if (!silo) {
+    onClose();
+    return null;
+  }
+
+  const used = structureUsed(silo);
+  const packSpace = Math.max(0, capacity - backpackUsed(inventory));
+  const entries = (Object.keys(silo.stored) as ResourceType[])
+    .filter((k) => (silo.stored[k] ?? 0) > 0)
+    .sort();
+
+  const take = (type: ResourceType, amount: number) => {
+    const got = withdrawFromStructure(structureId, type, amount);
+    if (got < amount) {
+      setNotice(got === 0 ? 'Backpack full — nothing withdrawn.' : `Backpack full — only ${got} taken.`);
+      setTimeout(() => setNotice(null), 3000);
+    }
+  };
+
+  return (
+    <div className="voxel-sheet-backdrop" onClick={onClose}>
+      <div className="voxel-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="voxel-sheet-head">
+          <span>
+            {t('silo')} {used}/{silo.capacity}
+          </span>
+          <button className="voxel-sheet-close" onClick={onClose}>
+            {t('close')}
+          </button>
+        </div>
+        {packSpace <= 0 && (
+          <div className="voxel-sheet-warn">Backpack full — free space to withdraw.</div>
+        )}
+        {entries.length === 0 ? (
+          <div className="voxel-backpack-empty">Empty.</div>
+        ) : (
+          <div className="voxel-sheet-list">
+            {entries.map((k) => (
+              <div key={k} className="voxel-pack-row">
+                <span className="voxel-pack-name">{RESOURCE_LABEL[k]}</span>
+                <span className="voxel-pack-amount">{silo.stored[k]}</span>
+                <button
+                  className="voxel-take-btn"
+                  disabled={packSpace <= 0}
+                  onClick={() => take(k, silo.stored[k] ?? 0)}
+                >
+                  {t('take')}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {notice && <div className="voxel-sheet-notice">{notice}</div>}
+        <button className="craft-confirm" onClick={() => depositToStructure(structureId)}>
+          {t('deposit')} All
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // On-foot HUD: compass + ship beacon, the open/close Backpack & Build menus, and
 // (desktop) the Board-ship action.
 export function VoxelHUD() {
@@ -164,6 +245,7 @@ export function VoxelHUD() {
   const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0 });
   const [menu, setMenu] = useState<Menu>('none');
   const [stationAvail, setStationAvail] = useState(false);
+  const [siloAvail, setSiloAvail] = useState(false);
   const raf = useRef(0);
 
   // Opening a menu frees the desktop cursor (pointer-lock) so it can click.
@@ -175,7 +257,8 @@ export function VoxelHUD() {
     });
   };
 
-  // Desktop keys: Tab → backpack, B → build, C → craft (near a station), Esc → close.
+  // Desktop keys: Tab → backpack, B → build, C → craft (near a station),
+  // V → silo contents (near a silo), Esc → close.
   useEffect(() => {
     if (sceneMode.type !== 'voxel') return;
     const onKey = (e: KeyboardEvent) => {
@@ -186,6 +269,8 @@ export function VoxelHUD() {
         openMenu('build');
       } else if (e.code === 'KeyC') {
         if (voxelStation.available) openMenu('craft');
+      } else if (e.code === 'KeyV') {
+        if (voxelSilo.available) openMenu('silo');
       } else if (e.code === 'Escape') {
         setMenu('none');
       }
@@ -194,13 +279,18 @@ export function VoxelHUD() {
     return () => window.removeEventListener('keydown', onKey);
   }, [sceneMode.type]);
 
-  // Poll station proximity for the contextual Craft button (and auto-close the
-  // craft menu when the player walks away).
+  // Poll station/silo proximity for the contextual Craft/Silo buttons (and
+  // auto-close their menus when the player walks away); also consume the
+  // gamepad's edge-triggered open-silo request (RB), since a controller can't
+  // click the HTML button directly.
   useEffect(() => {
     if (sceneMode.type !== 'voxel') return;
     const id = setInterval(() => {
       setStationAvail(voxelStation.available);
       if (!voxelStation.available) setMenu((m) => (m === 'craft' ? 'none' : m));
+      setSiloAvail(voxelSilo.available);
+      if (!voxelSilo.available) setMenu((m) => (m === 'silo' ? 'none' : m));
+      if (consumeOpenSilo() && voxelSilo.available) openMenu('silo');
     }, 150);
     return () => clearInterval(id);
   }, [sceneMode.type]);
@@ -282,11 +372,20 @@ export function VoxelHUD() {
           {t('craft')}
         </button>
       )}
+      {/* Contextual Silo opener — shown when standing at a silo; view/withdraw. */}
+      {siloAvail && menu === 'none' && (
+        <button className="voxel-silo-open" onClick={() => openMenu('silo')}>
+          {t('silo')}
+        </button>
+      )}
 
       {menu === 'backpack' && <BackpackSheet onClose={() => setMenu('none')} />}
       {menu === 'build' && <BuildSheet onClose={() => setMenu('none')} />}
       {menu === 'craft' && voxelStation.id >= 0 && (
         <CraftMenu stationId={voxelStation.id} onClose={() => setMenu('none')} />
+      )}
+      {menu === 'silo' && voxelSilo.id >= 0 && (
+        <SiloSheet structureId={voxelSilo.id} onClose={() => setMenu('none')} />
       )}
 
       <div className="surface-hud-top">

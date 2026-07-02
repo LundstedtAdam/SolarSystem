@@ -352,6 +352,10 @@ interface SimState {
   siloAbsorb: (id: number, type: ResourceType, amount: number) => number;
   /** Empty the backpack into a silo up to its capacity. */
   depositToStructure: (id: number) => void;
+  /** Withdraw a resource from a structure into the backpack, capped by whatever
+   *  backpack space is free. Returns the amount actually moved (0 if the
+   *  backpack has no room or the structure has none of that resource). */
+  withdrawFromStructure: (id: number, type: ResourceType, amount: number) => number;
   /** Move a ground drop into a silo (up to capacity); reduces/removes the drop. */
   absorbDropIntoSilo: (siloId: number, dropId: number) => void;
   setStructures: (structures: Structure[]) => void;
@@ -687,6 +691,25 @@ export const useStore = create<SimState>((set, get) => ({
       inventory,
       structures: s.structures.map((x) => (x.id === id ? { ...x, stored } : x)),
     });
+  },
+  withdrawFromStructure: (id, type, amount) => {
+    const s = get();
+    const st = s.structures.find((x) => x.id === id);
+    if (!st) return 0;
+    const haveInStructure = st.stored[type] ?? 0;
+    const want = Math.min(amount, haveInStructure);
+    if (want <= 0) return 0;
+    const space = Math.max(0, s.backpackCapacity - backpackUsed(s.inventory));
+    const taken = Math.min(want, space);
+    if (taken <= 0) return 0;
+    const stored = { ...st.stored, [type]: haveInStructure - taken };
+    if ((stored[type] ?? 0) <= 0) delete stored[type];
+    const inventory = { ...s.inventory, [type]: (s.inventory[type] ?? 0) + taken };
+    set({
+      inventory,
+      structures: s.structures.map((x) => (x.id === id ? { ...x, stored } : x)),
+    });
+    return taken;
   },
   absorbDropIntoSilo: (siloId, dropId) => {
     const s = get();

@@ -18,6 +18,9 @@ export interface VoxelInputState {
   place: boolean;
   /** Edge-triggered deposit-into-silo request (Deposit button / F / pad Y). */
   deposit: boolean;
+  /** Edge-triggered open-silo-contents request (Silo button / V / pad RB) —
+   *  gamepad-only plumbing; touch/desktop click the Silo button directly. */
+  openSilo: boolean;
 }
 
 export const voxelInput: VoxelInputState = {
@@ -29,6 +32,7 @@ export const voxelInput: VoxelInputState = {
   scan: false,
   place: false,
   deposit: false,
+  openSilo: false,
 };
 
 /** Whether a scannable POI is currently in range and roughly in the crosshair.
@@ -37,9 +41,9 @@ export const voxelInput: VoxelInputState = {
  *  avoid 60fps React churn — the button polls it. */
 export const voxelScan = { available: false };
 
-/** Whether a storage silo is within deposit range of the player — drives the
- *  contextual Deposit button (non-reactive; polled). */
-export const voxelSilo = { available: false };
+/** Nearest storage silo within range (id, or -1) — drives the contextual
+ *  Deposit and Silo (view/withdraw) buttons (non-reactive; polled). */
+export const voxelSilo = { available: false, id: -1 };
 
 /** Nearest crafting station within range (id, or -1) — drives the Craft button. */
 export const voxelStation = { available: false, id: -1 };
@@ -77,6 +81,13 @@ export function consumeDeposit(): boolean {
   return d;
 }
 
+/** Read and clear the one-shot open-silo-contents request. */
+export function consumeOpenSilo(): boolean {
+  const o = voxelInput.openSilo;
+  voxelInput.openSilo = false;
+  return o;
+}
+
 export function resetVoxelInput(): void {
   voxelInput.move.x = 0;
   voxelInput.move.z = 0;
@@ -88,6 +99,7 @@ export function resetVoxelInput(): void {
   voxelInput.scan = false;
   voxelInput.place = false;
   voxelInput.deposit = false;
+  voxelInput.openSilo = false;
 }
 
 /** Desktop: pointer-lock mouse look + WASD/Space/Shift. Returns a disposer. */
@@ -102,6 +114,7 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
   const kd = (e: KeyboardEvent) => {
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'KeyF') voxelInput.deposit = true; // deposit into nearby silo
+    if (e.code === 'KeyV') voxelInput.openSilo = true; // view/withdraw nearby silo
     keys[e.code] = true;
     refreshKeys();
   };
@@ -189,7 +202,7 @@ export function radialShape(x: number, y: number, deadzone: number): { x: number
 // matches. Triggers are treated as buttons with a 0.4 press threshold.
 const PAD_LOOK_GAIN = 1100;
 const TRIGGER_THRESHOLD = 0.4;
-const padPrev = { scan: false, back: false, place: false, deposit: false };
+const padPrev = { scan: false, back: false, place: false, deposit: false, openSilo: false };
 
 function padButton(gp: Gamepad, i: number): boolean {
   return !!gp.buttons[i]?.pressed;
@@ -199,9 +212,11 @@ function padButton(gp: Gamepad, i: number): boolean {
  * Poll the first connected gamepad and write the shared voxelInput, matching the
  * flight deadzone/curves. Left stick moves, right stick looks (accumulated as a
  * pixel-equivalent delta), A jumps, right trigger digs, left trigger scans, B
- * returns to the ship. Edge-triggered actions fire once per press. Returns
- * `back` so the caller can board the ship. No-op (and returns false) when no pad
- * is connected, so keyboard/touch keep working on devices without one.
+ * returns to the ship, X places, Y deposits into a nearby silo, RB opens a
+ * nearby silo's contents to view/withdraw. Edge-triggered actions fire once per
+ * press. Returns `back` so the caller can board the ship. No-op (and returns
+ * false) when no pad is connected, so keyboard/touch keep working on devices
+ * without one.
  */
 export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean } {
   const pads = navigator.getGamepads?.();
@@ -216,7 +231,7 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
   if (!gp) {
     // No pad: leave voxelInput.mine alone — it's owned by the touch Dig button /
     // left-mouse here. (Only the gamepad branch below sets mine, from RT.)
-    padPrev.scan = padPrev.back = padPrev.place = padPrev.deposit = false;
+    padPrev.scan = padPrev.back = padPrev.place = padPrev.deposit = padPrev.openSilo = false;
     return { back: false };
   }
 
@@ -250,6 +265,11 @@ export function pollVoxelGamepad(dt: number, deadzone: number): { back: boolean 
   const depositDown = padButton(gp, 3);
   if (depositDown && !padPrev.deposit) voxelInput.deposit = true;
   padPrev.deposit = depositDown;
+
+  // RB (5) — open the nearby silo's contents to view/withdraw, edge-triggered.
+  const openSiloDown = padButton(gp, 5);
+  if (openSiloDown && !padPrev.openSilo) voxelInput.openSilo = true;
+  padPrev.openSilo = openSiloDown;
 
   // B (1) — back to ship, edge-triggered.
   const backDown = padButton(gp, 1);

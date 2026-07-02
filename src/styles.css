@@ -1073,6 +1073,61 @@ canvas {
   box-shadow: 0 0 18px rgba(120, 200, 255, 0.4);
   pointer-events: auto;
 }
+/* Stacked above the Craft opener (offset) so both can show at once without
+   overlapping if a station and silo happen to be near each other. */
+.voxel-silo-open {
+  position: fixed;
+  bottom: calc(40% + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  min-height: 48px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: rgba(255, 215, 130, 0.18);
+  border: 1px solid rgba(255, 225, 150, 0.55);
+  color: #ffeab0;
+  font-family: monospace;
+  font-size: 16px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(255, 215, 130, 0.35);
+  pointer-events: auto;
+}
+.voxel-take-btn {
+  pointer-events: auto;
+  min-width: 64px;
+  min-height: 40px;
+  border-radius: 6px;
+  background: rgba(130, 200, 255, 0.16);
+  border: 1px solid rgba(150, 210, 255, 0.5);
+  color: #d8f0ff;
+  font-family: monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+.voxel-take-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.voxel-sheet-warn {
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 120, 90, 0.12);
+  border: 1px solid rgba(255, 140, 110, 0.35);
+  color: #ffcdb8;
+  font-size: 12px;
+}
+.voxel-sheet-notice {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 200, 120, 0.14);
+  border: 1px solid rgba(255, 210, 140, 0.4);
+  color: #ffe6b8;
+  font-size: 12px;
+}
 .craft-radial {
   position: absolute;
   left: 50%;
