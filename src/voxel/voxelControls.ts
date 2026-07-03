@@ -50,8 +50,9 @@ export const voxelStation = { available: false, id: -1 };
 
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
  *  the compass never forces a 60fps React re-render). Updated by the
- *  PlayerController each frame; the ship sits at the world origin. */
-export const voxelTelemetry = { x: 0, y: 0, z: 0, yaw: 0 };
+ *  PlayerController each frame; the ship sits at the world origin.
+ *  `underwater` = the eye voxel is liquid — drives the underwater overlay. */
+export const voxelTelemetry = { x: 0, y: 0, z: 0, yaw: 0, underwater: false };
 
 export function consumeLook(): { dx: number; dy: number } {
   const d = { dx: voxelInput.look.dx, dy: voxelInput.look.dy };

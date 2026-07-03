@@ -140,6 +140,17 @@ button {
   width: 100%;
 }
 
+/* Underwater tint — shown while the eye voxel is water. A soft blue wash with
+   a vignette so the surface transition reads instantly without hiding the HUD. */
+.voxel-underwater {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, rgba(20, 60, 110, 0.28) 0%, rgba(8, 28, 60, 0.55) 100%);
+  z-index: 0;
+}
+
 /* Inline keyboard hint chip on HUD buttons (desktop only). */
 .voxel-key-hint {
   margin-left: 6px;

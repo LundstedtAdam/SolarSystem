@@ -250,8 +250,9 @@ export interface MeshRequest {
   palette: Float32Array;
 }
 
-/** worker -> main: greedy-meshed geometry buffers (all transferable). An empty
- *  mesh (fully interior or fully air chunk) returns indexCount === 0. */
+/** worker -> main: greedy-meshed geometry buffers (all transferable), split
+ *  into the opaque terrain group and the translucent water group. An empty
+ *  group (fully interior / all-air / dry chunk) has indexCount === 0. */
 export interface MeshResult {
   type: 'mesh';
   key: string;
@@ -263,6 +264,12 @@ export interface MeshResult {
   indices: Uint32Array;
   /** Number of indices actually used (buffers may be sized exactly). */
   indexCount: number;
+  /** Water group — faces where water borders air; rendered translucent. */
+  waterPositions: Float32Array;
+  waterNormals: Float32Array;
+  waterColors: Float32Array;
+  waterIndices: Uint32Array;
+  waterIndexCount: number;
 }
 
 /** Collect the transferable ArrayBuffers from a request (zero-copy hand-off). */
@@ -272,5 +279,14 @@ export function requestTransfer(req: MeshRequest): Transferable[] {
 
 /** Collect the transferable ArrayBuffers from a result. */
 export function resultTransfer(res: MeshResult): Transferable[] {
-  return [res.positions.buffer, res.normals.buffer, res.colors.buffer, res.indices.buffer];
+  return [
+    res.positions.buffer,
+    res.normals.buffer,
+    res.colors.buffer,
+    res.indices.buffer,
+    res.waterPositions.buffer,
+    res.waterNormals.buffer,
+    res.waterColors.buffer,
+    res.waterIndices.buffer,
+  ];
 }

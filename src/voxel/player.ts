@@ -12,6 +12,8 @@ export type SolidFn = (wx: number, wy: number, wz: number) => boolean;
 /** Read-only surface API the ChunkManager hands to the player/controller. */
 export interface VoxelApi {
   isSolid: SolidFn;
+  /** True where the voxel is liquid (water) — swim physics + underwater UI. */
+  isLiquid: SolidFn;
   /** Block id at a world voxel (0 = air); used for footstep material. */
   blockAt: (wx: number, wy: number, wz: number) => number;
   edit: (wx: number, wy: number, wz: number, blockId: number) => void;
@@ -71,6 +73,19 @@ const JUMP_HEIGHT = 1.25; // apex on Earth gravity (voxels)
 // higher and hang longer — Moon floaty, Earth normal, Titan light.
 const JUMP_SPEED = Math.sqrt(2 * G_EARTH * JUMP_HEIGHT);
 
+// --- Minecraft-style water (static liquid; no flow simulation) --------------
+// In water: heavy all-axis drag, reduced gravity, hold-jump swims upward, and a
+// small hop when pushing against a bank so the player can climb out. Terminal
+// speeds fall out of the drag: v_term = accel_per_tick * DRAG/(1-DRAG).
+const WATER_DRAG = 0.8; // per-tick velocity retention on every axis
+const WATER_GRAVITY_MUL = 0.25; // buoyancy: sink slowly (~1.1 vox/s on Earth)
+// Of GROUND_ACCEL, slip-independent. Note terminal speed = a·drag/(1-drag):
+// water's high retention means a small gain — 0.15 lands at roughly half the
+// rock walking speed, matching the Minecraft feel.
+const WATER_ACCEL_MUL = 0.15;
+const SWIM_ACCEL = 0.8; // per-tick vertical gain while holding jump (~2 vox/s up)
+const SURFACE_HOP = JUMP_SPEED * 0.75; // bank-exit hop when swimming into a wall
+
 const AXIS = ['x', 'y', 'z'] as const;
 
 /** Move `pos` by `disp` on one axis; on collision snap flush to the voxel face
@@ -117,12 +132,19 @@ export class Player {
     return this.pos.y + EYE_OFFSET;
   }
 
-  /** Step the player by a real frame delta, draining it in fixed ticks. */
-  update(dt: number, input: PlayerInput, phys: SurfacePhysics, isSolid: SolidFn): void {
+  /** Step the player by a real frame delta, draining it in fixed ticks.
+   *  `isLiquid` is optional so pure-land callers/tests stay unchanged. */
+  update(
+    dt: number,
+    input: PlayerInput,
+    phys: SurfacePhysics,
+    isSolid: SolidFn,
+    isLiquid?: SolidFn,
+  ): void {
     this.acc += dt;
     let steps = 0;
     while (this.acc >= TICK && steps < MAX_TICKS) {
-      this.tick(input, phys, isSolid);
+      this.tick(input, phys, isSolid, isLiquid);
       this.acc -= TICK;
       steps++;
     }
@@ -130,10 +152,23 @@ export class Player {
     if (steps >= MAX_TICKS) this.acc = 0;
   }
 
+  /** True while the box centre sits in liquid (drives swim physics + the
+   *  controller's underwater checks). Updated each tick. */
+  inWater = false;
+
   /** One fixed-timestep tick of the Minecraft slipperiness model. */
-  private tick(input: PlayerInput, phys: SurfacePhysics, isSolid: SolidFn): void {
+  private tick(
+    input: PlayerInput,
+    phys: SurfacePhysics,
+    isSolid: SolidFn,
+    isLiquid?: SolidFn,
+  ): void {
     const grounded = this.onGround;
     const S = phys.slip;
+    const inWater =
+      !!isLiquid &&
+      isLiquid(Math.floor(this.pos.x), Math.floor(this.pos.y), Math.floor(this.pos.z));
+    this.inWater = inWater;
 
     // Desired move direction in world space via yaw (unit-clamped input).
     const sin = Math.sin(this.yaw);
@@ -148,22 +183,33 @@ export class Player {
 
     // Acceleration: on ground it scales by (REF_SLIP / S)³ so grippy surfaces
     // accelerate fast and icy ones slowly; in air it's a small fixed value that
-    // ignores the surface entirely.
+    // ignores the surface entirely. Water uses its own slip-independent gain.
     const sprint = input.run ? SPRINT_MULT : 1;
-    const accelMag = grounded
-      ? GROUND_ACCEL * Math.pow(REF_SLIP / S, 3) * phys.speedMul * sprint
-      : AIR_ACCEL * phys.speedMul * sprint;
+    const accelMag = inWater
+      ? GROUND_ACCEL * WATER_ACCEL_MUL * phys.speedMul * sprint
+      : grounded
+        ? GROUND_ACCEL * Math.pow(REF_SLIP / S, 3) * phys.speedMul * sprint
+        : AIR_ACCEL * phys.speedMul * sprint;
     this.vel.x += wx * accelMag;
     this.vel.z += wz * accelMag;
 
-    // Gravity + jump (pure ballistic vertical; no drag on Y).
-    const g = G_EARTH * phys.gravity;
+    // Gravity + jump. In water gravity is buoyancy-reduced and holding jump
+    // swims upward instead of firing a take-off impulse.
+    const g = G_EARTH * phys.gravity * (inWater ? WATER_GRAVITY_MUL : 1);
     this.vel.y -= g * TICK;
-    if (input.jump && grounded) this.vel.y = JUMP_SPEED;
+    if (input.jump) {
+      if (inWater) this.vel.y += SWIM_ACCEL;
+      else if (grounded) this.vel.y = JUMP_SPEED;
+    }
 
     // Horizontal move with auto step-up over 1-voxel lips.
-    this.moveHorizontal(0, this.vel.x * TICK, isSolid, grounded);
-    this.moveHorizontal(2, this.vel.z * TICK, isSolid, grounded);
+    const hitX = this.moveHorizontal(0, this.vel.x * TICK, isSolid, grounded);
+    const hitZ = this.moveHorizontal(2, this.vel.z * TICK, isSolid, grounded);
+    // Swimming into a bank while holding jump hops the player up so they can
+    // climb out of the water (the grounded step-up takes over at the top).
+    if (inWater && input.jump && (hitX || hitZ)) {
+      this.vel.y = Math.max(this.vel.y, SURFACE_HOP);
+    }
 
     // Vertical move; detect ground. Swept in sub-voxel steps: a long fall can
     // cover more than a voxel per tick, and a single collide() would then snap
@@ -186,27 +232,36 @@ export class Player {
 
     // Conserve momentum for the next tick: ground friction folds in the surface
     // slipperiness; air drag is fixed so jump arcs are identical everywhere.
-    const friction = this.onGround ? S * SLIP_K : AIR_DRAG;
-    this.vel.x *= friction;
-    this.vel.z *= friction;
+    // Water drags every axis heavily — that's what caps sink and swim speeds.
+    if (inWater) {
+      this.vel.x *= WATER_DRAG;
+      this.vel.z *= WATER_DRAG;
+      this.vel.y *= WATER_DRAG;
+    } else {
+      const friction = this.onGround ? S * SLIP_K : AIR_DRAG;
+      this.vel.x *= friction;
+      this.vel.z *= friction;
+    }
   }
 
-  private moveHorizontal(axis: 0 | 2, disp: number, isSolid: SolidFn, grounded: boolean): void {
-    if (disp === 0) return;
+  /** Returns true when the move was blocked (velocity on the axis zeroed). */
+  private moveHorizontal(axis: 0 | 2, disp: number, isSolid: SolidFn, grounded: boolean): boolean {
+    if (disp === 0) return false;
     const comp = AXIS[axis];
     const beforeComp = this.pos[comp];
     const beforeY = this.pos.y;
-    if (!collide(this.pos, axis, disp, isSolid)) return; // moved freely
+    if (!collide(this.pos, axis, disp, isSolid)) return false; // moved freely
 
     if (grounded) {
       // Try the same move one step higher (walk up a 1-voxel lip).
       this.pos[comp] = beforeComp;
       this.pos.y = beforeY + STEP_HEIGHT;
-      if (!collide(this.pos, axis, disp, isSolid)) return; // stepped up, keep momentum
+      if (!collide(this.pos, axis, disp, isSolid)) return false; // stepped up, keep momentum
       this.pos.y = beforeY; // revert the lift
       this.pos[comp] = beforeComp;
       collide(this.pos, axis, disp, isSolid); // re-snap flush at original height
     }
     this.vel[comp] = 0;
+    return true;
   }
 }

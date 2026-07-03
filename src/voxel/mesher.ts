@@ -9,6 +9,15 @@ import {
   type MeshResult,
 } from './voxelTypes';
 
+/** One geometry group's buffers (the MeshResult carries two: opaque + water). */
+export interface GeometryBuffers {
+  positions: Float32Array;
+  normals: Float32Array;
+  colors: Float32Array;
+  indices: Uint32Array;
+  indexCount: number;
+}
+
 type MeshDone = (res: MeshResult) => void;
 
 interface Job {
@@ -72,8 +81,8 @@ export class MesherPool {
   }
 }
 
-/** Assemble a BufferGeometry from a mesh result. Returns null for empty chunks. */
-export function buildGeometry(res: MeshResult): BufferGeometry | null {
+/** Assemble a BufferGeometry from one geometry group. Returns null when empty. */
+export function buildGeometry(res: GeometryBuffers): BufferGeometry | null {
   if (res.indexCount === 0) return null;
   const geo = new BufferGeometry();
   geo.setAttribute('position', new BufferAttribute(res.positions, 3));

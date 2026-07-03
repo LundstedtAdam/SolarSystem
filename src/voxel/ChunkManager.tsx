@@ -25,7 +25,7 @@ import { useStore, nextStructureId, type Structure } from '../store';
 import { getBiome } from '../terrain/biomes';
 import { audio } from '../audio/AudioManager';
 import { BUILDABLES } from './buildables';
-import { createVoxelMaterial } from './voxelMaterial';
+import { createVoxelMaterial, createVoxelWaterMaterial } from './voxelMaterial';
 import { QUALITY } from '../systems/quality';
 import {
   CHUNK_SIZE,
@@ -77,6 +77,7 @@ export function ChunkManager({
 
   const group = useMemo(() => new Group(), []);
   const material = useMemo(() => createVoxelMaterial(getBiome(planet)), [planet]);
+  const waterMaterial = useMemo(() => createVoxelWaterMaterial(getBiome(planet)), [planet]);
 
   // Targeted-voxel highlight (a subtle wireframe box around the aimed block).
   const highlight = useMemo(() => {
@@ -151,6 +152,9 @@ export function ChunkManager({
 
   const chunks = useRef(new Map<string, Chunk>());
   const meshes = useRef(new Map<string, Mesh>());
+  // Translucent water surfaces, keyed like `meshes`. Kept separate so the aim
+  // raycast (opaque only) and disposal can treat the two groups differently.
+  const waterMeshes = useRef(new Map<string, Mesh>());
   const inFlight = useRef(new Set<string>());
   // Saved per-chunk edit overlays for this body, loaded from IndexedDB; applied
   // to chunks as they're (re)generated so a dug-out world persists across loads.
@@ -305,26 +309,50 @@ export function ChunkManager({
     pool.enqueue(req, (res) => onMeshed(res));
   };
 
+  const dropMesh = (map: Map<string, Mesh>, key: string) => {
+    const old = map.get(key);
+    if (!old) return;
+    group.remove(old);
+    old.geometry.dispose();
+    map.delete(key);
+  };
+
   const onMeshed = (res: MeshResult) => {
     inFlight.current.delete(res.key);
     const c = chunks.current.get(res.key);
     // Drop stale meshes (a later edit superseded this revision).
     if (!c || res.rev !== c.rev) return;
 
-    const old = meshes.current.get(res.key);
-    if (old) {
-      group.remove(old);
-      old.geometry.dispose();
-      meshes.current.delete(res.key);
-    }
+    dropMesh(meshes.current, res.key);
+    dropMesh(waterMeshes.current, res.key);
+
     const geo = buildGeometry(res);
-    if (!geo) return; // empty chunk
-    const mesh = new Mesh(geo, material);
-    mesh.position.set(c.cx * CHUNK_SIZE, c.cy * CHUNK_SIZE, c.cz * CHUNK_SIZE);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    meshes.current.set(res.key, mesh);
+    if (geo) {
+      const mesh = new Mesh(geo, material);
+      mesh.position.set(c.cx * CHUNK_SIZE, c.cy * CHUNK_SIZE, c.cz * CHUNK_SIZE);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      meshes.current.set(res.key, mesh);
+    }
+
+    const waterGeo = buildGeometry({
+      positions: res.waterPositions,
+      normals: res.waterNormals,
+      colors: res.waterColors,
+      indices: res.waterIndices,
+      indexCount: res.waterIndexCount,
+    });
+    if (waterGeo) {
+      const mesh = new Mesh(waterGeo, waterMaterial);
+      mesh.position.set(c.cx * CHUNK_SIZE, c.cy * CHUNK_SIZE, c.cz * CHUNK_SIZE);
+      // Translucent: draw after the terrain, never into the shadow map.
+      mesh.renderOrder = 1;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      group.add(mesh);
+      waterMeshes.current.set(res.key, mesh);
+    }
   };
 
   const forceNeighbourRemesh = (cx: number, cy: number, cz: number) => {
@@ -354,7 +382,8 @@ export function ChunkManager({
 
   /** Solidity query for player collision (world voxel coords). Below the floor
    *  reads solid so the player can't fall out; generates on demand so collision
-   *  is always against real data. */
+   *  is always against real data. Water is NOT solid — the player sinks into it
+   *  and swims (Minecraft-style; see player.ts). */
   const isSolidApi = (wx: number, wy: number, wz: number): boolean => {
     const cy = floorDiv(wy, CHUNK_SIZE);
     if (cy < 0) return true;
@@ -363,7 +392,13 @@ export function ChunkManager({
     const cz = floorDiv(wz, CHUNK_SIZE);
     const c = ensureGenerated(cx, cy, cz);
     if (!c) return false;
-    return voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE)) !== BLOCK.AIR;
+    const id = voxelId(c.get(wx - cx * CHUNK_SIZE, wy - cy * CHUNK_SIZE, wz - cz * CHUNK_SIZE));
+    return id !== BLOCK.AIR && id !== BLOCK.WATER;
+  };
+
+  /** Liquid query (currently just water) — swim physics + underwater UI. */
+  const isLiquidApi = (wx: number, wy: number, wz: number): boolean => {
+    return blockAtApi(wx, wy, wz) === BLOCK.WATER;
   };
 
   /** Block id at a world voxel (0 = air); generate-on-demand like isSolid. */
@@ -462,11 +497,13 @@ export function ChunkManager({
     }
   };
 
-  /** Place the active buildable in the cell adjacent to the aimed face. */
+  /** Place the active buildable in the cell adjacent to the aimed face. Air
+   *  and water cells are placeable (placing into water displaces it). */
   const placeApi = () => {
     const p = placeVoxel.current;
     if (!p) return;
-    if (blockAtApi(p[0], p[1], p[2]) !== BLOCK.AIR) return; // cell occupied
+    const cur = blockAtApi(p[0], p[1], p[2]);
+    if (cur !== BLOCK.AIR && cur !== BLOCK.WATER) return; // cell occupied
     const store = useStore.getState();
     const b = BUILDABLES[store.activeBuildable];
     // Creative mode places for free; survival deducts (and afford-checks both
@@ -497,7 +534,14 @@ export function ChunkManager({
 
   // Publish the surface API for the player controller.
   useEffect(() => {
-    apiRef.current = { isSolid: isSolidApi, blockAt: blockAtApi, edit: editVoxel, mineTick, place: placeApi };
+    apiRef.current = {
+      isSolid: isSolidApi,
+      isLiquid: isLiquidApi,
+      blockAt: blockAtApi,
+      edit: editVoxel,
+      mineTick,
+      place: placeApi,
+    };
     return () => {
       apiRef.current = null;
     };
@@ -508,12 +552,16 @@ export function ChunkManager({
   // --- cleanup on unmount ---
   useEffect(() => {
     const meshMap = meshes.current;
+    const waterMap = waterMeshes.current;
     const chunkMap = chunks.current;
     return () => {
       for (const m of meshMap.values()) m.geometry.dispose();
       meshMap.clear();
+      for (const m of waterMap.values()) m.geometry.dispose();
+      waterMap.clear();
       chunkMap.clear();
       material.dispose();
+      waterMaterial.dispose();
       highlight.geometry.dispose();
       (highlight.material as LineBasicMaterial).dispose();
       crack.geometry.dispose();
@@ -521,7 +569,7 @@ export function ChunkManager({
       burst.geometry.dispose();
       (burst.material as MeshBasicMaterial).dispose();
     };
-  }, [material, highlight, crack, burst]);
+  }, [material, waterMaterial, highlight, crack, burst]);
 
   // --- per-frame streaming ---
   const camChunk = useRef({ x: NaN, z: NaN });
@@ -537,13 +585,15 @@ export function ChunkManager({
 
     // Unload chunks well outside the view (dispose meshes; keep edited data).
     const keep = R + 2;
-    for (const [key, mesh] of meshes.current) {
-      const dx = Math.abs(mesh.position.x / CHUNK_SIZE - ccx);
-      const dz = Math.abs(mesh.position.z / CHUNK_SIZE - ccz);
-      if (dx > keep || dz > keep) {
-        group.remove(mesh);
-        mesh.geometry.dispose();
-        meshes.current.delete(key);
+    for (const map of [meshes.current, waterMeshes.current]) {
+      for (const [key, mesh] of map) {
+        const dx = Math.abs(mesh.position.x / CHUNK_SIZE - ccx);
+        const dz = Math.abs(mesh.position.z / CHUNK_SIZE - ccz);
+        if (dx > keep || dz > keep) {
+          group.remove(mesh);
+          mesh.geometry.dispose();
+          map.delete(key);
+        }
       }
     }
     for (const [key, c] of chunks.current) {

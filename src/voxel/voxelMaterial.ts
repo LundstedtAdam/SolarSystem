@@ -6,7 +6,7 @@
 // Lighting (ambient fill + sun directional + shadows) comes from the scene,
 // like the Phase 8 surface — this material just shapes albedo, normal, fog.
 
-import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu';
 import {
   attribute,
   vec3,
@@ -56,6 +56,34 @@ export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMateri
 
   m.metalnessNode = float(0);
   m.roughnessNode = float(biome.roughnessHigh);
+
+  return m;
+}
+
+/** Translucent water surface (Minecraft-style). Same vertex-colour base as the
+ *  terrain material (the mesher's water pass carries the per-body palette
+ *  colour), but see-through, glossy, double-sided (visible from below) and
+ *  without depth writes so the terrain behind stays visible. */
+export function createVoxelWaterMaterial(biome: BiomeProfile): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial();
+  const vcol = attribute('color', 'vec4');
+  const albedo = vcol.xyz;
+
+  if (biome.fogDensity > 0) {
+    const fogCol = vec3(...biome.fogColor);
+    const dist = positionView.length().mul(0.005);
+    const fogFactor = smoothstep(float(0), float(1), dist.mul(biome.fogDensity));
+    m.colorNode = mix(albedo, fogCol, fogFactor);
+  } else {
+    m.colorNode = albedo;
+  }
+
+  m.metalnessNode = float(0);
+  m.roughnessNode = float(0.15);
+  m.transparent = true;
+  m.opacity = 0.72;
+  m.depthWrite = false;
+  m.side = DoubleSide;
 
   return m;
 }

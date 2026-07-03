@@ -77,3 +77,47 @@ describe('Player physics', () => {
     expect(p.pos.y).toBeGreaterThan(0.8);
   });
 });
+
+describe('Player water physics (Minecraft-style)', () => {
+  // A deep pool: solid floor below y = 0, water filling y = 0..8 (surface at 8).
+  const poolSolid: SolidFn = (_x, y) => y < 0;
+  const poolLiquid: SolidFn = (_x, y) => y >= 0 && y < 8;
+
+  it('brakes a fall on entry and sinks slowly instead of free-falling', () => {
+    const p = new Player();
+    p.spawnAt(new Vector3(0.5, 12, 0.5)); // 4 voxels of air above the surface
+    for (let i = 0; i < 120; i++) p.update(1 / 60, IDLE, EARTH, poolSolid, poolLiquid); // 2 s
+    // Submerged, still descending, but far above the bottom — and at a slow
+    // terminal sink speed, not the ~13 vox/s it entered with.
+    expect(p.inWater).toBe(true);
+    expect(p.pos.y).toBeLessThan(8);
+    expect(p.pos.y).toBeGreaterThan(2);
+    expect(Math.abs(p.vel.y)).toBeLessThan(2);
+    // Eventually rests on the pool floor.
+    for (let i = 0; i < 600; i++) p.update(1 / 60, IDLE, EARTH, poolSolid, poolLiquid);
+    expect(p.onGround).toBe(true);
+    expect(p.pos.y).toBeLessThan(1.0);
+  });
+
+  it('swims upward while holding jump', () => {
+    const p = new Player();
+    p.spawnAt(new Vector3(0.5, 1.5, 0.5));
+    const swim: PlayerInput = { move: { x: 0, z: 0 }, jump: true, run: false };
+    for (let i = 0; i < 360; i++) p.update(1 / 60, swim, EARTH, poolSolid, poolLiquid); // 6 s
+    expect(p.pos.y).toBeGreaterThan(6.5); // rose from the bottom to the surface zone
+  });
+
+  it('moves slower through water than over land', () => {
+    const run: PlayerInput = { move: { x: 1, z: 0 }, jump: false, run: false };
+
+    const land = new Player();
+    land.spawnAt(new Vector3(0.5, 1.5, 0.5));
+    for (let i = 0; i < 180; i++) land.update(1 / 60, run, EARTH, flatFloor);
+
+    const wet = new Player();
+    wet.spawnAt(new Vector3(0.5, 1.5, 0.5));
+    for (let i = 0; i < 180; i++) wet.update(1 / 60, run, EARTH, poolSolid, poolLiquid);
+
+    expect(wet.pos.x).toBeLessThan(land.pos.x * 0.7);
+  });
+});

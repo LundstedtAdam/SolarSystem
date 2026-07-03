@@ -3,6 +3,12 @@
 // coplanar same-material faces, bakes per-corner ambient occlusion into vertex
 // colours, and returns exact-size typed arrays.
 //
+// The mesh is produced in TWO groups (Minecraft-style water):
+//   - opaque:  every solid block; water counts as air, so terrain under water
+//     gets faces and stays visible through the translucent surface.
+//   - water:   water faces only where water borders AIR (never against solids —
+//     those faces would be buried in terrain and z-fight). No AO.
+//
 // Vertex pooling: scratch buffers are module-scoped and reused across calls, so
 // steady-state meshing does no per-quad allocation (only one copy-out per mesh).
 
@@ -12,6 +18,9 @@ const N = CHUNK_SIZE;
 
 // AO level (0 darkest .. 3 unoccluded) -> brightness multiplier.
 const AO_CURVE = [0.45, 0.65, 0.82, 1.0];
+/** Packed per-corner AO with every corner at level 3 (unoccluded) — used for
+ *  the water pass, which skips AO entirely. */
+const AO_NONE = 0xff;
 
 export interface MeshArrays {
   positions: Float32Array;
@@ -19,6 +28,11 @@ export interface MeshArrays {
   colors: Float32Array;
   indices: Uint32Array;
   indexCount: number;
+}
+
+export interface GreedyMeshResult {
+  opaque: MeshArrays;
+  water: MeshArrays;
 }
 
 // --- vertex pool (reused across calls) ---------------------------------------
@@ -50,12 +64,17 @@ function ensureIndexCapacity(extra: number) {
 }
 
 let vox: Uint32Array = new Uint32Array(0);
+/** Which block volume the current pass is meshing (see file header). */
+let pass: 'opaque' | 'water' = 'opaque';
 
-function solid(x: number, y: number, z: number): boolean {
-  return voxelId(vox[paddedIndex(x + 1, y + 1, z + 1)]) !== BLOCK.AIR;
-}
 function blockAt(x: number, y: number, z: number): number {
   return voxelId(vox[paddedIndex(x + 1, y + 1, z + 1)]);
+}
+/** Whether a voxel belongs to the current pass's volume. Also the AO occluder
+ *  test: water never darkens terrain, terrain never darkens water faces. */
+function solid(x: number, y: number, z: number): boolean {
+  const id = blockAt(x, y, z);
+  return pass === 'opaque' ? id !== BLOCK.AIR && id !== BLOCK.WATER : id === BLOCK.WATER;
 }
 function aoValue(s1: boolean, s2: boolean, cor: boolean): number {
   if (s1 && s2) return 0;
@@ -149,8 +168,8 @@ function emitQuad(
   else quadIndices(v0, v0 + 3, v0 + 2, v0 + 1, flip);
 }
 
-/** Greedy-mesh a padded voxel neighbourhood into vertex/index arrays. */
-export function greedyMesh(voxels: Uint32Array, palette: Float32Array): MeshArrays {
+/** Greedy-mesh one pass (the module-level `pass` selects the volume). */
+function meshPass(voxels: Uint32Array, palette: Float32Array): MeshArrays {
   vox = voxels;
   vCount = 0;
   iCount = 0;
@@ -177,9 +196,17 @@ export function greedyMesh(voxels: Uint32Array, palette: Float32Array): MeshArra
           const sx = a ? x[0] : x[0] + q[0];
           const sy = a ? x[1] : x[1] + q[1];
           const sz = a ? x[2] : x[2] + q[2];
+          if (pass === 'water') {
+            // Only emit water faces against AIR — a face against a solid is
+            // buried in terrain and would z-fight the opaque mesh.
+            const ox = a ? x[0] + q[0] : x[0];
+            const oy = a ? x[1] + q[1] : x[1];
+            const oz = a ? x[2] + q[2] : x[2];
+            if (blockAt(ox, oy, oz) !== BLOCK.AIR) { maskDir[n] = 0; continue; }
+          }
           maskDir[n] = dir;
           maskId[n] = blockAt(sx, sy, sz);
-          maskAO[n] = packFaceAO(sx, sy, sz, d, u, v, dir);
+          maskAO[n] = pass === 'water' ? AO_NONE : packFaceAO(sx, sy, sz, d, u, v, dir);
         }
       }
 
@@ -230,4 +257,36 @@ export function greedyMesh(voxels: Uint32Array, palette: Float32Array): MeshArra
     indices: new Uint32Array(idxPool.subarray(0, iCount)),
     indexCount: iCount,
   };
+}
+
+/** Fresh zero-length buffers — never shared, so the worker can safely list
+ *  them as transferables (transfer detaches a buffer permanently). */
+function emptyMesh(): MeshArrays {
+  return {
+    positions: new Float32Array(0),
+    normals: new Float32Array(0),
+    colors: new Float32Array(0),
+    indices: new Uint32Array(0),
+    indexCount: 0,
+  };
+}
+
+/** Greedy-mesh a padded voxel neighbourhood into two vertex/index groups:
+ *  opaque terrain and translucent water (see file header). */
+export function greedyMesh(voxels: Uint32Array, palette: Float32Array): GreedyMeshResult {
+  pass = 'opaque';
+  const opaque = meshPass(voxels, palette);
+
+  // Skip the whole water pass for the common all-dry chunk.
+  let hasWater = false;
+  for (let i = 0; i < voxels.length; i++) {
+    if (voxelId(voxels[i]) === BLOCK.WATER) { hasWater = true; break; }
+  }
+  let water = emptyMesh();
+  if (hasWater) {
+    pass = 'water';
+    water = meshPass(voxels, palette);
+    pass = 'opaque';
+  }
+  return { opaque, water };
 }
