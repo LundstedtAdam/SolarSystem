@@ -1,5 +1,6 @@
-import { Suspense, useCallback, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import type { PerspectiveCamera } from 'three';
 import { AmbientLight, PointLight } from 'three';
 import {
   WebGPURenderer,
@@ -31,6 +32,21 @@ import { PLANETS, WORLD_SCALE } from '../systems/bodies';
 import { useStore, type SceneMode } from '../store';
 import { QUALITY } from '../systems/quality';
 import { useT } from '../i18n';
+
+/** Applies the player's FOV setting to the default camera in the modes that
+ *  don't own their FOV per frame (piloting speed-zooms it in ShipCamera; the
+ *  voxel controller sets it on entry). */
+function FovSync() {
+  const camera = useThree((s) => s.camera) as PerspectiveCamera;
+  const fov = useStore((s) => s.fov);
+  const modeType = useStore((s) => s.sceneMode.type);
+  useEffect(() => {
+    if (modeType === 'piloting' || modeType === 'voxel') return;
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }, [camera, fov, modeType]);
+  return null;
+}
 
 /** The 3D scene rendered with a WebGPU renderer (auto WebGL2 fallback). */
 export function SolarSystem() {
@@ -111,6 +127,7 @@ export function SolarSystem() {
       )}
       <SimClock />
       <AudioReactor />
+      <FovSync />
       {!onGround && <LabelProjector />}
       {sceneMode.type === 'solar' && <CameraRig />}
       {sceneMode.type === 'piloting' && (

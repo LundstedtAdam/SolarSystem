@@ -326,8 +326,9 @@ export function VoxelHUD() {
   const activeBuildable = useStore((s) => s.activeBuildable);
   const structures = useStore((s) => s.structures);
   const creativeMode = useStore((s) => s.creativeMode);
+  const toggleSettings = useStore((s) => s.toggleSettings);
   const { t } = useT();
-  const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0 });
+  const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0, underwater: false });
   const [menu, setMenu] = useState<Menu>('none');
   const [stationAvail, setStationAvail] = useState(false);
   const [siloAvail, setSiloAvail] = useState(false);
@@ -390,7 +391,7 @@ export function VoxelHUD() {
     let running = true;
     const tick = () => {
       if (!running) return;
-      const { x, z, yaw } = voxelTelemetry;
+      const { x, z, yaw, underwater } = voxelTelemetry;
       const heading = ((-yaw * 180) / Math.PI + 360) % 360;
       const fx = -Math.sin(yaw);
       const fz = -Math.cos(yaw);
@@ -407,9 +408,13 @@ export function VoxelHUD() {
         heading: Math.round(heading) % 360,
         shipAngle: Math.round(shipAngle),
         dist: Math.round(Math.hypot(x, z)),
+        underwater,
       };
       setHud((prev) =>
-        prev.heading === next.heading && prev.shipAngle === next.shipAngle && prev.dist === next.dist
+        prev.heading === next.heading &&
+        prev.shipAngle === next.shipAngle &&
+        prev.dist === next.dist &&
+        prev.underwater === next.underwater
           ? prev
           : next,
       );
@@ -439,6 +444,8 @@ export function VoxelHUD() {
 
   return (
     <div className="surface-hud">
+      {/* Underwater tint + vignette while the eye is below a water surface. */}
+      {hud.underwater && <div className="voxel-underwater" aria-hidden="true" />}
       <div className="voxel-crosshair" aria-hidden="true" />
 
       {/* Top-right menu toggles (also serve as compact indicators). */}
@@ -462,6 +469,17 @@ export function VoxelHUD() {
         >
           {t('build')}: {t(activeBuildable)}
           {keyHint('B')}
+        </button>
+        <button
+          className="voxel-toggle-btn"
+          aria-label={t('settings')}
+          onClick={() => {
+            // Free the desktop cursor so the settings panel can be clicked.
+            if (document.pointerLockElement) document.exitPointerLock();
+            toggleSettings();
+          }}
+        >
+          ⚙
         </button>
       </div>
 

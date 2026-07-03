@@ -5,6 +5,7 @@ export function SurfaceHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
   const beginAscent = useStore((s) => s.beginAscent);
   const disembark = useStore((s) => s.disembark);
+  const toggleSettings = useStore((s) => s.toggleSettings);
   const [heading, setHeading] = useState(0);
   const frameRef = useRef(0);
 
@@ -63,6 +64,10 @@ export function SurfaceHUD() {
         <button className="button surface-hud-action" onClick={beginAscent}>
           <span className="actual-text">&nbsp;Launch&nbsp;</span>
           <span aria-hidden="true" className="hover-text">&nbsp;Launch&nbsp;</span>
+        </button>
+        <button className="button surface-hud-action" onClick={toggleSettings} aria-label="Settings">
+          <span className="actual-text">&nbsp;⚙&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;⚙&nbsp;</span>
         </button>
       </div>
     </div>

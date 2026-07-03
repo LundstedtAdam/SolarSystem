@@ -1,4 +1,4 @@
-import { useStore } from '../store';
+import { useStore, FOV_MIN, FOV_MAX } from '../store';
 import { useT } from '../i18n';
 import { dateFromDays } from '../systems/ephemeris';
 import { QUALITY_ORDER } from '../systems/quality';
@@ -23,6 +23,8 @@ export function SettingsPanel() {
   const setQuality = useStore((s) => s.setQuality);
   const controls = useStore((s) => s.controls);
   const setControls = useStore((s) => s.setControls);
+  const fov = useStore((s) => s.fov);
+  const setFov = useStore((s) => s.setFov);
   const creativeMode = useStore((s) => s.creativeMode);
   const setCreativeMode = useStore((s) => s.setCreativeMode);
   const { t } = useT();
@@ -87,6 +89,20 @@ export function SettingsPanel() {
             />{' '}
             {t('reducedMotion')}
           </label>
+        </div>
+
+        <div className="setting-row">
+          <label htmlFor="settings-fov">{t('fov')}</label>
+          <input
+            id="settings-fov"
+            type="range"
+            min={FOV_MIN}
+            max={FOV_MAX}
+            step="1"
+            value={fov}
+            onChange={(e) => setFov(parseInt(e.target.value, 10))}
+          />
+          <span>{fov}°</span>
         </div>
 
         <div className="setting-row">

@@ -22,8 +22,9 @@ const LOOK_AHEAD = new Vector3(0, 0.25, -6);
  *  Distance is held by velocity compensation, so this only absorbs orbit/offset
  *  drift — the ship no longer outruns the camera at high thrust. */
 const FOLLOW_RATE = 6;
-const DEFAULT_FOV = 75;
-const MIN_FOV = 68; // gentle speed-based zoom (was 62 — too aggressive)
+/** Speed-zoom narrows the FOV by this many degrees at full speed (relative to
+ *  the player's base FOV setting; was fixed 75 -> 68). */
+const SPEED_ZOOM_DEG = 7;
 const MAX_SPEED_FOR_FOV = 500;
 /** Subtle extra chase distance at full throttle — a hint of pull-back, no more. */
 const THROTTLE_ZOOM = 0.12;
@@ -235,7 +236,7 @@ export function ShipCamera() {
 
     const speed = shipTelemetry.velocity.length();
     const fovT = Math.min(speed / MAX_SPEED_FOR_FOV, 1);
-    camera.fov = DEFAULT_FOV - (DEFAULT_FOV - MIN_FOV) * fovT;
+    camera.fov = store.fov - SPEED_ZOOM_DEG * fovT;
     camera.updateProjectionMatrix();
   });
 

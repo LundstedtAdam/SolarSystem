@@ -273,6 +273,35 @@ const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
+// --- Persisted UI preferences (small, synchronous — same pattern as the
+// discovery/narrative records above). Currently just the camera FOV. ---
+const UIPREFS_KEY = 'solarsystem.uiprefs.v1';
+export const FOV_MIN = 60;
+export const FOV_MAX = 100;
+export const FOV_DEFAULT = 75;
+
+function loadUiPrefs(): { fov: number } {
+  if (typeof window === 'undefined') return { fov: FOV_DEFAULT };
+  try {
+    const raw = window.localStorage.getItem(UIPREFS_KEY);
+    if (!raw) return { fov: FOV_DEFAULT };
+    const p = JSON.parse(raw) as { fov?: number };
+    const fov = typeof p.fov === 'number' ? Math.min(FOV_MAX, Math.max(FOV_MIN, p.fov)) : FOV_DEFAULT;
+    return { fov };
+  } catch {
+    return { fov: FOV_DEFAULT };
+  }
+}
+
+function saveUiPrefs(p: { fov: number }): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(UIPREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage full / unavailable — the preference just won't persist */
+  }
+}
+
 /** Real physical data shown in the info panel for the selected body. */
 export interface SelectedBody {
   name: string;
@@ -340,6 +369,8 @@ interface SimState {
   reducedMotion: boolean;
   settingsOpen: boolean;
   quality: Quality;
+  /** Base camera field of view in degrees (60–100); persisted. */
+  fov: number;
   /** Live meshes of planets, keyed by name, for programmatic focus. */
   planetObjects: Record<string, Object3D>;
 
@@ -418,6 +449,7 @@ interface SimState {
   toggleSettings: () => void;
   setDate: (date: Date) => void;
   setQuality: (q: Quality) => void;
+  setFov: (fov: number) => void;
   enterShip: () => void;
   exitShip: () => void;
   beginDescent: (target: string) => boolean;
@@ -555,6 +587,7 @@ export const useStore = create<SimState>((set, get) => ({
   reducedMotion: prefersReducedMotion,
   settingsOpen: false,
   quality: detectQuality(),
+  fov: loadUiPrefs().fov,
   planetObjects: {},
 
   sceneMode: { type: 'solar' },
@@ -634,6 +667,11 @@ export const useStore = create<SimState>((set, get) => ({
   toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
   setDate: (date) => set({ simTimeDays: daysSinceJ2000(date) }),
   setQuality: (quality) => set({ quality }),
+  setFov: (fov) => {
+    const clamped = Math.min(FOV_MAX, Math.max(FOV_MIN, fov));
+    set({ fov: clamped });
+    saveUiPrefs({ fov: clamped });
+  },
 
   enterShip: () =>
     set((s) => {

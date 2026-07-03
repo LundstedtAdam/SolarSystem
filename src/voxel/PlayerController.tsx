@@ -111,15 +111,23 @@ export function PlayerController({
     return [s.x, s.y, s.z];
   }, [planet]);
 
-  // Camera setup + desktop input wiring.
+  const fov = useStore((s) => s.fov);
+
+  // Camera setup + desktop input wiring. FOV is applied in its own effect so a
+  // mid-session slider change doesn't reset `ready` (which would respawn the
+  // player at the origin).
   useEffect(() => {
     camera.near = 0.05;
     camera.far = 2000;
-    camera.fov = 75;
     camera.updateProjectionMatrix();
     ready.current = false;
     return attachDesktopControls(gl.domElement);
   }, [camera, gl, planet]);
+
+  useEffect(() => {
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }, [camera, fov]);
 
   // Visible hand parented to the camera.
   useEffect(() => {
@@ -177,6 +185,7 @@ export function PlayerController({
       { move: voxelInput.move, jump: voxelInput.jump, run: voxelInput.run },
       phys,
       api.isSolid,
+      api.isLiquid,
     );
 
     euler.set(player.pitch, player.yaw, 0);
@@ -187,6 +196,11 @@ export function PlayerController({
     voxelTelemetry.y = player.pos.y;
     voxelTelemetry.z = player.pos.z;
     voxelTelemetry.yaw = player.yaw;
+    voxelTelemetry.underwater = api.isLiquid(
+      Math.floor(player.pos.x),
+      Math.floor(player.eyeY()),
+      Math.floor(player.pos.z),
+    );
 
     // Walk-over pickup of overflow drops on this body (only when there's space).
     const st = useStore.getState();

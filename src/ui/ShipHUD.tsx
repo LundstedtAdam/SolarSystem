@@ -46,6 +46,7 @@ export function ShipHUD() {
   const items = useStore((s) => s.items);
   const descentBlocked = useStore((s) => s.descentBlocked);
   const setDescentBlocked = useStore((s) => s.setDescentBlocked);
+  const toggleSettings = useStore((s) => s.toggleSettings);
   const { t, name } = useT();
   const [upgradesOpen, setUpgradesOpen] = useState(false);
 
@@ -224,6 +225,10 @@ export function ShipHUD() {
         <button className="button ship-hud-action" onClick={exitShip}>
           <span className="actual-text">&nbsp;{t('exit')}&nbsp;</span>
           <span aria-hidden="true" className="hover-text">&nbsp;{t('exit')}&nbsp;</span>
+        </button>
+        <button className="button ship-hud-action" onClick={toggleSettings} aria-label={t('settings')}>
+          <span className="actual-text">&nbsp;⚙&nbsp;</span>
+          <span aria-hidden="true" className="hover-text">&nbsp;⚙&nbsp;</span>
         </button>
       </div>
     </>
