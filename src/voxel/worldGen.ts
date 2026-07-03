@@ -340,18 +340,64 @@ export function surfaceHeightAt(
   return Math.max(columnHeight(wx, wz, params, seed), params.waterLevel, params.lavaLevel);
 }
 
-export interface NearbyPOI {
-  spec: POISpec;
+/** A cell-grid-placed spec found near the player (anchor + distance). */
+export interface NearbySpec<S> {
+  spec: S;
   ax: number;
   az: number;
   dist: number;
 }
 
-/** Nearest POI anchor to (px, pz) within maxDist, or null. Reverses the same
- *  deterministic placement the stamper uses, so the discovery scan and the
- *  rendered ruin always agree. No spatial index needed — the cell grid is the
- *  index. Excludes Phase 10.5 war-lore POIs — use findNearbyWarLorePOI for
- *  those, since the two narrative threads never mix in a single scan result. */
+/** The placement fields every cell-grid spec shares (POIs, science notes,
+ *  translation fragments). */
+interface CellGridSpec {
+  id: string;
+  cell: number;
+  density: number;
+}
+
+/** Nearest cell-grid spec anchor to (px, pz) within maxDist, or null. Reverses
+ *  the exact deterministic placement the stamper uses (same cell hash, same
+ *  salts), so a scan result and the rendered feature always agree. No spatial
+ *  index needed — the cell grid IS the index. `filter` narrows which specs
+ *  participate (e.g. war-lore vs. legacy POIs, which never mix in one scan). */
+export function findNearestCellSpec<S extends CellGridSpec>(
+  specs: readonly S[],
+  seed: number,
+  px: number,
+  pz: number,
+  maxDist: number,
+  filter?: (spec: S) => boolean,
+): NearbySpec<S> | null {
+  let best: NearbySpec<S> | null = null;
+  for (const spec of specs) {
+    if (filter && !filter(spec)) continue;
+    const cell = spec.cell;
+    const sSeed = seed + (seedFromName(spec.id) % 100000);
+    const gx0 = Math.floor((px - maxDist) / cell);
+    const gx1 = Math.floor((px + maxDist) / cell);
+    const gz0 = Math.floor((pz - maxDist) / cell);
+    const gz1 = Math.floor((pz + maxDist) / cell);
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
+        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
+        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
+        const dist = Math.hypot(px - ax, pz - az);
+        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
+      }
+    }
+  }
+  return best;
+}
+
+export type NearbyPOI = NearbySpec<POISpec>;
+export type NearbyScienceNote = NearbySpec<ScienceNoteSpec>;
+export type NearbyTranslationFragment = NearbySpec<TranslationFragmentSpec>;
+
+/** Nearest POI anchor to (px, pz) within maxDist, or null. Excludes Phase 10.5
+ *  war-lore POIs — use findNearbyWarLorePOI for those, since the two narrative
+ *  threads never mix in a single scan result. */
 export function findNearbyPOI(
   params: VoxelTerrainParams,
   seed: number,
@@ -359,38 +405,11 @@ export function findNearbyPOI(
   pz: number,
   maxDist: number,
 ): NearbyPOI | null {
-  let best: NearbyPOI | null = null;
-  for (const spec of params.pois) {
-    if (spec.act !== undefined) continue;
-    const cell = spec.cell;
-    const sSeed = seed + (seedFromName(spec.id) % 100000);
-    const gx0 = Math.floor((px - maxDist) / cell);
-    const gx1 = Math.floor((px + maxDist) / cell);
-    const gz0 = Math.floor((pz - maxDist) / cell);
-    const gz1 = Math.floor((pz + maxDist) / cell);
-    for (let gz = gz0; gz <= gz1; gz++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
-        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
-        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
-        const dist = Math.hypot(px - ax, pz - az);
-        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
-      }
-    }
-  }
-  return best;
-}
-
-export interface NearbyScienceNote {
-  spec: ScienceNoteSpec;
-  ax: number;
-  az: number;
-  dist: number;
+  return findNearestCellSpec(params.pois, seed, px, pz, maxDist, (s) => s.act === undefined);
 }
 
 /** Nearest Layer 1 science note to (px, pz) within maxDist — a normal surface
- *  feature, same deterministic cell-hash placement as findNearbyPOI, no depth
- *  gate. */
+ *  feature, no depth gate. */
 export function findNearbyScienceNote(
   params: VoxelTerrainParams,
   seed: number,
@@ -398,29 +417,11 @@ export function findNearbyScienceNote(
   pz: number,
   maxDist: number,
 ): NearbyScienceNote | null {
-  let best: NearbyScienceNote | null = null;
-  for (const spec of params.scienceNotes) {
-    const cell = spec.cell;
-    const sSeed = seed + (seedFromName(spec.id) % 100000);
-    const gx0 = Math.floor((px - maxDist) / cell);
-    const gx1 = Math.floor((px + maxDist) / cell);
-    const gz0 = Math.floor((pz - maxDist) / cell);
-    const gz1 = Math.floor((pz + maxDist) / cell);
-    for (let gz = gz0; gz <= gz1; gz++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
-        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
-        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
-        const dist = Math.hypot(px - ax, pz - az);
-        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
-      }
-    }
-  }
-  return best;
+  return findNearestCellSpec(params.scienceNotes, seed, px, pz, maxDist);
 }
 
-/** Nearest Phase 10.5 war-lore POI to (px, pz) within maxDist, or null. Same
- *  placement mechanics as findNearbyPOI, filtered to POIs carrying an `act`. */
+/** Nearest Phase 10.5 war-lore POI to (px, pz) within maxDist, or null — the
+ *  POIs carrying an `act`. */
 export function findNearbyWarLorePOI(
   params: VoxelTerrainParams,
   seed: number,
@@ -428,37 +429,10 @@ export function findNearbyWarLorePOI(
   pz: number,
   maxDist: number,
 ): NearbyPOI | null {
-  let best: NearbyPOI | null = null;
-  for (const spec of params.pois) {
-    if (spec.act === undefined) continue;
-    const cell = spec.cell;
-    const sSeed = seed + (seedFromName(spec.id) % 100000);
-    const gx0 = Math.floor((px - maxDist) / cell);
-    const gx1 = Math.floor((px + maxDist) / cell);
-    const gz0 = Math.floor((pz - maxDist) / cell);
-    const gz1 = Math.floor((pz + maxDist) / cell);
-    for (let gz = gz0; gz <= gz1; gz++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
-        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
-        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
-        const dist = Math.hypot(px - ax, pz - az);
-        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
-      }
-    }
-  }
-  return best;
+  return findNearestCellSpec(params.pois, seed, px, pz, maxDist, (s) => s.act !== undefined);
 }
 
-export interface NearbyTranslationFragment {
-  spec: TranslationFragmentSpec;
-  ax: number;
-  az: number;
-  dist: number;
-}
-
-/** Nearest Translation Fragment to (px, pz) within maxDist — same deterministic
- *  cell-hash placement as findNearbyPOI/findNearbyScienceNote. Phase 10.5. */
+/** Nearest Translation Fragment to (px, pz) within maxDist. Phase 10.5. */
 export function findNearbyTranslationFragment(
   params: VoxelTerrainParams,
   seed: number,
@@ -466,25 +440,7 @@ export function findNearbyTranslationFragment(
   pz: number,
   maxDist: number,
 ): NearbyTranslationFragment | null {
-  let best: NearbyTranslationFragment | null = null;
-  for (const spec of params.translationFragments) {
-    const cell = spec.cell;
-    const sSeed = seed + (seedFromName(spec.id) % 100000);
-    const gx0 = Math.floor((px - maxDist) / cell);
-    const gx1 = Math.floor((px + maxDist) / cell);
-    const gz0 = Math.floor((pz - maxDist) / cell);
-    const gz1 = Math.floor((pz + maxDist) / cell);
-    for (let gz = gz0; gz <= gz1; gz++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
-        const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
-        const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
-        const dist = Math.hypot(px - ax, pz - az);
-        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
-      }
-    }
-  }
-  return best;
+  return findNearestCellSpec(params.translationFragments, seed, px, pz, maxDist);
 }
 
 export interface NearbyDeepSite {
