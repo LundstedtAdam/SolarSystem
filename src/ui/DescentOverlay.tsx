@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Vector3 } from 'three';
 import { useStore } from '../store';
+import { useT } from '../i18n';
 import { resolveDescentTarget } from '../descent/descentHelpers';
 import { archetypeFor } from '../voxel/voxelBiomes';
 import { getBodyResources, RESOURCE_LABEL } from '../voxel/resourceProfiles';
@@ -26,6 +27,7 @@ export function DescentOverlay() {
   const shipPosition = useStore((s) => s.shipPosition);
   const simTimeDays = useStore((s) => s.simTimeDays);
   const scannerTier = useStore((s) => s.shipUpgrades.scanner);
+  const { name } = useT();
   const [isGasGiant, setIsGasGiant] = useState(false);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export function DescentOverlay() {
         color: isGasGiant ? '#ff4444' : 'rgba(255,255,255,0.9)',
       }}>
         <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 2 }}>
-          {sceneMode.target.toUpperCase()}
+          {name(sceneMode.target).toUpperCase()}
         </div>
         {isGasGiant ? (
           <div style={{ fontWeight: 'bold', fontSize: 16 }}>

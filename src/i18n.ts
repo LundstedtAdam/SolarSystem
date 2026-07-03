@@ -2,8 +2,10 @@ import { useStore } from './store';
 
 export type Lang = 'en' | 'sv';
 
-/** Canonical body id (the Swedish name used in data) → localized display names. */
-const BODY_NAMES: Record<string, { en: string; sv: string }> = {
+/** Canonical body id (the Swedish name used in data) → localized display names.
+ *  Exported so a test can verify every id in systems/bodies.ts has an entry —
+ *  a gap here is exactly what let "Jorden" leak into English UI text. */
+export const BODY_NAMES: Record<string, { en: string; sv: string }> = {
   Merkurius: { en: 'Mercury', sv: 'Merkurius' },
   Venus: { en: 'Venus', sv: 'Venus' },
   Jorden: { en: 'Earth', sv: 'Jorden' },
@@ -22,6 +24,8 @@ const BODY_NAMES: Record<string, { en: string; sv: string }> = {
   Titan: { en: 'Titan', sv: 'Titan' },
   Miranda: { en: 'Miranda', sv: 'Miranda' },
   Triton: { en: 'Triton', sv: 'Triton' },
+  Pluto: { en: 'Pluto', sv: 'Pluto' },
+  Charon: { en: 'Charon', sv: 'Charon' },
 };
 
 export function bodyName(id: string, lang: Lang): string {

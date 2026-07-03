@@ -327,7 +327,7 @@ export function VoxelHUD() {
   const structures = useStore((s) => s.structures);
   const creativeMode = useStore((s) => s.creativeMode);
   const toggleSettings = useStore((s) => s.toggleSettings);
-  const { t } = useT();
+  const { t, name } = useT();
   const [hud, setHud] = useState({ heading: 0, shipAngle: 0, dist: 0, underwater: false });
   const [menu, setMenu] = useState<Menu>('none');
   const [stationAvail, setStationAvail] = useState(false);
@@ -508,7 +508,7 @@ export function VoxelHUD() {
       )}
 
       <div className="surface-hud-top">
-        <div className="surface-hud-name">{sceneMode.planet.toUpperCase()} — ON FOOT</div>
+        <div className="surface-hud-name">{name(sceneMode.planet).toUpperCase()} — ON FOOT</div>
         <div className="surface-hud-compass">
           <svg width="56" height="56" viewBox="0 0 48 48">
             <circle cx="24" cy="24" r="22" fill="rgba(0,0,0,0.35)" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />

@@ -1,11 +1,13 @@
 import { useRef, useEffect, useState } from 'react';
 import { useStore } from '../store';
+import { useT } from '../i18n';
 
 export function SurfaceHUD() {
   const sceneMode = useStore((s) => s.sceneMode);
   const beginAscent = useStore((s) => s.beginAscent);
   const disembark = useStore((s) => s.disembark);
   const toggleSettings = useStore((s) => s.toggleSettings);
+  const { name } = useT();
   const [heading, setHeading] = useState(0);
   const frameRef = useRef(0);
 
@@ -39,7 +41,7 @@ export function SurfaceHUD() {
       {/* Top: planet name + compass */}
       <div className="surface-hud-top">
         <div className="surface-hud-name">
-          {sceneMode.planet.toUpperCase()} — SURFACE
+          {name(sceneMode.planet).toUpperCase()} — SURFACE
         </div>
         <div className="surface-hud-compass">
           <svg width="48" height="48" viewBox="0 0 48 48">
