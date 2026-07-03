@@ -12,6 +12,7 @@ import {
   type ShipInput,
 } from './shipPhysics';
 import { readInput, installKeyboardListeners, removeKeyboardListeners } from './shipInput';
+import { shipTelemetry, syncTelemetryFromStore, MIRROR_INTERVAL } from './shipTelemetry';
 import { decayStick, resetStick } from './virtualStick';
 import { resolveDescentTarget, findNearestLandable, landRange } from '../descent/descentHelpers';
 import { ShipModel } from './ShipModel';
@@ -90,17 +91,44 @@ const AUTO_SAFE_RADII = 4; // stop this many body-radii out (matches orbit phase
 export function ShipController() {
   const groupRef = useRef<Group>(null);
   const angVel = useRef<AngularVelocity>({ pitch: 0, yaw: 0, roll: 0 });
+  // Live telemetry <-> store hand-off (see shipTelemetry.ts). `wasPiloting`
+  // detects mode transitions; `mirrorAcc` paces the reactive-store mirror.
+  const wasPiloting = useRef(false);
+  const mirrorAcc = useRef(0);
 
   useEffect(() => {
     installKeyboardListeners();
     return () => removeKeyboardListeners();
   }, []);
 
+  /** Push the live telemetry into the reactive store (HUD and non-piloting
+   *  consumers read from there). */
+  function mirrorToStore(store: ReturnType<typeof useStore.getState>) {
+    const t = shipTelemetry;
+    store.setShipPosition([t.position.x, t.position.y, t.position.z]);
+    store.setShipVelocity([t.velocity.x, t.velocity.y, t.velocity.z]);
+    store.setShipRotation([t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w]);
+    store.setShipThrottle(t.throttle);
+  }
+
   useFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
     const store = useStore.getState();
     if (store.sceneMode.type !== 'piloting') {
+      // Leaving piloting: flush the exact live state to the store once, before
+      // the descent/ascent managers (registered after us) read it this frame.
+      if (wasPiloting.current) {
+        wasPiloting.current = false;
+        mirrorToStore(store);
+      }
+      // During descent/ascent the managers drive the store — follow it here so
+      // the ship model tracks the cinematic path (previously done by a reactive
+      // store subscription that re-rendered this component every frame).
+      const [sx, sy, sz] = store.shipPosition;
+      const [rx, ry, rz, rw] = store.shipRotation;
+      group.position.set(sx, sy, sz);
+      group.quaternion.set(rx, ry, rz, rw);
       // Shed any residual spin so re-entering the ship starts settled.
       angVel.current.pitch = 0;
       angVel.current.yaw = 0;
@@ -109,19 +137,28 @@ export function ShipController() {
       return;
     }
 
+    if (!wasPiloting.current) {
+      // Entering piloting: the store is authoritative (descent/ascent/surface
+      // wrote it) — load it into the live telemetry.
+      wasPiloting.current = true;
+      mirrorAcc.current = 0;
+      syncTelemetryFromStore(
+        store.shipPosition,
+        store.shipVelocity,
+        store.shipRotation,
+        store.shipThrottle,
+      );
+    }
+
     const dt = Math.min(delta, 0.05);
 
     // Spring the mouse virtual joystick back toward center (frame-rate
     // independent). Fresh pointer deltas this frame skip the decay internally.
     decayStick(dt);
 
-    const [px, py, pz] = store.shipPosition;
-    const [vx, vy, vz] = store.shipVelocity;
-    const [qx, qy, qz, qw] = store.shipRotation;
-
-    _pos.set(px, py, pz);
-    _vel.set(vx, vy, vz);
-    _quat.set(qx, qy, qz, qw);
+    _pos.copy(shipTelemetry.position);
+    _vel.copy(shipTelemetry.velocity);
+    _quat.copy(shipTelemetry.rotation);
 
     // Discrete gamepad flight actions (Land / Nav / Pause).
     pollFlightGamepad(store);
@@ -155,12 +192,19 @@ export function ShipController() {
     group.position.copy(_pos);
     group.quaternion.copy(_quat);
 
-    store.setShipPosition([_pos.x, _pos.y, _pos.z]);
-    store.setShipVelocity([_vel.x, _vel.y, _vel.z]);
-    store.setShipRotation([_quat.x, _quat.y, _quat.z, _quat.w]);
-    // Store the raw lever position (0..1) so the HUD zones and last-quarter
-    // effects key off the slider, not the post-curve thrust.
-    store.setShipThrottle(input.throttleRaw ?? Math.abs(input.thrust));
+    // Live telemetry every frame (camera reads it back this frame); the
+    // reactive store only gets a low-rate mirror so HUD components don't
+    // re-render at 60 fps. The raw lever position (0..1) is kept so the HUD
+    // zones and last-quarter effects key off the slider, not post-curve thrust.
+    shipTelemetry.position.copy(_pos);
+    shipTelemetry.velocity.copy(_vel);
+    shipTelemetry.rotation.copy(_quat);
+    shipTelemetry.throttle = input.throttleRaw ?? Math.abs(input.thrust);
+    mirrorAcc.current += dt;
+    if (mirrorAcc.current >= MIRROR_INTERVAL) {
+      mirrorAcc.current = 0;
+      mirrorToStore(store);
+    }
   });
 
   /** Steer-and-brake autopilot toward the current quick-nav target. Operates on
@@ -194,12 +238,14 @@ export function ShipController() {
     const desiredSpeed = Math.max(0, Math.min(AUTO_CRUISE, brakeSpeed));
 
     if (remaining <= 1 && desiredSpeed < 1) {
-      // Arrived at a safe orbital distance — stop and return control.
+      // Arrived at a safe orbital distance — stop, flush the exact state to
+      // the store, and return control.
       _vel.set(0, 0, 0);
-      store.setShipVelocity([0, 0, 0]);
-      store.setShipRotation([_quat.x, _quat.y, _quat.z, _quat.w]);
-      store.setShipThrottle(0);
+      shipTelemetry.velocity.set(0, 0, 0);
+      shipTelemetry.rotation.copy(_quat);
+      shipTelemetry.throttle = 0;
       group.quaternion.copy(_quat);
+      mirrorToStore(store);
       store.cancelAutopilot();
       return;
     }
@@ -209,13 +255,21 @@ export function ShipController() {
 
     group.position.copy(_pos);
     group.quaternion.copy(_quat);
-    store.setShipPosition([_pos.x, _pos.y, _pos.z]);
-    store.setShipVelocity([_vel.x, _vel.y, _vel.z]);
-    store.setShipRotation([_quat.x, _quat.y, _quat.z, _quat.w]);
-    store.setShipThrottle(Math.min(desiredSpeed / AUTO_CRUISE, 1));
+    shipTelemetry.position.copy(_pos);
+    shipTelemetry.velocity.copy(_vel);
+    shipTelemetry.rotation.copy(_quat);
+    shipTelemetry.throttle = Math.min(desiredSpeed / AUTO_CRUISE, 1);
+    mirrorAcc.current += dt;
+    if (mirrorAcc.current >= MIRROR_INTERVAL) {
+      mirrorAcc.current = 0;
+      mirrorToStore(store);
+    }
   }
 
-  const [px, py, pz] = useStore((s) => s.shipPosition);
+  // Initial mount position only — every subsequent frame the useFrame above
+  // moves the group directly, so a reactive subscription here would just force
+  // a React re-render per store mirror for nothing.
+  const [px, py, pz] = useStore.getState().shipPosition;
 
   return (
     <group ref={groupRef} position={[px, py, pz]}>

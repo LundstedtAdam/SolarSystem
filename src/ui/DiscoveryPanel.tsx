@@ -69,6 +69,24 @@ interface WarLoreNearby {
   flavorText?: string;
 }
 
+/** Display-level equality for the polled sensor states, so the 120 ms tick
+ *  only re-renders when something the player can actually see changed (id,
+ *  discovered flag, whole-metre distance or whole-degree bearing). */
+function sameReading(
+  a: { id: string; dist: number; bearing: number } | null,
+  b: { id: string; dist: number; bearing: number } | null,
+  aFlag?: boolean,
+  bFlag?: boolean,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.id === b.id &&
+    aFlag === bFlag &&
+    Math.round(a.dist) === Math.round(b.dist) &&
+    Math.round(a.bearing) === Math.round(b.bearing)
+  );
+}
+
 export function DiscoveryPanel() {
   const sceneMode = useStore((s) => s.sceneMode);
   const planet = sceneMode.type === 'voxel' ? sceneMode.planet : '';
@@ -145,8 +163,17 @@ export function DiscoveryPanel() {
             const fz = -Math.cos(yaw);
             const bearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
             const resource = ORE_TO_RESOURCE[heat.block];
-            setOreHeat(
-              resource ? { bearing, label: RESOURCE_LABEL[resource], strength: heat.strength } : null,
+            const nextHeat = resource
+              ? { bearing, label: RESOURCE_LABEL[resource], strength: heat.strength }
+              : null;
+            setOreHeat((prev) =>
+              prev !== null &&
+              nextHeat !== null &&
+              prev.label === nextHeat.label &&
+              Math.round(prev.bearing) === Math.round(nextHeat.bearing) &&
+              prev.strength === nextHeat.strength
+                ? prev
+                : nextHeat,
             );
           } else {
             setOreHeat(null);
@@ -216,7 +243,7 @@ export function DiscoveryPanel() {
         const tz = dz / len;
         legacyBearing = (Math.atan2(fx * tz - fz * tx, fx * tx + fz * tz) * 180) / Math.PI;
         const isDiscovered = !!discovered[`${planet}:${candidate.id}`];
-        setNearby({
+        const next: Nearby = {
           id: candidate.id,
           name: candidate.name,
           dist: candidate.dist,
@@ -226,7 +253,8 @@ export function DiscoveryPanel() {
           mysteryId: candidate.mysteryId,
           discovered: isDiscovered,
           speculative: candidate.speculative,
-        });
+        };
+        setNearby((prev) => (sameReading(prev, next, prev?.discovered, isDiscovered) ? prev : next));
         legacyAvailable =
           !isDiscovered && candidate.dist <= SCAN_RANGE && Math.abs(legacyBearing) <= CROSSHAIR_CONE;
       } else {
@@ -281,7 +309,7 @@ export function DiscoveryPanel() {
           : Math.sin(performance.now() / 900 + seedFromName(warLoreCandidate.id)) * 18;
         warLoreBearing = trueBearing + jitter;
         if (!isDiscovered) {
-          setWarLoreNearby({
+          const nextWar: WarLoreNearby = {
             id: warLoreCandidate.id,
             name: warLoreCandidate.name,
             dist: warLoreCandidate.dist,
@@ -289,7 +317,8 @@ export function DiscoveryPanel() {
             act: warLoreCandidate.act,
             isFragment: warLoreCandidate.isFragment,
             flavorText: warLoreCandidate.flavorText,
-          });
+          };
+          setWarLoreNearby((prev) => (sameReading(prev, nextWar) ? prev : nextWar));
           warLoreAvailable = warLoreCandidate.dist <= SCAN_RANGE && Math.abs(trueBearing) <= CROSSHAIR_CONE;
           pingProximity(warLoreCandidate.dist, SENSOR_RANGE);
         } else {

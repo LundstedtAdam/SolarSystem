@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Quaternion, MathUtils, type PerspectiveCamera } from 'three';
 import { useStore } from '../store';
+import { shipTelemetry } from './shipTelemetry';
 import { PLANETS } from '../systems/bodies';
 import { positionAtTime } from '../systems/ephemeris';
 import {
@@ -163,13 +164,11 @@ export function ShipCamera() {
     const store = useStore.getState();
     if (store.sceneMode.type !== 'piloting') return;
 
-    const [px, py, pz] = store.shipPosition;
-    const [vx, vy, vz] = store.shipVelocity;
-    const [qx, qy, qz, qw] = store.shipRotation;
-    const throttle = store.shipThrottle; // raw lever position 0..1
-
-    _shipPos.set(px, py, pz);
-    _quat.set(qx, qy, qz, qw);
+    // Live per-frame telemetry (the reactive store only mirrors it at a low
+    // rate for the HUD) — the camera must track the ship exactly, same frame.
+    const throttle = shipTelemetry.throttle; // raw lever position 0..1
+    _shipPos.copy(shipTelemetry.position);
+    _quat.copy(shipTelemetry.rotation);
 
     decayCameraLook(delta);
     const look = getCameraLook();
@@ -234,7 +233,7 @@ export function ShipCamera() {
 
     camera.lookAt(_lookAt);
 
-    const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    const speed = shipTelemetry.velocity.length();
     const fovT = Math.min(speed / MAX_SPEED_FOR_FOV, 1);
     camera.fov = DEFAULT_FOV - (DEFAULT_FOV - MIN_FOV) * fovT;
     camera.updateProjectionMatrix();
