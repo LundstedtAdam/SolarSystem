@@ -28,7 +28,7 @@ export function AscentCamera() {
     }
 
     camera.lookAt(_shipPos);
-    camera.fov = 75;
+    camera.fov = store.fov;
     camera.near = 0.1;
     camera.far = 50000;
     camera.updateProjectionMatrix();

@@ -165,14 +165,18 @@ export function PlayerController({
       return;
     }
 
-    // Minecraft-style cubic look sensitivity (radians per pixel), shared by mouse
-    // and touch drag. Pitch never rolls — only yaw + clamped pitch are applied.
+    // Minecraft-style cubic look sensitivity (radians per pixel), shared by
+    // mouse, touch drag, and gamepad look (all three write into the same
+    // voxelInput.look). Pitch never rolls — only yaw + clamped pitch are
+    // applied. Respects "Invert pitch" the same way flight input does
+    // (shipInput.ts) — previously only flight honoured that setting.
     const ms = cfg.mouseSensitivity;
     const look = consumeLook();
+    const dy = cfg.invertPitch ? -look.dy : look.dy;
     player.yaw -= cubicLook(look.dx, ms);
     player.pitch = Math.max(
       -PITCH_LIMIT,
-      Math.min(PITCH_LIMIT, player.pitch - cubicLook(look.dy, ms)),
+      Math.min(PITCH_LIMIT, player.pitch - cubicLook(dy, ms)),
     );
 
     // Continuous hold-to-mine at the crosshair (touch Dig / left mouse / RT).

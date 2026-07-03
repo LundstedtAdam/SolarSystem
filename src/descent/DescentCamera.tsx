@@ -91,7 +91,9 @@ export function DescentCamera() {
     _lookAt.lerpVectors(_shipPos, _targetPos, eased * 0.5);
     camera.lookAt(_lookAt);
 
-    camera.fov = 75 - eased * 10;
+    // Base is the player's FOV setting (was a hardcoded 75, silently ignoring
+    // it); the cinematic narrowing during the phase is an offset from that base.
+    camera.fov = useStore.getState().fov - eased * 10;
     camera.updateProjectionMatrix();
   }
 
@@ -114,7 +116,9 @@ export function DescentCamera() {
     _lookAt.lerpVectors(_shipPos, _targetPos, 0.3 + eased * 0.4);
     camera.lookAt(_lookAt);
 
-    camera.fov = 65 + eased * 15;
+    // Starts exactly where the orbit phase left off (base - 10) for a seamless
+    // handoff, then ramps up for the reentry speed sensation.
+    camera.fov = useStore.getState().fov - 10 + eased * 15;
     camera.updateProjectionMatrix();
   }
 
@@ -131,7 +135,7 @@ export function DescentCamera() {
     camera.position.lerp(_camPos, 0.06);
     camera.lookAt(_shipPos);
 
-    camera.fov = 75 - eased * 5;
+    camera.fov = useStore.getState().fov - eased * 5;
     camera.near = 1 - eased * 0.9;
     camera.far = 50000 - eased * 48000;
     camera.updateProjectionMatrix();

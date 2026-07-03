@@ -3,9 +3,11 @@
 // and orbits around the ship; when the player stops dragging, the view eases
 // back to the default behind-the-ship framing for a cinematic resting pose.
 
+import { useStore, DEFAULT_MOUSE_SENSITIVITY } from '../store';
+
 const MAX_YAW = 2.6; // ~150° each way
 const MAX_PITCH = 1.1; // ~63° each way
-/** Radians of orbit per pixel of pointer travel. */
+/** Radians of orbit per pixel of pointer travel, at the default sensitivity. */
 const LOOK_SENS = 0.005;
 /** How fast the camera recenters behind the ship once released (1/s). */
 const RECENTER_RATE = 2;
@@ -18,10 +20,13 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
-/** Apply a pointer delta (px). Grab-the-world feel: drag right looks left. */
+/** Apply a pointer delta (px). Grab-the-world feel: drag right looks left.
+ *  Scaled by the "Mouse/touch sensitivity" setting, relative to its default
+ *  (so LOOK_SENS's tuned feel is exactly reproduced at the default value). */
 export function addCameraLook(dx: number, dy: number) {
-  yaw = clamp(yaw - dx * LOOK_SENS, -MAX_YAW, MAX_YAW);
-  pitch = clamp(pitch - dy * LOOK_SENS, -MAX_PITCH, MAX_PITCH);
+  const scale = useStore.getState().controls.mouseSensitivity / DEFAULT_MOUSE_SENSITIVITY;
+  yaw = clamp(yaw - dx * LOOK_SENS * scale, -MAX_YAW, MAX_YAW);
+  pitch = clamp(pitch - dy * LOOK_SENS * scale, -MAX_PITCH, MAX_PITCH);
   dragging = true;
 }
 

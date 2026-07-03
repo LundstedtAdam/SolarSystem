@@ -47,7 +47,9 @@ export function SurfaceCamera() {
   useEffect(() => {
     camera.near = 0.1;
     camera.far = 2000;
-    camera.fov = 70;
+    // Was hardcoded to 70, silently overriding the user's FOV setting every
+    // time this (pre-disembark) surface view is entered.
+    camera.fov = useStore.getState().fov;
     camera.updateProjectionMatrix();
   }, [camera]);
 

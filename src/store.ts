@@ -20,6 +20,12 @@ import {
 /** Backpack capacity with no cargo upgrades. */
 const BASE_BACKPACK_CAPACITY = 50;
 
+/** Default "Mouse/touch sensitivity" setting. The flight look code
+ *  (ship/cameraLook.ts, ship/virtualStick.ts) scales its tuned gain by
+ *  `mouseSensitivity / DEFAULT_MOUSE_SENSITIVITY` so the feel at this default
+ *  matches what was previously hardcoded. */
+export const DEFAULT_MOUSE_SENSITIVITY = 1.5;
+
 /** Capacity is always a pure function of the cargo tier, so hydration and
  *  upgrades can never drift apart (the tier is what's persisted, not the
  *  capacity). */
@@ -602,7 +608,7 @@ export const useStore = create<SimState>((set, get) => ({
     deadzone: 0.1,
     invertPitch: false,
     flightAssist: true,
-    mouseSensitivity: 1.5,
+    mouseSensitivity: DEFAULT_MOUSE_SENSITIVITY,
     fineControl: false,
   },
 

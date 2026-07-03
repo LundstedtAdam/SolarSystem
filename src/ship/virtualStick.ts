@@ -5,7 +5,10 @@
 // ShipController reads the normalized stick each frame and feeds it into the
 // flight model. Mirrors the module-level shape of cameraLook.ts.
 
-/** Pointer travel (px) to full deflection scales by this gain. */
+import { useStore, DEFAULT_MOUSE_SENSITIVITY } from '../store';
+
+/** Pointer travel (px) to full deflection scales by this gain, at the default
+ *  "Mouse/touch sensitivity" setting. */
 const MOUSE_GAIN = 0.012;
 /** Maximum stick deflection radius; output is normalized by this. */
 const MAX_DEFLECTION = 1;
@@ -29,10 +32,13 @@ function clampRadius() {
   }
 }
 
-/** Accumulate a raw pointer delta (px) into the stick, clamped to the radius. */
+/** Accumulate a raw pointer delta (px) into the stick, clamped to the radius.
+ *  Scaled by the "Mouse/touch sensitivity" setting, relative to its default
+ *  (so MOUSE_GAIN's tuned feel is exactly reproduced at the default value). */
 export function addStickInput(dx: number, dy: number) {
-  stickX += dx * MOUSE_GAIN;
-  stickY += dy * MOUSE_GAIN;
+  const scale = useStore.getState().controls.mouseSensitivity / DEFAULT_MOUSE_SENSITIVITY;
+  stickX += dx * MOUSE_GAIN * scale;
+  stickY += dy * MOUSE_GAIN * scale;
   clampRadius();
   fedThisFrame = true;
 }
