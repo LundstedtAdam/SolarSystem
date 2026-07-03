@@ -625,10 +625,20 @@ button {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(2px);
+  /* Lets a panel taller than the overlay's centered box still be reachable —
+     without this the panel could only ever be as tall as `align-items:center`
+     allows before clipping against the (globally overflow:hidden) body. */
+  padding: 24px 0;
 }
 .settings-panel {
   position: relative;
   width: min(92vw, 420px);
+  /* The panel has grown past what fits on most phone viewports (15+ rows).
+     Cap it and let only the body scroll — the heading/close button are
+     siblings of .settings-body below, so they never scroll out of reach. */
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   background: #16181d;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
@@ -638,6 +648,15 @@ button {
 .settings-panel h2 {
   margin: 0 0 16px;
   font-size: 22px;
+  flex: 0 0 auto;
+}
+.settings-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+  /* Flex children default to a min-height equal to their content, which
+     defeats overflow scrolling entirely — this is the actual fix. */
+  min-height: 0;
 }
 .setting-row {
   display: flex;
