@@ -30,6 +30,7 @@ import { Effects } from '../postfx/Effects';
 import { PLANETS, WORLD_SCALE } from '../systems/bodies';
 import { useStore, type SceneMode } from '../store';
 import { QUALITY } from '../systems/quality';
+import { useT } from '../i18n';
 
 /** The 3D scene rendered with a WebGPU renderer (auto WebGL2 fallback). */
 export function SolarSystem() {
@@ -37,6 +38,10 @@ export function SolarSystem() {
   // init() before it can render. So we start with the loop paused and flip it
   // to "always" once init resolves.
   const [frameloop, setFrameloop] = useState<'never' | 'always'>('never');
+  // Init rejection (no WebGPU *and* no WebGL2) previously left a silent black
+  // screen — surface it as an explanatory overlay instead.
+  const [initFailed, setInitFailed] = useState(false);
+  const { t } = useT();
   const dprMax = QUALITY[useStore((s) => s.quality)].dprMax;
   const sceneMode: SceneMode = useStore((s) => s.sceneMode);
   const onSurface = sceneMode.type === 'surface';
@@ -60,9 +65,23 @@ export function SolarSystem() {
     renderer
       .init()
       .then(() => setFrameloop('always'))
-      .catch((err) => console.error('WebGPU init failed:', err));
+      .catch((err) => {
+        console.error('WebGPU init failed:', err);
+        setInitFailed(true);
+      });
     return renderer;
   }, []);
+
+  if (initFailed) {
+    return (
+      <div className="renderer-failed" role="alert">
+        <div className="renderer-failed-inner">
+          <h1>{t('rendererFailedTitle')}</h1>
+          <p>{t('rendererFailedBody')}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Canvas

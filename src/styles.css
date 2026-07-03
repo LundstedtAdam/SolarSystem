@@ -68,6 +68,88 @@ button {
   z-index: 1000;
 }
 
+/* Renderer-init failure overlay (no WebGPU and no WebGL2) — replaces the
+   otherwise silent black screen with an actionable explanation. */
+.renderer-failed {
+  position: fixed;
+  inset: 0;
+  background: var(--background-gradient);
+  color: var(--text-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 24px;
+}
+.renderer-failed-inner {
+  max-width: 460px;
+  text-align: center;
+}
+.renderer-failed-inner h1 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.renderer-failed-inner p {
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+/* First-time control hints — one-shot overlay per mode (flight / on foot).
+   Sits above the HUD but below nothing critical; dismissal persists. */
+.control-hints {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 900;
+  padding: 16px;
+}
+.control-hints-card {
+  background: var(--ui-background);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 440px;
+  width: 100%;
+  backdrop-filter: blur(6px);
+}
+.control-hints-card h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.control-hints-card table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+.control-hints-card td {
+  padding: 4px 0;
+  vertical-align: top;
+}
+.control-hints-key {
+  white-space: nowrap;
+  padding-right: 14px !important;
+  color: #7fd0ff;
+  font-weight: 600;
+}
+.control-hints-dismiss {
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Inline keyboard hint chip on HUD buttons (desktop only). */
+.voxel-key-hint {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 /* Top bar + hamburger drawer — single navigation menu on all viewports. */
 .ui-mobile-bar {
     display: flex;

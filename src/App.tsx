@@ -20,6 +20,7 @@ import { DiscoveryPanel } from './ui/DiscoveryPanel';
 import { VoxelTransition } from './ui/VoxelTransition';
 import { VoxelTouchControls } from './ui/VoxelTouchControls';
 import { TouchControls } from './ui/TouchControls';
+import { ControlHints } from './ui/ControlHints';
 
 export default function App() {
   // Restore the persisted backpack once on load (voxel edits load per-body in
@@ -59,6 +60,7 @@ export default function App() {
       <VoxelTransition />
       <VoxelTouchControls />
       <TouchControls />
+      <ControlHints />
       <Loading />
       <Controls />
       <Audio />

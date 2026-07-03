@@ -109,6 +109,9 @@ const STRINGS = {
     mysteryLog: 'Mystery Log',
     close: 'Close',
     loading: 'Loading the solar system…',
+    rendererFailedTitle: 'Could not start the 3D renderer',
+    rendererFailedBody:
+      'Your browser or device does not support WebGPU/WebGL2. Try updating your browser, enabling hardware acceleration, or switching to a recent version of Chrome, Edge, Firefox or Safari.',
     diameter: 'Diameter',
     distanceFromSun: 'Distance from the Sun',
     orbitalPeriod: 'Orbital period',
@@ -201,6 +204,9 @@ const STRINGS = {
     mysteryLog: 'Mysteriedagbok',
     close: 'Stäng',
     loading: 'Laddar solsystemet…',
+    rendererFailedTitle: 'Kunde inte starta 3D-renderaren',
+    rendererFailedBody:
+      'Din webbläsare eller enhet saknar stöd för WebGPU/WebGL2. Prova att uppdatera webbläsaren, slå på hårdvaruacceleration, eller byt till en aktuell version av Chrome, Edge, Firefox eller Safari.',
     diameter: 'Diameter',
     distanceFromSun: 'Avstånd från solen',
     orbitalPeriod: 'Omloppstid',

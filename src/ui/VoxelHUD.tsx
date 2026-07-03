@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, backpackUsed, structureUsed } from '../store';
 import { useT } from '../i18n';
-import { voxelTelemetry, voxelStation, voxelSilo, consumeOpenSilo } from '../voxel/voxelControls';
+import {
+  voxelTelemetry,
+  voxelStation,
+  voxelSilo,
+  consumeOpenSilo,
+  isTouchDevice,
+} from '../voxel/voxelControls';
 import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
 import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
 import { CRAFTED_LABEL, type CraftedItem } from '../voxel/recipes';
@@ -10,6 +16,12 @@ import { CraftMenu } from './CraftMenu';
 import type { ResourceType } from '../voxel/voxelTypes';
 
 type Menu = 'none' | 'backpack' | 'build' | 'craft' | 'silo';
+
+/** Small inline keyboard hint, desktop only (touch has no keys to hint at). */
+function keyHint(key: string) {
+  if (isTouchDevice()) return null;
+  return <span className="voxel-key-hint">{key}</span>;
+}
 
 function costLabel(cost: Partial<Record<ResourceType, number>>): string {
   return (Object.keys(cost) as ResourceType[])
@@ -388,7 +400,19 @@ export function VoxelHUD() {
       const dot = fx * tx + fz * tz;
       const cross = fx * tz - fz * tx;
       const shipAngle = (Math.atan2(cross, dot) * 180) / Math.PI;
-      setHud({ heading, shipAngle, dist: Math.hypot(x, z) });
+      // Quantize to display precision and only setState on a real change —
+      // otherwise the compass would re-render the whole HUD at 60 fps even
+      // while standing still.
+      const next = {
+        heading: Math.round(heading) % 360,
+        shipAngle: Math.round(shipAngle),
+        dist: Math.round(Math.hypot(x, z)),
+      };
+      setHud((prev) =>
+        prev.heading === next.heading && prev.shipAngle === next.shipAngle && prev.dist === next.dist
+          ? prev
+          : next,
+      );
       raf.current = requestAnimationFrame(tick);
     };
     raf.current = requestAnimationFrame(tick);
@@ -430,12 +454,14 @@ export function VoxelHUD() {
           onClick={() => openMenu('backpack')}
         >
           {t('backpack')} {used}/{capacity}
+          {keyHint('Tab')}
         </button>
         <button
           className={`voxel-toggle-btn${menu === 'build' ? ' active' : ''}`}
           onClick={() => openMenu('build')}
         >
           {t('build')}: {t(activeBuildable)}
+          {keyHint('B')}
         </button>
       </div>
 
@@ -443,12 +469,14 @@ export function VoxelHUD() {
       {stationAvail && menu === 'none' && (
         <button className="voxel-craft-open" onClick={() => openMenu('craft')}>
           {t('craft')}
+          {keyHint('C')}
         </button>
       )}
       {/* Contextual Silo opener — shown when standing at a silo; view/withdraw. */}
       {siloAvail && menu === 'none' && (
         <button className="voxel-silo-open" onClick={() => openMenu('silo')}>
           {t('silo')}
+          {keyHint('V')}
         </button>
       )}
 
