@@ -10,7 +10,7 @@
 import localforage from 'localforage';
 import type { ResourceType } from './voxelTypes';
 import type { CraftedItem } from './recipes';
-import type { Structure } from '../store';
+import type { Structure, ResourceDrop } from '../store';
 
 const SCHEMA = 'v1';
 
@@ -153,6 +153,32 @@ export async function saveStructures(planet: string, all: Structure[]): Promise<
     const own = all.filter((s) => s.planet === planet);
     if (own.length === 0) await store.removeItem(structuresKey(planet));
     else await store.setItem(structuresKey(planet), own);
+  } catch {
+    /* ignore */
+  }
+}
+
+function dropsKey(planet: string): string {
+  return `drops.${SCHEMA}.${planet}`;
+}
+
+/** Load ground drops for a body (empty list if none / on error). Overflow that
+ *  couldn't fit in the backpack is real yield — losing it on reload read as a
+ *  bug, so drops persist alongside structures. */
+export async function loadDrops(planet: string): Promise<ResourceDrop[]> {
+  try {
+    return (await store.getItem<ResourceDrop[]>(dropsKey(planet))) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Persist the ground drops belonging to a body (filters by planet). */
+export async function saveDrops(planet: string, all: ResourceDrop[]): Promise<void> {
+  try {
+    const own = all.filter((d) => d.planet === planet);
+    if (own.length === 0) await store.removeItem(dropsKey(planet));
+    else await store.setItem(dropsKey(planet), own);
   } catch {
     /* ignore */
   }

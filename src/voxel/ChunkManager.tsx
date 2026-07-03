@@ -52,6 +52,8 @@ import {
   saveInventory,
   loadStructures,
   saveStructures,
+  loadDrops,
+  saveDrops,
   saveItems,
   saveSeen,
   type BodyEdits,
@@ -86,8 +88,17 @@ export function ChunkManager({
     h.renderOrder = 3;
     return h;
   }, []);
-  const aimRay = useMemo(() => new Raycaster(), []);
+  const aimRay = useMemo(() => {
+    const r = new Raycaster();
+    // Digging reach is tiny compared to the streamed world — capping the ray
+    // (and only testing nearby chunk meshes below) keeps the per-frame cost
+    // independent of how many chunks are loaded.
+    r.far = REACH + 1;
+    return r;
+  }, []);
   const aimNdc = useMemo(() => new Vector2(0, 0), []);
+  // Scratch list of candidate meshes for the aim raycast (reused every frame).
+  const aimTargets = useRef<Mesh[]>([]);
   const aimVoxel = useRef<[number, number, number] | null>(null);
   // The empty cell adjacent to the aimed face — where placement happens.
   const placeVoxel = useRef<[number, number, number] | null>(null);
@@ -167,6 +178,11 @@ export function ChunkManager({
       const others = useStore.getState().structures.filter((s) => s.planet !== planet);
       useStore.getState().setStructures([...others, ...list]);
     });
+    // Restore ground drops (backpack-overflow yield) for this body.
+    loadDrops(planet).then((list) => {
+      if (!alive || list.length === 0) return;
+      useStore.getState().setDropsForPlanet(planet, list);
+    });
     loadBodyEdits(planet).then((map) => {
       if (!alive) return;
       savedEdits.current = map;
@@ -199,6 +215,7 @@ export function ChunkManager({
       void saveBodyEdits(planet, out);
       void saveInventory(useStore.getState().inventory);
       void saveStructures(planet, useStore.getState().structures);
+      void saveDrops(planet, useStore.getState().drops);
       void saveItems(useStore.getState().items);
       void saveSeen(useStore.getState().seenResources);
     };
@@ -565,9 +582,21 @@ export function ChunkManager({
     updateDebris(burst, debris.current, dt, _burstM, _burstC);
 
     // Aim: raycast from the crosshair to find the targeted voxel (within reach)
-    // for the highlight + dig.
+    // for the highlight + dig. REACH (6) is well under a chunk edge (32), so
+    // only the 3x3x3 chunk neighbourhood around the camera can be hit.
     aimRay.setFromCamera(aimNdc, camera);
-    const hits = aimRay.intersectObjects([...meshes.current.values()], false);
+    const targets = aimTargets.current;
+    targets.length = 0;
+    const acy = floorDiv(camera.position.y, CHUNK_SIZE);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const m = meshes.current.get(chunkKey(ccx + dx, acy + dy, ccz + dz));
+          if (m) targets.push(m);
+        }
+      }
+    }
+    const hits = aimRay.intersectObjects(targets, false);
     const hit = hits.length > 0 ? hits[0] : null;
     if (hit && hit.face && hit.distance <= REACH) {
       const nx = Math.round(hit.face.normal.x);

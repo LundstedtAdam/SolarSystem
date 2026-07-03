@@ -37,6 +37,9 @@ const HALF: [number, number, number] = [0.3, 0.9, 0.3];
 export const EYE_OFFSET = 0.7;
 const STEP_HEIGHT = 1.05;
 const EPS = 1e-3;
+/** Max distance (voxels) a single collide() sweep may cover — keeps every
+ *  sub-step under one voxel so fast falls can't skip past a surface. */
+const MAX_SWEEP = 0.9;
 
 // --- Minecraft-style slipperiness movement -------------------------------
 // Velocity lives in voxels/second; physics steps on a fixed 20 ticks/s grid so
@@ -162,9 +165,19 @@ export class Player {
     this.moveHorizontal(0, this.vel.x * TICK, isSolid, grounded);
     this.moveHorizontal(2, this.vel.z * TICK, isSolid, grounded);
 
-    // Vertical move; detect ground.
+    // Vertical move; detect ground. Swept in sub-voxel steps: a long fall can
+    // cover more than a voxel per tick, and a single collide() would then snap
+    // to the deepest overlapped cell — embedding the player inside terrain
+    // (or tunnelling through a thin floor) instead of resting on the surface.
     const vy = this.vel.y * TICK;
-    if (vy !== 0 && collide(this.pos, 1, vy, isSolid)) {
+    let hitY = false;
+    let remaining = vy;
+    while (remaining !== 0 && !hitY) {
+      const d = Math.abs(remaining) > MAX_SWEEP ? Math.sign(remaining) * MAX_SWEEP : remaining;
+      remaining -= d;
+      hitY = collide(this.pos, 1, d, isSolid);
+    }
+    if (hitY) {
       this.onGround = this.vel.y < 0;
       this.vel.y = 0;
     } else {

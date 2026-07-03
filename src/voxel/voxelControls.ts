@@ -142,6 +142,16 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
     if (e.button === 0) voxelInput.mine = false;
   };
   const onContext = (e: Event) => e.preventDefault();
+  // Blur swallows keyup/mouseup events — clear all held state so the player
+  // doesn't keep walking/mining after an Alt-Tab. Losing pointer lock (Esc)
+  // likewise releases the held mine button.
+  const onBlur = () => {
+    for (const k in keys) keys[k] = false;
+    resetVoxelInput();
+  };
+  const onLockChange = () => {
+    if (document.pointerLockElement !== dom) voxelInput.mine = false;
+  };
 
   window.addEventListener('keydown', kd);
   window.addEventListener('keyup', ku);
@@ -149,6 +159,8 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
   dom.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('mouseup', onPointerUp);
   dom.addEventListener('contextmenu', onContext);
+  window.addEventListener('blur', onBlur);
+  document.addEventListener('pointerlockchange', onLockChange);
 
   return () => {
     window.removeEventListener('keydown', kd);
@@ -157,6 +169,8 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
     dom.removeEventListener('pointerdown', onPointerDown);
     window.removeEventListener('mouseup', onPointerUp);
     dom.removeEventListener('contextmenu', onContext);
+    window.removeEventListener('blur', onBlur);
+    document.removeEventListener('pointerlockchange', onLockChange);
     if (document.pointerLockElement === dom) document.exitPointerLock();
     resetVoxelInput();
   };

@@ -6,7 +6,7 @@ import type { ResourceType } from './voxel/voxelTypes';
 import type { BuildableId } from './voxel/buildables';
 import { recipeById, type CraftedItem } from './voxel/recipes';
 import { planetPower } from './voxel/power';
-import { saveMode, saveUpgrades } from './voxel/persistence';
+import { saveMode, saveUpgrades, saveInventory, saveItems } from './voxel/persistence';
 import {
   UPGRADE_COSTS,
   UPGRADE_MAX_TIER,
@@ -16,6 +16,16 @@ import {
   type UpgradeKind,
   type ShipUpgrades,
 } from './ship/upgrades';
+
+/** Backpack capacity with no cargo upgrades. */
+const BASE_BACKPACK_CAPACITY = 50;
+
+/** Capacity is always a pure function of the cargo tier, so hydration and
+ *  upgrades can never drift apart (the tier is what's persisted, not the
+ *  capacity). */
+function backpackCapacityFor(upgrades: ShipUpgrades): number {
+  return BASE_BACKPACK_CAPACITY + upgrades.cargo * CARGO_CAPACITY_PER_TIER;
+}
 
 /** Raw ore -> smelted ingot conversions the refinery performs. */
 const SMELT: Array<{ ore: ResourceType; ingot: CraftedItem }> = [
@@ -493,6 +503,8 @@ interface SimState {
   /** Move a ground drop into a silo (up to capacity); reduces/removes the drop. */
   absorbDropIntoSilo: (siloId: number, dropId: number) => void;
   setStructures: (structures: Structure[]) => void;
+  /** Replace one body's drops with a restored list (persistence hydration). */
+  setDropsForPlanet: (planet: string, drops: ResourceDrop[]) => void;
 
   /** Phase 11.2 crafting. */
   /** Combined resource availability = backpack + silos within pull radius of the
@@ -566,7 +578,7 @@ export const useStore = create<SimState>((set, get) => ({
   warLoreToast: null,
 
   inventory: {},
-  backpackCapacity: 50,
+  backpackCapacity: BASE_BACKPACK_CAPACITY,
   drops: [],
   structures: [],
   activeBuildable: 'block',
@@ -979,6 +991,10 @@ export const useStore = create<SimState>((set, get) => ({
     for (const s of structures) if (s.id >= nextDropId) nextDropId = s.id + 1;
     set({ structures });
   },
+  setDropsForPlanet: (planet, restored) => {
+    for (const d of restored) if (d.id >= nextDropId) nextDropId = d.id + 1;
+    set((s) => ({ drops: [...s.drops.filter((d) => d.planet !== planet), ...restored] }));
+  },
 
   craftAvailability: (stationId) => {
     const s = get();
@@ -1042,6 +1058,10 @@ export const useStore = create<SimState>((set, get) => ({
       [recipe.output]: (s.items[recipe.output] ?? 0) + recipe.qty,
     };
     set({ inventory, structures, items });
+    // Persist the transaction right away, mirroring upgradeShip — a craft
+    // followed by a crash/refresh must not refund the inputs.
+    void saveInventory(inventory);
+    void saveItems(items);
     return true;
   },
   setItems: (items) => set({ items }),
@@ -1080,13 +1100,18 @@ export const useStore = create<SimState>((set, get) => ({
     if (!s.spendResources(cost.resources)) return false;
     if (cost.items) s.spendItems(cost.items);
     const shipUpgrades = { ...s.shipUpgrades, [kind]: tier + 1 };
-    const patch: Partial<SimState> =
-      kind === 'cargo' ? { backpackCapacity: s.backpackCapacity + CARGO_CAPACITY_PER_TIER } : {};
-    set({ shipUpgrades, ...patch });
+    set({ shipUpgrades, backpackCapacity: backpackCapacityFor(shipUpgrades) });
     void saveUpgrades(shipUpgrades);
+    // Persist the spend immediately — the ChunkManager's save only runs in the
+    // voxel scene, and an upgrade bought while piloting must not "refund" the
+    // resources on the next reload.
+    const after = get();
+    void saveInventory(after.inventory);
+    void saveItems(after.items);
     return true;
   },
-  setShipUpgrades: (shipUpgrades) => set({ shipUpgrades }),
+  setShipUpgrades: (shipUpgrades) =>
+    set({ shipUpgrades, backpackCapacity: backpackCapacityFor(shipUpgrades) }),
   setDescentBlocked: (descentBlocked) => set({ descentBlocked }),
 
   spendItems: (cost) => {

@@ -12,6 +12,13 @@ function onKeyUp(e: KeyboardEvent) {
   keys.delete(e.key.toLowerCase());
 }
 
+// Losing window focus swallows the matching keyup events — without this a
+// key held through Alt-Tab would stay "down" forever (ship stuck at full
+// thrust until the key is pressed and released again).
+function onBlur() {
+  keys.clear();
+}
+
 let installed = false;
 
 export function installKeyboardListeners() {
@@ -19,12 +26,14 @@ export function installKeyboardListeners() {
   installed = true;
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onBlur);
 }
 
 export function removeKeyboardListeners() {
   installed = false;
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('blur', onBlur);
   keys.clear();
 }
 
