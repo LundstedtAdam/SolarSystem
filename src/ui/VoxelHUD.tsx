@@ -9,10 +9,11 @@ import {
   isTouchDevice,
 } from '../voxel/voxelControls';
 import { BUILDABLES, BUILDABLE_IDS } from '../voxel/buildables';
-import { RESOURCE_LABEL } from '../voxel/resourceProfiles';
-import { CRAFTED_LABEL, type CraftedItem } from '../voxel/recipes';
+import { RESOURCE_LABEL, RESOURCE_COLOR } from '../voxel/resourceProfiles';
+import { CRAFTED_LABEL, CRAFTED_COLOR, type CraftedItem } from '../voxel/recipes';
 import { planetPower } from '../voxel/power';
 import { CraftMenu } from './CraftMenu';
+import { ItemSlot } from './ItemSlot';
 import type { ResourceType } from '../voxel/voxelTypes';
 
 type Menu = 'none' | 'backpack' | 'build' | 'craft' | 'silo';
@@ -41,19 +42,44 @@ function dropPos(): [number, number, number] {
   return [x - Math.sin(yaw) * 1.2, y, z - Math.cos(yaw) * 1.2];
 }
 
-/** The backpack as an open/close sheet: capacity, stacks, and a Drop per stack. */
+/** Which single slot is selected, if any — drives the detail/action row below
+ *  the grid. Resources can be dropped; crafted items are display-only today
+ *  (there's no discard action for them), so selecting one just shows its name. */
+type SelectedSlot = { kind: 'resource'; key: ResourceType } | { kind: 'item'; key: CraftedItem } | null;
+
+/** The backpack as an open/close sheet: capacity, and every stack as a
+ *  Minecraft-style grid of icon slots (colour swatch + count) rather than a
+ *  text list. Tapping a slot selects it and reveals a detail row with its
+ *  full name and (for resources) a Drop action — kept to select-then-act
+ *  instead of drag-and-drop since every stack is already canonically keyed by
+ *  resource/item type (there's no arbitrary slot ordering to rearrange). */
 function BackpackSheet({ onClose }: { onClose: () => void }) {
   const { t } = useT();
   const inventory = useStore((s) => s.inventory);
   const capacity = useStore((s) => s.backpackCapacity);
   const items = useStore((s) => s.items);
   const discardResource = useStore((s) => s.discardResource);
+  const [selected, setSelected] = useState<SelectedSlot>(null);
   const used = backpackUsed(inventory);
   const itemEntries = (Object.keys(items) as CraftedItem[]).filter((k) => (items[k] ?? 0) > 0);
   const full = used >= capacity;
   const entries = (Object.keys(inventory) as ResourceType[])
     .filter((k) => (inventory[k] ?? 0) > 0)
     .sort();
+
+  const selectResource = (k: ResourceType) =>
+    setSelected((prev) => (prev?.kind === 'resource' && prev.key === k ? null : { kind: 'resource', key: k }));
+  const selectItem = (k: CraftedItem) =>
+    setSelected((prev) => (prev?.kind === 'item' && prev.key === k ? null : { kind: 'item', key: k }));
+
+  const selectedLabel =
+    selected?.kind === 'resource'
+      ? RESOURCE_LABEL[selected.key]
+      : selected?.kind === 'item'
+        ? CRAFTED_LABEL[selected.key]
+        : null;
+  const selectedCount =
+    selected?.kind === 'resource' ? inventory[selected.key] ?? 0 : selected?.kind === 'item' ? items[selected.key] ?? 0 : 0;
 
   return (
     <div className="voxel-sheet-backdrop" onClick={onClose}>
@@ -75,36 +101,49 @@ function BackpackSheet({ onClose }: { onClose: () => void }) {
             }}
           />
         </div>
-        {entries.length === 0 ? (
+        {entries.length === 0 && itemEntries.length === 0 ? (
           <div className="voxel-backpack-empty">Empty — mine ore veins.</div>
         ) : (
-          <div className="voxel-sheet-list">
+          <div className="voxel-item-grid">
             {entries.map((k) => (
-              <div key={k} className="voxel-pack-row">
-                <span className="voxel-pack-name">{RESOURCE_LABEL[k]}</span>
-                <span className="voxel-pack-amount">{inventory[k]}</span>
-                <button
-                  className="voxel-drop-btn"
-                  onClick={() => discardResource(k, inventory[k] ?? 0, dropPos())}
-                >
-                  {t('drop')}
-                </button>
-              </div>
+              <ItemSlot
+                key={k}
+                color={RESOURCE_COLOR[k]}
+                count={inventory[k] ?? 0}
+                label={RESOURCE_LABEL[k]}
+                active={selected?.kind === 'resource' && selected.key === k}
+                onSelect={() => selectResource(k)}
+              />
+            ))}
+            {itemEntries.map((k) => (
+              <ItemSlot
+                key={k}
+                color={CRAFTED_COLOR[k]}
+                count={items[k] ?? 0}
+                label={CRAFTED_LABEL[k]}
+                active={selected?.kind === 'item' && selected.key === k}
+                onSelect={() => selectItem(k)}
+              />
             ))}
           </div>
         )}
-        {itemEntries.length > 0 && (
-          <>
-            <div className="voxel-sheet-subhead">Items</div>
-            <div className="voxel-sheet-list">
-              {itemEntries.map((k) => (
-                <div key={k} className="voxel-pack-row">
-                  <span className="voxel-pack-name">{CRAFTED_LABEL[k]}</span>
-                  <span className="voxel-pack-amount">{items[k]}</span>
-                </div>
-              ))}
-            </div>
-          </>
+        {selected && selectedLabel && (
+          <div className="voxel-item-detail">
+            <span>
+              {selectedLabel} × {selectedCount}
+            </span>
+            {selected.kind === 'resource' && (
+              <button
+                className="voxel-drop-btn"
+                onClick={() => {
+                  discardResource(selected.key, inventory[selected.key] ?? 0, dropPos());
+                  setSelected(null);
+                }}
+              >
+                {t('drop')}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

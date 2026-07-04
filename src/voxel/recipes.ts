@@ -34,6 +34,18 @@ export const CRAFTED_LABEL: Record<CraftedItem, string> = {
   copper_ingot: 'Copper Ingot',
 };
 
+/** Display colour per crafted item — mirrors RESOURCE_COLOR (resourceProfiles.ts)
+ *  so the backpack grid can render a consistent icon swatch for every stack,
+ *  raw or crafted, without needing new art assets. */
+export const CRAFTED_COLOR: Record<CraftedItem, [number, number, number]> = {
+  alloy: [0.72, 0.74, 0.78],
+  circuit: [0.25, 0.65, 0.45],
+  drill: [0.8, 0.55, 0.15],
+  crate: [0.6, 0.44, 0.28],
+  iron_ingot: [0.65, 0.45, 0.35],
+  copper_ingot: [0.85, 0.55, 0.25],
+};
+
 export const RECIPES: Recipe[] = [
   { id: 'alloy', name: 'Refined Alloy', requires: 'iron', inputs: { iron: 4, silicon: 2 }, output: 'alloy', qty: 1 },
   { id: 'crate', name: 'Cargo Crate', requires: 'silicon', inputs: { silicon: 8, iron: 2 }, output: 'crate', qty: 1 },
