@@ -7,18 +7,41 @@ import {
   ConeGeometry,
   SphereGeometry,
   BoxGeometry,
+  CylinderGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
   MeshStandardMaterial,
   Object3D,
   Color,
-  type BufferGeometry,
+  DoubleSide,
 } from 'three';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
-import { getScatter, type ScatterKind, type ScatterProfile } from './scatterProfiles';
+import { getScatter, getGroundClutter, type ScatterKind, type ScatterProfile } from './scatterProfiles';
 import { getContent } from './contentProfiles';
 import { getVoxelTerrain } from './voxelBiomes';
 import { landHeightAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
+
+/** Two crossed vertical quads (an X-shaped billboard), base at local y=0 so it
+ *  places like every other kind. Built by hand (no external merge utility)
+ *  the same way greedyMesh.ts hand-builds its vertex buffers — cheap, and the
+ *  only way to get a two-quad "cross" as a single InstancedMesh geometry. */
+function crossedQuadGeometry(width: number, height: number): BufferGeometry {
+  const hw = width / 2;
+  const geo = new BufferGeometry();
+  const positions = new Float32Array([
+    -hw, 0, 0, hw, 0, 0, hw, height, 0, -hw, 0, 0, hw, height, 0, -hw, height, 0,
+    0, 0, -hw, 0, 0, hw, 0, height, hw, 0, 0, -hw, 0, height, hw, 0, height, -hw,
+  ]);
+  const normals = new Float32Array([
+    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+    1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+  ]);
+  geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new Float32BufferAttribute(normals, 3));
+  return geo;
+}
 
 function makeGeometry(kind: ScatterKind): BufferGeometry {
   switch (kind) {
@@ -30,6 +53,15 @@ function makeGeometry(kind: ScatterKind): BufferGeometry {
       return new SphereGeometry(0.5, 6, 5);
     case 'slab':
       return new BoxGeometry(1, 1, 1); // flattened via scaleXYZ into layered slabs
+    case 'blade':
+      return crossedQuadGeometry(0.4, 0.5); // grass tufts / weeds billboard
+    case 'branch': {
+      // A thin cylinder pre-rotated to lie on its side — reused as a fallen
+      // branch/root on Earth, or a loose debris sliver on other archetypes.
+      const g = new CylinderGeometry(0.06, 0.08, 1, 5);
+      g.rotateZ(Math.PI / 2);
+      return g;
+    }
     default:
       return new IcosahedronGeometry(0.5, 0);
   }
@@ -59,6 +91,7 @@ function PropLayer({
 
   const mesh = useMemo(() => {
     const geo = makeGeometry(profile.kind);
+    const isBlade = profile.kind === 'blade';
     const mat = new MeshStandardMaterial({
       color: new Color(...profile.color),
       emissive: new Color(...profile.emissive),
@@ -66,10 +99,15 @@ function PropLayer({
       roughness: 0.85,
       metalness: 0,
       flatShading: true,
+      // Billboard blades are a single-sided plane pair — double-side them so
+      // grass reads from both approach directions instead of vanishing.
+      ...(isBlade ? { side: DoubleSide } : {}),
     });
     const m = new InstancedMesh(geo, mat, Math.max(1, max));
     m.frustumCulled = false; // props are world-positioned around the player
-    m.castShadow = true;
+    // Thin grass cards casting shadows is a lot of shadow-map cost for very
+    // little visual payoff at this density — skip it for blades only.
+    m.castShadow = !isBlade;
     m.receiveShadow = true;
     m.count = 0;
     return m;
@@ -106,6 +144,14 @@ function PropLayer({
           const land = landHeightAt(wx, wz, terrain, seed);
           if (terrain.waterLevel >= 0 && land < terrain.waterLevel) continue; // underwater
           if (terrain.lavaLevel >= 0 && land < terrain.lavaLevel) continue; // in lava
+          // Shoreline/wetland dressing: only within a couple voxels of the
+          // water surface, on either side (reeds need shore, not open water).
+          if (
+            profile.waterAdjacent &&
+            !(terrain.waterLevel >= 0 && land >= terrain.waterLevel - 2 && land <= terrain.waterLevel + 1)
+          ) {
+            continue;
+          }
           const s = minScale + cellHash(gx, gz, seed + 3) * (maxScale - minScale);
           dummy.position.set(wx, land + s * yFactor, wz);
           dummy.rotation.set(
@@ -147,12 +193,15 @@ export function VoxelScatter({ planet }: { planet: string }) {
   const terrain = useMemo(() => getVoxelTerrain(planet), [planet]);
   const seed = useMemo(() => seedFromName(planet), [planet]);
 
-  // Authored per-body props (Phase 10) take priority; otherwise fall back to the
-  // archetype scatter so every body keeps its existing single prop.
-  const profiles = useMemo(() => {
-    const authored = getContent(planet).props;
-    return authored.length > 0 ? authored : [getScatter(planet)];
-  }, [planet]);
+  // Every body layers: fine ground clutter (always), the per-archetype
+  // feature scatter (always), then any authored per-body accent props on
+  // top (World Richness Phase 2 — additive so authored bodies like Mars keep
+  // their curated look and gain density rather than losing the archetype
+  // baseline they used to replace).
+  const profiles = useMemo(
+    () => [...getGroundClutter(planet), getScatter(planet), ...getContent(planet).props],
+    [planet],
+  );
 
   // Split the instance budget across the prop layers.
   const perLayerMax = Math.max(1, Math.floor(quality.voxelScatter / profiles.length));

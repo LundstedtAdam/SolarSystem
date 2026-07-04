@@ -411,7 +411,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Io: {
-    props: [], // archetype scatter (sulphur crystals) until 10.5
+    props: [
+      {
+        // Raw sulfur-dioxide frost crust, freshly deposited near a vent.
+        kind: 'crystal', color: [0.9, 0.85, 0.6], emissive: [0.6, 0.3, 0.05], emissiveIntensity: 0.25,
+        density: 0.09, cell: 9, minScale: 0.4, maxScale: 1.0, scaleXYZ: [0.7, 0.7, 0.7], yFactor: 0.35,
+      },
+    ],
     landmarks: [
       {
         name: 'Loki Patera',
@@ -460,7 +466,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Pluto: {
-    props: [],
+    props: [
+      {
+        // Nitrogen-ice polygon terrain, Sputnik-Planitia-style convection cells.
+        kind: 'slab', color: [0.85, 0.78, 0.74], emissive: [0.1, 0.08, 0.12], emissiveIntensity: 0.1,
+        density: 0.1, cell: 13, minScale: 0.9, maxScale: 1.8, scaleXYZ: [1.6, 0.3, 1.4], yFactor: 0.3,
+      },
+    ],
     landmarks: [
       {
         name: 'Sputnik Planitia',
@@ -550,7 +562,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Triton: {
-    props: [],
+    props: [
+      {
+        // Nitrogen-geyser deposit spires with dark wind-streaked dust trails.
+        kind: 'spire', color: [0.55, 0.48, 0.46], emissive: [0, 0, 0], emissiveIntensity: 0,
+        density: 0.07, cell: 11, minScale: 0.6, maxScale: 1.5, scaleXYZ: [0.5, 1.2, 0.5], yFactor: 0.5,
+      },
+    ],
     landmarks: [
       { name: 'Cantaloupe Terrain', kind: 'basin', position: [0, 480], radius: 440, amplitude: 12, description: 'Dimpled, melon-rind terrain unique to Triton.' },
     ],
@@ -603,7 +621,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Titan: {
-    props: [],
+    props: [
+      {
+        // Evaporite terraces along dry methane-lake shorelines.
+        kind: 'slab', color: [0.42, 0.28, 0.1], emissive: [0.15, 0.08, 0.02], emissiveIntensity: 0.1,
+        density: 0.09, cell: 12, minScale: 0.7, maxScale: 1.6, scaleXYZ: [1.5, 0.35, 1.2], yFactor: 0.35,
+      },
+    ],
     landmarks: [
       { name: 'Kraken Mare', kind: 'lake', position: [0, 520], radius: 480, amplitude: 16, description: 'Titan’s largest methane sea.' },
     ],
@@ -806,7 +830,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Venus: {
-    props: [],
+    props: [
+      {
+        // Rippled, glassy pahoehoe lava-flow slabs, faintly still warm.
+        kind: 'slab', color: [0.35, 0.18, 0.08], emissive: [0.3, 0.05, 0], emissiveIntensity: 0.15,
+        density: 0.1, cell: 10, minScale: 0.7, maxScale: 1.6, scaleXYZ: [1.6, 0.35, 1.3], yFactor: 0.4,
+      },
+    ],
     landmarks: [
       { name: 'Maxwell Montes', kind: 'ridge', position: [-300, 250], radius: 80, amplitude: 70, length: 900, angleDeg: 35, description: 'Venus’s highest mountains.' },
     ],
@@ -848,7 +878,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Jorden: {
-    props: [],
+    props: [
+      {
+        // Weathered limestone outcrops breaking through the topsoil.
+        kind: 'slab', color: [0.55, 0.52, 0.42], emissive: [0, 0, 0], emissiveIntensity: 0,
+        density: 0.08, cell: 11, minScale: 0.6, maxScale: 1.5, scaleXYZ: [1.4, 0.5, 1.1], yFactor: 0.35,
+      },
+    ],
     landmarks: [
       { name: 'Elevator Anchor', kind: 'ridge', position: [0, 400], radius: 50, amplitude: 60, length: 200, angleDeg: 0, description: 'The ruined ground anchor of a space elevator.' },
     ],
@@ -910,7 +946,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Phobos: {
-    props: [],
+    props: [
+      {
+        // Glassy ejecta beads from a nearby impact, faintly sheened.
+        kind: 'crystal', color: [0.3, 0.3, 0.34], emissive: [0.15, 0.15, 0.2], emissiveIntensity: 0.1,
+        density: 0.05, cell: 9, minScale: 0.3, maxScale: 0.7, scaleXYZ: [0.8, 0.8, 0.8], yFactor: 0.4,
+      },
+    ],
     landmarks: [
       { name: 'Stickney', kind: 'crater', position: [0, 300], radius: 220, amplitude: 24, description: 'The great crater that nearly shattered Phobos.' },
     ],
@@ -974,7 +1016,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Deimos: {
-    props: [],
+    props: [
+      {
+        // Flat regolith plates, barely proud of the ankle-deep dust.
+        kind: 'slab', color: [0.24, 0.22, 0.2], emissive: [0, 0, 0], emissiveIntensity: 0,
+        density: 0.12, cell: 8, minScale: 0.6, maxScale: 1.3, scaleXYZ: [1.3, 0.25, 1.1], yFactor: 0.25,
+      },
+    ],
     landmarks: [],
     pois: [
       {
@@ -1094,7 +1142,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Ganymede: {
-    props: [],
+    props: [
+      {
+        // Fractured, dirty-ice ridges — darker and duller than Europa's shell.
+        kind: 'spire', color: [0.5, 0.52, 0.58], emissive: [0.1, 0.15, 0.25], emissiveIntensity: 0.2,
+        density: 0.12, cell: 9, minScale: 0.6, maxScale: 1.6, scaleXYZ: [0.6, 1.1, 0.6], yFactor: 0.5,
+      },
+    ],
     landmarks: [
       { name: 'Galileo Regio', kind: 'basin', position: [0, 500], radius: 460, amplitude: 12, description: 'An ancient dark-terrain province.' },
     ],
@@ -1135,7 +1189,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Callisto: {
-    props: [],
+    props: [
+      {
+        // Dark ejecta boulders scattered across the oldest surface in the system.
+        kind: 'rock', color: [0.18, 0.15, 0.14], emissive: [0, 0, 0], emissiveIntensity: 0,
+        density: 0.2, cell: 7, minScale: 0.5, maxScale: 1.5, scaleXYZ: [1, 0.75, 1], yFactor: 0.3,
+      },
+    ],
     landmarks: [
       { name: 'Valhalla', kind: 'crater', position: [0, 520], radius: 500, amplitude: 18, description: 'A vast multi-ring impact structure.' },
     ],
@@ -1176,7 +1236,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Miranda: {
-    props: [],
+    props: [
+      {
+        // Giant fractured coronae fault-blocks, jumbled by resurfacing.
+        kind: 'slab', color: [0.42, 0.42, 0.46], emissive: [0, 0, 0], emissiveIntensity: 0,
+        density: 0.1, cell: 12, minScale: 0.8, maxScale: 2.0, scaleXYZ: [1.8, 0.6, 1.4], yFactor: 0.4,
+      },
+    ],
     landmarks: [
       { name: 'Verona Rupes', kind: 'ridge', position: [-260, 0], radius: 70, amplitude: 80, length: 700, angleDeg: 90, description: 'The tallest known cliff in the Solar System.' },
     ],
@@ -1227,7 +1293,13 @@ const CONTENT: Record<string, ContentProfile> = {
   },
 
   Charon: {
-    props: [],
+    props: [
+      {
+        // Tholin-reddened ice-rock fragments near the dark polar cap.
+        kind: 'crystal', color: [0.4, 0.32, 0.34], emissive: [0, 0, 0], emissiveIntensity: 0,
+        density: 0.08, cell: 10, minScale: 0.5, maxScale: 1.2, scaleXYZ: [0.9, 0.9, 0.9], yFactor: 0.35,
+      },
+    ],
     landmarks: [
       { name: 'Serenity Chasma', kind: 'canyon', position: [0, 200], radius: 70, amplitude: 60, length: 1100, angleDeg: 8, description: 'A rift canyon that splits Charon’s face.' },
     ],

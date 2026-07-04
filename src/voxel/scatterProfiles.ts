@@ -5,8 +5,9 @@
 
 import { getBiome } from '../terrain/biomes';
 import { archetypeFor } from './voxelBiomes';
+import { getContent } from './contentProfiles';
 
-export type ScatterKind = 'rock' | 'crystal' | 'spire' | 'fungus' | 'slab';
+export type ScatterKind = 'rock' | 'crystal' | 'spire' | 'fungus' | 'slab' | 'blade' | 'branch';
 
 export interface ScatterProfile {
   kind: ScatterKind;
@@ -24,6 +25,23 @@ export interface ScatterProfile {
   /** Fraction of (scale·yExtent) used to raise the centre so the base sits on
    *  the ground (and embeds slightly). */
   yFactor: number;
+  /** Only place within a couple voxels of the body's water/lake surface —
+   *  shoreline/wetland dressing (reeds, wet-ground clumps). Unused (undefined)
+   *  everywhere else. */
+  waterAdjacent?: boolean;
+}
+
+/** True if this body's own science note leaves the life question open
+ *  ('theoretical' or 'inconclusive') rather than settled ('not_detected') —
+ *  the gate for sparse, deliberately-ambiguous flora-like ground clutter on
+ *  alien worlds. Reads the same source of truth narrative content already
+ *  uses (contentProfiles.ts), so this can never drift from the game's actual
+ *  science-integrity data. Earth is handled separately (unconditional real
+ *  biology) and never needs this check. */
+function lifeAmbiguous(planet: string): boolean {
+  return getContent(planet).scienceNotes.some(
+    (n) => n.lifeStatus === 'theoretical' || n.lifeStatus === 'inconclusive',
+  );
 }
 
 export function getScatter(planet: string): ScatterProfile {
@@ -61,4 +79,95 @@ export function getScatter(planet: string): ScatterProfile {
         density: 0.28, cell: 7, minScale: 0.5, maxScale: 1.4, scaleXYZ: [1, 0.8, 1], yFactor: 0.3,
       };
   }
+}
+
+/** Fine loose stones/grit every body gets — much smaller and denser than the
+ *  feature scatter layer above, so the ground itself reads as textured
+ *  underfoot instead of smooth voxel faces between the occasional feature
+ *  prop. Reuses the existing 'rock' geometry at a tiny scale. */
+function abioticGrit(planet: string): ScatterProfile {
+  const b = getBiome(planet);
+  return {
+    kind: 'rock',
+    color: [b.colorLow[0] * 0.8, b.colorLow[1] * 0.8, b.colorLow[2] * 0.8],
+    emissive: [0, 0, 0],
+    emissiveIntensity: 0,
+    density: 0.5,
+    cell: 3,
+    minScale: 0.12,
+    maxScale: 0.3,
+    scaleXYZ: [1, 0.6, 1],
+    yFactor: 0.3,
+  };
+}
+
+/** Earth's grass tufts — dense, cheap crossed-quad billboards. */
+function earthGrass(): ScatterProfile {
+  return {
+    kind: 'blade',
+    color: [0.2, 0.55, 0.18],
+    emissive: [0, 0, 0],
+    emissiveIntensity: 0,
+    density: 0.55,
+    cell: 2,
+    minScale: 0.6,
+    maxScale: 1.1,
+    scaleXYZ: [1, 1, 1],
+    yFactor: 0,
+  };
+}
+
+/** Earth's small wildflowers/mushroom caps — sparse, colourful bloom accents
+ *  among the grass. Reuses the 'fungus' dome geometry at a much smaller
+ *  scale than Titan's alien blooms. */
+function earthFlora(): ScatterProfile {
+  return {
+    kind: 'fungus',
+    color: [0.85, 0.6, 0.25],
+    emissive: [0, 0, 0],
+    emissiveIntensity: 0,
+    density: 0.05,
+    cell: 5,
+    minScale: 0.25,
+    maxScale: 0.45,
+    scaleXYZ: [1, 0.8, 1],
+    yFactor: 0.3,
+  };
+}
+
+/** Deliberately ambiguous flora-like growths for bodies whose science note
+ *  leaves the life question open (see lifeAmbiguous() above) — sparse and
+ *  small so they read as "could be biological, could be mineral," never as a
+ *  confirmed ecosystem. Tinted from the body's own high-elevation colour so
+ *  each world's growths look like they belong there, not a recoloured
+ *  copy-paste of Earth's. */
+function ambiguousGrowth(planet: string): ScatterProfile {
+  const b = getBiome(planet);
+  return {
+    kind: 'fungus',
+    color: [b.colorHigh[0] * 0.7 + 0.1, b.colorHigh[1] * 0.6 + 0.05, b.colorHigh[2] * 0.7 + 0.15],
+    emissive: [b.colorHigh[0] * 0.2, b.colorHigh[1] * 0.15, b.colorHigh[2] * 0.25],
+    emissiveIntensity: 0.15,
+    density: 0.04,
+    cell: 9,
+    minScale: 0.3,
+    maxScale: 0.6,
+    scaleXYZ: [1, 0.7, 1],
+    yFactor: 0.3,
+  };
+}
+
+/** Ground-level clutter layers for a body: always includes fine abiotic
+ *  grit; additionally includes flora-like accents on Earth (real biology,
+ *  unconditional) or bodies whose life question is still open (deliberately
+ *  ambiguous — see lifeAmbiguous()). Every other body stays abiotic-only, by
+ *  design, per the game's existing no-confirmed-life narrative rule. */
+export function getGroundClutter(planet: string): ScatterProfile[] {
+  const layers: ScatterProfile[] = [abioticGrit(planet)];
+  if (archetypeFor(planet) === 'earth') {
+    layers.push(earthGrass(), earthFlora());
+  } else if (lifeAmbiguous(planet)) {
+    layers.push(ambiguousGrowth(planet));
+  }
+  return layers;
 }
