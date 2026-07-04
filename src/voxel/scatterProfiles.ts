@@ -5,7 +5,7 @@
 
 import { getBiome } from '../terrain/biomes';
 import { archetypeFor } from './voxelBiomes';
-import { getContent } from './contentProfiles';
+import { lifeAmbiguous } from './contentProfiles';
 
 export type ScatterKind = 'rock' | 'crystal' | 'spire' | 'fungus' | 'slab' | 'blade' | 'branch';
 
@@ -37,19 +37,6 @@ export interface ScatterProfile {
    *  voxelBiomes.ts) — living ground cover getting sparser away from the
    *  equator, a gradual biome transition rather than a uniform carpet. */
   latitudeFalloff?: boolean;
-}
-
-/** True if this body's own science note leaves the life question open
- *  ('theoretical' or 'inconclusive') rather than settled ('not_detected') —
- *  the gate for sparse, deliberately-ambiguous flora-like ground clutter on
- *  alien worlds. Reads the same source of truth narrative content already
- *  uses (contentProfiles.ts), so this can never drift from the game's actual
- *  science-integrity data. Earth is handled separately (unconditional real
- *  biology) and never needs this check. */
-function lifeAmbiguous(planet: string): boolean {
-  return getContent(planet).scienceNotes.some(
-    (n) => n.lifeStatus === 'theoretical' || n.lifeStatus === 'inconclusive',
-  );
 }
 
 export function getScatter(planet: string): ScatterProfile {

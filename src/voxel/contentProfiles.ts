@@ -1446,3 +1446,17 @@ for (const body of Object.values(CONTENT)) {
 export function getContent(planet: string): ContentProfile {
   return CONTENT[planet] ?? EMPTY;
 }
+
+/** True if this body's own science note leaves the life question open
+ *  ('theoretical' or 'inconclusive') rather than settled ('not_detected') —
+ *  the single shared gate for sparse, deliberately-ambiguous life-like
+ *  content on alien worlds (ground clutter, trees, wildlife). Earth is
+ *  handled separately by each caller (unconditional real biology) and never
+ *  needs this check. Centralized here — the canonical narrative-data module
+ *  — so scatterProfiles.ts/treeProfiles.ts/wildlifeProfiles.ts can't drift
+ *  from each other or from the game's actual science-integrity data. */
+export function lifeAmbiguous(planet: string): boolean {
+  return getContent(planet).scienceNotes.some(
+    (n) => n.lifeStatus === 'theoretical' || n.lifeStatus === 'inconclusive',
+  );
+}

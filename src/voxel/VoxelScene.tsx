@@ -8,6 +8,7 @@ import { ChunkManager } from './ChunkManager';
 import { VoxelSky } from './VoxelSky';
 import { VoxelWeather } from './VoxelWeather';
 import { VoxelScatter } from './VoxelScatter';
+import { VoxelTrees } from './VoxelTrees';
 import { Emitters } from './Emitters';
 import { RiverWaterfalls } from './RiverWaterfalls';
 import { DropItems } from './DropItems';
@@ -90,6 +91,7 @@ export function VoxelScene() {
       <ChunkManager planet={planet} apiRef={apiRef} />
       <VoxelSky planet={planet} />
       <VoxelScatter planet={planet} />
+      <VoxelTrees planet={planet} />
       <Emitters planet={planet} />
       <RiverWaterfalls planet={planet} />
       <DropItems planet={planet} />

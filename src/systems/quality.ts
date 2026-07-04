@@ -36,6 +36,8 @@ export interface QualitySettings {
   voxelParticles: number;
   /** Max instanced surface-scatter props in the voxel world. */
   voxelScatter: number;
+  /** Max instanced trees in the voxel world (World Richness Phase 7). */
+  voxelTrees: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -61,6 +63,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelMeshBudget: 2,
     voxelParticles: 180,
     voxelScatter: 120,
+    voxelTrees: 60,
   },
   medium: {
     planetSegments: 40,
@@ -84,6 +87,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelMeshBudget: 3,
     voxelParticles: 450,
     voxelScatter: 340,
+    voxelTrees: 160,
   },
   high: {
     planetSegments: 64,
@@ -107,6 +111,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelMeshBudget: 4,
     voxelParticles: 900,
     voxelScatter: 680,
+    voxelTrees: 320,
   },
   ultra: {
     planetSegments: 96,
@@ -130,6 +135,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelMeshBudget: 6,
     voxelParticles: 1500,
     voxelScatter: 1100,
+    voxelTrees: 550,
   },
 };
 
