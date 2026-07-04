@@ -237,6 +237,14 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
   chunk.generated = true;
 }
 
+/** Deterministic per-instance build seed for a POI placed at grid cell
+ *  (gx,gz), given its spec's own seed offset (`sSeed`). Shared by the terrain
+ *  stamper and the scanner's footprint correction (see correctPOIDistance)
+ *  so both always agree on exactly which structure occupies a cell. */
+function poiInstanceSeed(gx: number, gz: number, sSeed: number): number {
+  return Math.floor(cellHash(gx, gz, sSeed + 3) * 1e9);
+}
+
 /** Stamp any modular POIs whose footprint overlaps this chunk. POIs are placed
  *  deterministically on a per-spec grid; each is generated once (cached) and the
  *  voxels falling inside this chunk are written over the terrain. Generation-time
@@ -261,7 +269,7 @@ function stampPOIs(chunk: Chunk, params: VoxelTerrainParams, seed: number): void
         if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
         const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
         const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
-        const pSeed = Math.floor(cellHash(gx, gz, sSeed + 3) * 1e9);
+        const pSeed = poiInstanceSeed(gx, gz, sSeed);
         const built = generatePOI(spec.type, pSeed, params.archetype);
         const ox = ax - (built.footprint[0] >> 1);
         const oz = az - (built.footprint[1] >> 1);
@@ -346,6 +354,11 @@ export interface NearbySpec<S> {
   ax: number;
   az: number;
   dist: number;
+  /** Grid cell the winning instance was placed in — lets a caller re-derive
+   *  its exact per-instance build seed (poiInstanceSeed) without re-scanning
+   *  the grid, e.g. to look up its actual generated footprint. */
+  gx: number;
+  gz: number;
 }
 
 /** The placement fields every cell-grid spec shares (POIs, science notes,
@@ -384,7 +397,7 @@ export function findNearestCellSpec<S extends CellGridSpec>(
         const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
         const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
         const dist = Math.hypot(px - ax, pz - az);
-        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist };
+        if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, ax, az, dist, gx, gz };
       }
     }
   }
@@ -394,6 +407,35 @@ export function findNearestCellSpec<S extends CellGridSpec>(
 export type NearbyPOI = NearbySpec<POISpec>;
 export type NearbyScienceNote = NearbySpec<ScienceNoteSpec>;
 export type NearbyTranslationFragment = NearbySpec<TranslationFragmentSpec>;
+
+/** Corrects a POI hit's `dist` from "distance to its cell-hash anchor" to
+ *  "distance to its actual generated footprint" — 0 once the player is
+ *  standing anywhere inside it, no matter where the anchor itself falls
+ *  (even inside solid terrain). A POI can span up to POI_MAX_HALF_EXTENT
+ *  (32) from its anchor — far more than the old anchor-only distance ever
+ *  accounted for — so without this, a player in a peripheral module of a
+ *  large ruin could never get close enough to the anchor to scan it.
+ *  generatePOI is memoized, so this is a cache hit in practice: the same
+ *  structure was already built when the surrounding chunks were stamped
+ *  (see stampPOIs), so this adds no measurable cost to the scan poll.
+ *  The corrected distance can only be <= the raw one (clamping never
+ *  increases a component), so a hit that already passed `dist <= maxDist`
+ *  in findNearestCellSpec is guaranteed to still pass after correction. */
+function correctPOIDistance(
+  hit: NearbyPOI | null,
+  params: VoxelTerrainParams,
+  seed: number,
+  px: number,
+  pz: number,
+): NearbyPOI | null {
+  if (!hit) return null;
+  const sSeed = seed + (seedFromName(hit.spec.id) % 100000);
+  const pSeed = poiInstanceSeed(hit.gx, hit.gz, sSeed);
+  const [fw, fd] = generatePOI(hit.spec.type, pSeed, params.archetype).footprint;
+  const dx = Math.max(Math.abs(px - hit.ax) - fw / 2, 0);
+  const dz = Math.max(Math.abs(pz - hit.az) - fd / 2, 0);
+  return { ...hit, dist: Math.hypot(dx, dz) };
+}
 
 /** Nearest POI anchor to (px, pz) within maxDist, or null. Excludes Phase 10.5
  *  war-lore POIs — use findNearbyWarLorePOI for those, since the two narrative
@@ -405,7 +447,8 @@ export function findNearbyPOI(
   pz: number,
   maxDist: number,
 ): NearbyPOI | null {
-  return findNearestCellSpec(params.pois, seed, px, pz, maxDist, (s) => s.act === undefined);
+  const hit = findNearestCellSpec(params.pois, seed, px, pz, maxDist, (s) => s.act === undefined);
+  return correctPOIDistance(hit, params, seed, px, pz);
 }
 
 /** Nearest Layer 1 science note to (px, pz) within maxDist — a normal surface
@@ -429,7 +472,8 @@ export function findNearbyWarLorePOI(
   pz: number,
   maxDist: number,
 ): NearbyPOI | null {
-  return findNearestCellSpec(params.pois, seed, px, pz, maxDist, (s) => s.act !== undefined);
+  const hit = findNearestCellSpec(params.pois, seed, px, pz, maxDist, (s) => s.act !== undefined);
+  return correctPOIDistance(hit, params, seed, px, pz);
 }
 
 /** Nearest Translation Fragment to (px, pz) within maxDist. Phase 10.5. */
@@ -448,11 +492,19 @@ export interface NearbyDeepSite {
   dist: number;
 }
 
-/** Nearest Layer 2 deep site to (px, py, pz) within maxDist — 3D distance to
- *  the fixed chamber anchor AND the player must be below the surface column by
- *  at least depthMin (i.e. actually down in the excavation). This is the
- *  mechanical "hidden, hard to reach" enforcement, not just a narrative one:
- *  standing on the surface directly above a chamber never finds it. */
+/** Nearest Layer 2 deep site to (px, py, pz) within maxDist, or null. The
+ *  player must be below the surface column by at least depthMin (i.e.
+ *  actually down in the excavation) — the mechanical "hidden, hard to reach"
+ *  enforcement, not just a narrative one: standing on the surface directly
+ *  above a chamber never finds it.
+ *
+ *  Distance is clamped to the chamber's actual carved shape rather than its
+ *  center point: carveDeepSites carves a cylinder (circular cross-section of
+ *  `radius`, vertical band depthMin..depthMax), so standing anywhere inside
+ *  that cylinder — not just near its exact vertical-center point — registers
+ *  0 (radii are typically 8-18, occasionally exceeding a tight scan range
+ *  from the center alone). Mirrors the POI footprint correction above for
+ *  the same reason. */
 export function findNearbyDeepSite(
   params: VoxelTerrainParams,
   seed: number,
@@ -467,7 +519,10 @@ export function findNearbyDeepSite(
     const surface = columnHeight(ax, az, params, seed);
     if (py > surface - spec.depthMin) continue; // not down in the excavation yet
     const ay = surface - (spec.depthMin + spec.depthMax) / 2;
-    const dist = Math.hypot(px - ax, py - ay, pz - az);
+    const halfHeight = (spec.depthMax - spec.depthMin) / 2;
+    const horiz = Math.max(Math.hypot(px - ax, pz - az) - spec.radius, 0);
+    const vert = Math.max(Math.abs(py - ay) - halfHeight, 0);
+    const dist = Math.hypot(horiz, vert);
     if (dist <= maxDist && (best === null || dist < best.dist)) best = { spec, dist };
   }
   return best;
