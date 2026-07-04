@@ -491,6 +491,53 @@ class AudioManager {
     }
   }
 
+  /** World Richness Phase 8 — a single ambient wildlife call, scheduled
+   *  periodically by a parallel driver (VoxelAudio.tsx) alongside (never
+   *  replacing) the existing ice/volcanic/geyser texture scheduler, gated to
+   *  the same bodies the visual wildlife layer appears on. Both variants are
+   *  synthesized (no sample assets), same technique as playSurfaceTexture. */
+  playWildlifeCall(kind: 'chirp' | 'drift') {
+    if (!this.ctx || !this.surfaceBus) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    if (kind === 'chirp') {
+      // Earth birdsong/insect chirp: a quick upward pitch sweep.
+      const dur = 0.14;
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1800 + Math.random() * 400, t);
+      osc.frequency.exponentialRampToValueAtTime(2600 + Math.random() * 500, t + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.05, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g).connect(this.surfaceBus);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    } else {
+      // Ambiguous-life "drifter" hum: slow, deliberately alien pitch wobble —
+      // never a clear animal call, matching the visual's ambiguity.
+      const dur = 1.6;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(180 + Math.random() * 40, t);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.6;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 12;
+      lfo.connect(lfoGain).connect(osc.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.035, t + 0.4);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g).connect(this.surfaceBus);
+      osc.start(t);
+      lfo.start(t);
+      osc.stop(t + dur + 0.05);
+      lfo.stop(t + dur + 0.05);
+    }
+  }
+
   // --- Descent / atmospheric entry --------------------------------------
 
   /** Rising filtered-noise sweep for atmospheric reentry (~3s swell + decay). */

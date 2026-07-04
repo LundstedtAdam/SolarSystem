@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useStore } from '../store';
 import { audio } from './AudioManager';
 import { getSurfaceAudio } from './surfaceAudio';
+import { archetypeFor } from '../voxel/voxelBiomes';
+import { getWildlife } from '../voxel/wildlifeProfiles';
 
 /**
  * On-foot soundscape: reuses the per-body surface ambience (wind/rumble +
@@ -30,8 +32,23 @@ export function VoxelAudio() {
       timer = setTimeout(schedule, meanGap * (0.5 + Math.random()));
     }
 
+    // World Richness Phase 8 — a parallel scheduler (never replacing the
+    // texture one above) for ambient wildlife calls, gated to exactly the
+    // same bodies VoxelWildlife.tsx renders creatures on.
+    let wildlifeTimer: ReturnType<typeof setTimeout> | undefined;
+    if (getWildlife(planet).length > 0) {
+      const kind = archetypeFor(planet) === 'earth' ? 'chirp' : 'drift';
+      const meanGap = kind === 'chirp' ? 3500 : 9000;
+      const scheduleWildlife = () => {
+        audio.playWildlifeCall(kind);
+        wildlifeTimer = setTimeout(scheduleWildlife, meanGap * (0.5 + Math.random()));
+      };
+      wildlifeTimer = setTimeout(scheduleWildlife, meanGap * (0.5 + Math.random()));
+    }
+
     return () => {
       if (timer) clearTimeout(timer);
+      if (wildlifeTimer) clearTimeout(wildlifeTimer);
       audio.setCaveAmount(0);
       audio.stopSurface();
     };
