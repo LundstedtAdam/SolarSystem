@@ -139,7 +139,7 @@ A cross-cutting audit pass plus follow-up rounds, spanning bug fixes,
 performance, settings/FOV, water physics, localization, scan-range accuracy,
 work that substantively fulfills Phase 11.6/11.7 (Round 6), and — unlike the
 rest, genuinely new capability rather than maintenance — an 8-phase "World
-Richness" pass (Round 8) increasing procedural environmental density across
+Richness" pass (Round 7) increasing procedural environmental density across
 the voxel walking layer on every landable body: per-body detail/micro terrain
 noise, layered ground scatter (grass/flowers/stones/ore-tells), new POI module
 kinds plus a high-frequency micro-discovery channel, worm-tunnel caves and
