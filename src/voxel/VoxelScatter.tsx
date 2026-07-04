@@ -19,7 +19,7 @@ import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
 import { getScatter, getGroundClutter, type ScatterKind, type ScatterProfile } from './scatterProfiles';
 import { getContent } from './contentProfiles';
-import { getVoxelTerrain } from './voxelBiomes';
+import { getVoxelTerrain, latitudeOf } from './voxelBiomes';
 import { landHeightAt, oreAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
 
@@ -164,6 +164,11 @@ function PropLayer({
               if (oreAt(d, ix, iy - d, iz, terrain, seed) >= 0) veined = true;
             }
             if (!veined) continue;
+          }
+          // Gradual biome transition: living ground cover thins toward the
+          // flat-world "poles" instead of forming a uniform carpet end to end.
+          if (profile.latitudeFalloff && cellHash(gx, gz, seed + 88) < latitudeOf(wz) * 0.85) {
+            continue;
           }
           const s = minScale + cellHash(gx, gz, seed + 3) * (maxScale - minScale);
           dummy.position.set(wx, land + s * yFactor, wz);

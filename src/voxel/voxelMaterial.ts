@@ -13,6 +13,7 @@ import {
   float,
   mix,
   smoothstep,
+  abs,
   normalLocal,
   normalize,
   positionWorld,
@@ -20,6 +21,16 @@ import {
   mx_fractal_noise_vec3,
 } from 'three/tsl';
 import type { BiomeProfile } from '../terrain/biomes';
+import { LATITUDE_SPAN } from './voxelBiomes';
+
+/** True if this body actually authored a distinct polar colour (most bodies
+ *  just repeat colorHigh) — skips the blend entirely, at zero cost, on
+ *  bodies that didn't, so nothing regresses their existing look. */
+function hasPolarColor(biome: BiomeProfile): boolean {
+  const [ph, pg, pb] = biome.colorPolar;
+  const [hh, hg, hb] = biome.colorHigh;
+  return Math.abs(ph - hh) + Math.abs(pg - hg) + Math.abs(pb - hb) > 0.02;
+}
 
 export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial();
@@ -27,7 +38,7 @@ export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMateri
   // Vertex colour is RGBA: rgb = albedo with baked AO, a = emissive strength
   // (lava, glowing ice). Emissive isn't AO-darkened so it reads in shadow/caves.
   const vcol = attribute('color', 'vec4');
-  const albedo = vcol.xyz;
+  let albedo = vcol.xyz;
 
   // Break up flat faces: a low-amplitude world-space normal perturbation. Kept
   // small so lighting stays clean but faces no longer read as mirror-flat.
@@ -39,6 +50,18 @@ export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMateri
     float(1.0),
   ).mul(0.12);
   m.normalNode = normalize(normalLocal.add(jitter));
+
+  // World Richness Phase 5 — gradual blend toward the body's own colorPolar
+  // near the flat-world "poles" (world-Z distance from the equator; see
+  // LATITUDE_SPAN in voxelBiomes.ts). Applied before fog so both compose
+  // naturally. Pure shader-graph addition — never touches the per-block
+  // palette or the mesher/worker transfer contract.
+  if (hasPolarColor(biome)) {
+    const polar = vec3(...biome.colorPolar);
+    const dist = abs(positionWorld.z);
+    const latT = smoothstep(float(LATITUDE_SPAN * 0.4), float(LATITUDE_SPAN), dist);
+    albedo = mix(albedo, polar, latT);
+  }
 
   // Biome fog — same math and 0.005 distance scale as terrainMaterial.ts, but
   // keyed off camera distance (view-space) since voxel chunks aren't centred.

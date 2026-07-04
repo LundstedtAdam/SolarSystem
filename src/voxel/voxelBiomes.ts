@@ -18,6 +18,18 @@ import { getBodyResources, type ResourceVein } from './resourceProfiles';
 
 export type Archetype = 'rock' | 'regolith' | 'earth' | 'ice' | 'lava' | 'dune';
 
+/** Voxels from the equator (world Z=0) to "pole" (full latitude blend) — a
+ *  flat-world stand-in for planetary latitude (these are flat voxel worlds,
+ *  not literal spheres). Shared by the polar colour blend (voxelMaterial.ts,
+ *  keyed on positionWorld.z in the shader) and the ground-clutter density
+ *  falloff (VoxelScatter.tsx) so both agree on where "polar" starts. */
+export const LATITUDE_SPAN = 1800;
+
+/** 0 (equator) .. 1 (pole), pure function of world-Z distance only. */
+export function latitudeOf(wz: number): number {
+  return Math.min(1, Math.abs(wz) / LATITUDE_SPAN);
+}
+
 // 16 landable bodies mapped onto 6 archetypes.
 const ARCHETYPE: Record<string, Archetype> = {
   Mars: 'rock',

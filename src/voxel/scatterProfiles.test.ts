@@ -40,4 +40,10 @@ describe('getGroundClutter narrative gating', () => {
     const growth = layers.find((l) => l.kind === 'fungus')!;
     expect(growth.density).toBeLessThan(0.1);
   });
+
+  it('flags Earth flora layers for polar thinning (World Richness Phase 5)', () => {
+    const layers = getGroundClutter('Jorden');
+    expect(layers.find((l) => l.kind === 'blade')?.latitudeFalloff).toBe(true);
+    expect(layers.find((l) => l.kind === 'fungus')?.latitudeFalloff).toBe(true);
+  });
 });

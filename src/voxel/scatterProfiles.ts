@@ -33,6 +33,10 @@ export interface ScatterProfile {
    *  (queried directly against oreAt() by the caller) — a visual hint at
    *  what's below without a HUD marker. */
   oreTell?: boolean;
+  /** Thin out toward the flat-world "poles" (see LATITUDE_SPAN in
+   *  voxelBiomes.ts) — living ground cover getting sparser away from the
+   *  equator, a gradual biome transition rather than a uniform carpet. */
+  latitudeFalloff?: boolean;
 }
 
 /** True if this body's own science note leaves the life question open
@@ -126,7 +130,9 @@ function oreGlint(): ScatterProfile {
   };
 }
 
-/** Earth's grass tufts — dense, cheap crossed-quad billboards. */
+/** Earth's grass tufts — dense, cheap crossed-quad billboards. Thins toward
+ *  the poles (latitudeFalloff) — a gradual biome transition rather than a
+ *  uniform green carpet end to end. */
 function earthGrass(): ScatterProfile {
   return {
     kind: 'blade',
@@ -139,12 +145,13 @@ function earthGrass(): ScatterProfile {
     maxScale: 1.1,
     scaleXYZ: [1, 1, 1],
     yFactor: 0,
+    latitudeFalloff: true,
   };
 }
 
 /** Earth's small wildflowers/mushroom caps — sparse, colourful bloom accents
  *  among the grass. Reuses the 'fungus' dome geometry at a much smaller
- *  scale than Titan's alien blooms. */
+ *  scale than Titan's alien blooms. Same polar thinning as the grass. */
 function earthFlora(): ScatterProfile {
   return {
     kind: 'fungus',
@@ -157,6 +164,7 @@ function earthFlora(): ScatterProfile {
     maxScale: 0.45,
     scaleXYZ: [1, 0.8, 1],
     yFactor: 0.3,
+    latitudeFalloff: true,
   };
 }
 
