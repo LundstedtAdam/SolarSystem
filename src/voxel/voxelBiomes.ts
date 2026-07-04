@@ -63,6 +63,15 @@ export interface VoxelTerrainParams {
   glowDepth: number;
   /** Lava-lake level in voxels (lava), or -1. */
   lavaLevel: number;
+  /** Secondary rolling-hill octave, one tier finer than rollFreq/rollAmp —
+   *  sourced straight from the body's BiomeProfile (detailFreq/detailAmp),
+   *  previously only consumed by the GPU orbital shader. */
+  detailFreq: number;
+  detailAmp: number;
+  /** Finest single-octave surface bump — sourced from BiomeProfile
+   *  (microFreq/microAmp), previously GPU-shader-only. */
+  microFreq: number;
+  microAmp: number;
   /** Named procedural landmarks carved into the height field (Phase 10.1). */
   landmarks: LandmarkSpec[];
   /** Modular ruined points-of-interest stamped into chunks (Phase 10.2). */
@@ -170,6 +179,10 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     octaves: Math.max(3, b.octaves),
     caveFreq: 0.07,
     caveThreshold: 0.8,
+    detailFreq: b.detailFreq,
+    detailAmp: b.detailAmp,
+    microFreq: b.microFreq,
+    microAmp: b.microAmp,
     craters: 0,
     waterLevel: -1,
     duneAmp: 0,

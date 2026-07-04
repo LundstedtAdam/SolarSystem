@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findNearestCellSpec, findNearbyPOI, findNearbyDeepSite } from './worldGen';
+import { findNearestCellSpec, findNearbyPOI, findNearbyDeepSite, landHeightAt } from './worldGen';
 import { generatePOI } from './structures';
 import { cellHash, seedFromName } from './noise';
 import type { VoxelTerrainParams } from './voxelBiomes';
@@ -156,5 +156,48 @@ describe('findNearbyDeepSite cylinder clamp', () => {
     // 100 units away horizontally, well past radius(5) + maxDist(14).
     const outside = findNearbyDeepSite(params, seed, 100, 90, 0, 14);
     expect(outside).toBeNull();
+  });
+});
+
+describe('detail/micro terrain perturbation', () => {
+  // Every other height contributor zeroed so landHeightAt() isolates the new
+  // detail/micro octaves (Phase 1 of the voxel-richness plan).
+  const params = {
+    baseHeight: 100,
+    rollAmp: 0,
+    rollFreq: 1,
+    mountainAmp: 0,
+    mountainFreq: 1,
+    ridged: false,
+    octaves: 1,
+    detailFreq: 0.05,
+    detailAmp: 2,
+    microFreq: 0.3,
+    microAmp: 0.6,
+    duneAmp: 0,
+    craters: 0,
+    landmarks: [],
+  } as unknown as VoxelTerrainParams;
+  const seed = 42;
+
+  it('is deterministic for a fixed seed and position', () => {
+    const a = landHeightAt(17, -9, params, seed);
+    const b = landHeightAt(17, -9, params, seed);
+    expect(a).toBe(b);
+  });
+
+  it('stays within the combined detail+micro amplitude bound', () => {
+    for (let wx = -50; wx <= 50; wx += 7) {
+      for (let wz = -50; wz <= 50; wz += 11) {
+        const h = landHeightAt(wx, wz, params, seed);
+        expect(h).toBeGreaterThanOrEqual(params.baseHeight - params.detailAmp - params.microAmp - 1);
+        expect(h).toBeLessThanOrEqual(params.baseHeight + params.detailAmp + params.microAmp + 1);
+      }
+    }
+  });
+
+  it('is a no-op when detailAmp/microAmp are both 0 (unaffected bodies stay unaffected)', () => {
+    const flat = { ...params, detailAmp: 0, microAmp: 0 } as VoxelTerrainParams;
+    expect(landHeightAt(17, -9, flat, seed)).toBe(params.baseHeight);
   });
 });

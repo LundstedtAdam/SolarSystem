@@ -103,6 +103,16 @@ function columnHeight(wx: number, wz: number, p: VoxelTerrainParams, seed: numbe
   const mRaw = fbm2(wx * p.mountainFreq, wz * p.mountainFreq, seed + 7919, p.octaves);
   const mountain = (p.ridged ? 1 - Math.abs(mRaw * 2 - 1) : mRaw) * p.mountainAmp;
   let h = p.baseHeight + roll + mountain;
+  // Secondary detail + micro octaves — per-body BiomeProfile numbers that used
+  // to be GPU-orbital-shader-only; layering them into the voxel height field
+  // gives each planet its own fine-grained terrain texture instead of every
+  // body in an archetype sharing the exact same roll/mountain shape.
+  if (p.detailAmp > 0) {
+    h += (fbm2(wx * p.detailFreq, wz * p.detailFreq, seed + 3301, 2) * 2 - 1) * p.detailAmp;
+  }
+  if (p.microAmp > 0) {
+    h += (valueNoise2(wx * p.microFreq, wz * p.microFreq, seed + 4507) * 2 - 1) * p.microAmp;
+  }
   if (p.duneAmp > 0) {
     const warp = valueNoise2(wx * 0.012, wz * 0.012, seed + 51) * 6.28;
     h += p.duneAmp * Math.sin(wx * 0.22 + wz * 0.08 + warp);
