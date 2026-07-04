@@ -149,10 +149,29 @@ wildlife — all gated by the existing no-confirmed-life narrative rule (real
 biology only on Earth; sparse deliberately-ambiguous life-like content only
 on the handful of bodies already flagged `theoretical`/`inconclusive`).
 None of this was assigned a phase number since it deepens the existing
-Phase 9-11 voxel world rather than opening new roadmap arcs. Currently open
-as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is tracked
-here rather than by renaming or re-committing history: the roadmap file is
-the source of truth for status, git history stays as-is. Manual in-game
-playtesting of the World Richness pass has not been done. Once Round 6
-(11.6) and Round 1 (11.7) have been played through and confirmed, update
-their status lines above accordingly.
+Phase 9-11 voxel world rather than opening new roadmap arcs. Round 8 is a
+rendering/gameplay pass in the same spirit: a **Material Identity** system
+replacing flat-vertex-color-only block identity with a small deterministic
+procedural texture atlas (no external image assets, no Canvas/DOM — a raw
+pixel buffer, since the atlas must build correctly under the vitest/jsdom
+test environment) sampled per voxel face through a new `materialUV` vertex
+attribute threaded through the greedy mesher and mesher-worker pipeline;
+biome palette tint is now a diluted overlay on natural terrain/tree blocks
+rather than the sole source of a block's visual identity. Alongside this,
+Earth's forest changed from a purely cosmetic, non-interactive InstancedMesh
+system to real voxel-embedded trees (new `WOOD_LOG`/`LEAVES` block ids)
+stamped directly into the chunk grid, choppable via the existing mining
+pipeline: felling a trunk cascades upward through the whole log column,
+yields wood, and triggers leaf-disconnection decay for any leaves left
+without a nearby log. The decorative "ambiguous alien growth" variant of the
+old tree system is untouched and stays cosmetic-only on bodies flagged
+`theoretical`/`inconclusive`, per the existing narrative rule. Currently
+open as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is
+tracked here rather than by renaming or re-committing history: the roadmap
+file is the source of truth for status, git history stays as-is. Manual
+in-game/visual playtesting of both the World Richness pass and the Material
+Identity pass has not been done (this environment cannot render WebGPU
+live) — the texture atlas's on-screen appearance, chop/felling game feel,
+and any frame-rate impact all need a live-device check before either round
+is considered closed. Once Round 6 (11.6) and Round 1 (11.7) have been
+played through and confirmed, update their status lines above accordingly.
