@@ -46,6 +46,7 @@ describe('greedyMesh', () => {
     expect(m.positions.length).toBe(24 * 3);
     expect(m.normals.length).toBe(24 * 3);
     expect(m.colors.length).toBe(24 * 4);
+    expect(m.uvs.length).toBe(24 * 3);
   });
 
   it('culls the shared interior face and merges coplanar faces of a 2-voxel bar', () => {
@@ -82,12 +83,30 @@ describe('greedyMesh', () => {
     const c = makeChunk();
     c.set(5, 5, 5, BLOCK.ROCK);
     const m = greedyMesh(c.voxels, makePalette()).opaque;
-    // A lone voxel is fully unoccluded: every corner gets AO level 3 (x1.0),
-    // so the colour equals the palette entry exactly.
+    // A lone voxel is fully unoccluded: every corner gets AO level 3 (x1.0).
+    // ROCK is a natural-terrain block, so its palette tint is diluted toward
+    // white at TINT_STRENGTH (0.4) before the AO multiply — material identity
+    // now comes primarily from the atlas texture, biome tint is an overlay:
+    // 0.5 * 0.4 + (1 - 0.4) = 0.8.
     for (let v = 0; v < 24; v++) {
-      expect(m.colors[v * 4]).toBeCloseTo(0.5, 5);
+      expect(m.colors[v * 4]).toBeCloseTo(0.8, 5);
       expect(m.colors[v * 4 + 3]).toBe(0); // no emissive in the test palette
     }
+  });
+
+  it('emits per-voxel-unit UVs that repeat (not stretch) across a greedy-merged quad', () => {
+    const c = makeChunk();
+    c.set(5, 5, 5, BLOCK.ROCK);
+    c.set(6, 5, 5, BLOCK.ROCK);
+    const m = greedyMesh(c.voxels, makePalette()).opaque;
+    expect(m.uvs.length).toBe(m.positions.length);
+    let maxUV = 0;
+    for (let v = 0; v < m.uvs.length / 3; v++) {
+      maxUV = Math.max(maxUV, m.uvs[v * 3], m.uvs[v * 3 + 1]);
+    }
+    // The merged 2x1 quad's raw local UV reaches 2, not 1 — the shader tiles
+    // the texture per voxel unit instead of stretching one tile across it.
+    expect(maxUV).toBe(2);
   });
 });
 

@@ -76,10 +76,14 @@ export const BLOCK = {
   // resource from the vein it was placed on, condenser harvests atmosphere.
   EXTRACTOR: 36,
   CONDENSER: 37,
+  // Choppable voxel-embedded trees (Material Identity pass): trunk is a
+  // harvestable resource, leaves are a decaying non-resource material.
+  WOOD_LOG: 38,
+  LEAVES: 39,
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 38;
+export const BLOCK_COUNT = 40;
 
 /** Block ids that anchor a placed Structure entity — mining one removes the
  *  entity (silos spill their contents). */
@@ -116,7 +120,8 @@ export type ResourceType =
   | 'titanite'
   | 'hematite'
   | 'lithium'
-  | 'artifact';
+  | 'artifact'
+  | 'wood';
 
 /** Ore block id -> the resource it yields when mined. Non-ore blocks are absent
  *  (mining them just removes terrain and yields nothing). */
@@ -166,6 +171,8 @@ const HOST_RESOURCE: Partial<Record<number, ResourceType>> = {
   [BLOCK.TETHER]: 'carbon',
   [BLOCK.EXTRACTOR]: 'iron',
   [BLOCK.CONDENSER]: 'silicon',
+  [BLOCK.WOOD_LOG]: 'wood',
+  // LEAVES deliberately absent: decorative/decaying, yields nothing when mined.
 };
 
 /** The resource a mined block yields, or undefined if it yields nothing.
@@ -215,6 +222,8 @@ const HARDNESS: Partial<Record<number, number>> = {
   [BLOCK.TETHER]: 0.4, // quick to reclaim — repositioning a line shouldn't hurt
   [BLOCK.EXTRACTOR]: 1.3,
   [BLOCK.CONDENSER]: 1.2,
+  [BLOCK.WOOD_LOG]: 0.55,
+  [BLOCK.LEAVES]: 0.15, // near-instant — leaves are flimsy, and decayed leaves never get hand-mined anyway
 };
 
 /** Seconds of continuous mining required to break the given block. */
@@ -274,6 +283,9 @@ export interface MeshResult {
   indices: Uint32Array;
   /** Number of indices actually used (buffers may be sized exactly). */
   indexCount: number;
+  /** Per-vertex (uLocal, vLocal, tileIndex) into the material atlas — opaque
+   *  group only; the water surface stays untextured. */
+  uvs: Float32Array;
   /** Water group — faces where water borders air; rendered translucent. */
   waterPositions: Float32Array;
   waterNormals: Float32Array;
@@ -294,6 +306,7 @@ export function resultTransfer(res: MeshResult): Transferable[] {
     res.normals.buffer,
     res.colors.buffer,
     res.indices.buffer,
+    res.uvs.buffer,
     res.waterPositions.buffer,
     res.waterNormals.buffer,
     res.waterColors.buffer,

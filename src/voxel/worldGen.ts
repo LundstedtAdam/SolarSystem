@@ -17,6 +17,14 @@ import type {
   TranslationFragmentSpec,
 } from './contentProfiles';
 import { generatePOI, POI_MAX_HALF_EXTENT } from './structures';
+import {
+  generateTree,
+  TREE_MAX_HALF_EXTENT,
+  EARTH_TREE_DENSITY,
+  EARTH_TREE_CELL,
+  EARTH_TREE_FOREST_FREQ,
+  EARTH_TREE_FOREST_THRESHOLD,
+} from './trees';
 
 /** Crater bowl + rim height delta (regolith bodies). */
 function craterDelta(wx: number, wz: number, seed: number, strength: number): number {
@@ -370,6 +378,7 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
   }
 
   stampPOIs(chunk, params, seed);
+  stampTrees(chunk, params, seed);
   carveDeepSites(chunk, params, seed);
 
   chunk.reapplyEdits();
@@ -422,6 +431,53 @@ function stampPOIs(chunk: Chunk, params: VoxelTerrainParams, seed: number): void
             continue;
           voxels[chunkIndex(lx, ly, lz)] = packVoxel(v.block);
         }
+      }
+    }
+  }
+}
+
+/** Stamp Earth's real forest as choppable, voxel-embedded trees (replaces the
+ *  old cosmetic InstancedMesh forest — see treeProfiles.ts). Mirrors
+ *  stampPOIs's exact placement pattern (cell-hash density gate, jittered
+ *  anchor, per-instance seed), plus a low-frequency forest-coverage mask
+ *  (migrated from the old cosmetic profile) so trees cluster into groves with
+ *  clearings instead of a uniform scatter. */
+function stampTrees(chunk: Chunk, params: VoxelTerrainParams, seed: number): void {
+  if (params.archetype !== 'earth') return;
+  const { voxels } = chunk;
+  const baseX = chunk.cx * CHUNK_SIZE;
+  const baseY = chunk.cy * CHUNK_SIZE;
+  const baseZ = chunk.cz * CHUNK_SIZE;
+  const E = TREE_MAX_HALF_EXTENT;
+  const cell = EARTH_TREE_CELL;
+  const sSeed = seed + (seedFromName('earth-forest') % 100000);
+
+  const gx0 = Math.floor((baseX - E) / cell);
+  const gx1 = Math.floor((baseX + CHUNK_SIZE + E) / cell);
+  const gz0 = Math.floor((baseZ - E) / cell);
+  const gz1 = Math.floor((baseZ + CHUNK_SIZE + E) / cell);
+  for (let gz = gz0; gz <= gz1; gz++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      if (cellHash(gx, gz, sSeed + 17) > EARTH_TREE_DENSITY) continue;
+      const ax = Math.round((gx + cellHash(gx, gz, sSeed + 1)) * cell);
+      const az = Math.round((gz + cellHash(gx, gz, sSeed + 2)) * cell);
+      const coverage = fbm2(ax * EARTH_TREE_FOREST_FREQ, az * EARTH_TREE_FOREST_FREQ, seed + 7001, 2);
+      if (coverage < EARTH_TREE_FOREST_THRESHOLD) continue; // grove/clearing mask
+      const h = columnHeight(ax, az, params, seed);
+      const waterCeiling = localWaterCeilingAt(ax, az, h, params, seed);
+      if (waterCeiling >= 0 && h < waterCeiling) continue; // never root a tree underwater
+      const pSeed = poiInstanceSeed(gx, gz, sSeed);
+      const built = generateTree(pSeed);
+      const ox = ax - (built.footprint[0] >> 1);
+      const oz = az - (built.footprint[1] >> 1);
+      const oy = h + 1; // rooted on top of the surface, not replacing it
+      for (const v of built.voxels) {
+        const lx = ox + v.x - baseX;
+        const ly = oy + v.y - baseY;
+        const lz = oz + v.z - baseZ;
+        if (lx < 0 || lx >= CHUNK_SIZE || ly < 0 || ly >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
+          continue;
+        voxels[chunkIndex(lx, ly, lz)] = packVoxel(v.block);
       }
     }
   }

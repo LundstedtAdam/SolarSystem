@@ -477,3 +477,73 @@ describe('river carving + water fill (World Richness Phase 6)', () => {
     expect(foundWater).toBe(true);
   });
 });
+
+describe('voxel-embedded trees (Material Identity pass)', () => {
+  const earthParams = {
+    archetype: 'earth',
+    baseHeight: 50,
+    rollAmp: 0,
+    rollFreq: 1,
+    mountainAmp: 0,
+    mountainFreq: 1,
+    ridged: false,
+    octaves: 1,
+    caveFreq: 0.1,
+    caveThreshold: 1.1,
+    caveTunnelWidth: 0,
+    detailAmp: 0,
+    detailFreq: 1,
+    microAmp: 0,
+    microFreq: 1,
+    cellNoiseAmp: 0,
+    cellNoiseFreq: 1,
+    craters: 0,
+    waterLevel: -1,
+    duneAmp: 0,
+    glowDepth: 0,
+    lavaLevel: -1,
+    landmarks: [],
+    lakes: [],
+    pois: [],
+    resources: [],
+    scienceNotes: [],
+    deepSites: [],
+    translationFragments: [],
+  } as unknown as VoxelTerrainParams;
+  const seed = 314159;
+
+  function scanForBlocks(params: VoxelTerrainParams, span: number): Set<number> {
+    const found = new Set<number>();
+    for (let cx = 0; cx < span; cx++) {
+      for (let cz = 0; cz < span; cz++) {
+        for (let cy = 0; cy < 3; cy++) {
+          const chunk = new Chunk(cx, cy, cz);
+          generateChunk(chunk, params, seed);
+          for (let i = 0; i < chunk.voxels.length; i++) found.add(voxelId(chunk.voxels[i]));
+        }
+      }
+    }
+    return found;
+  }
+
+  it('places WOOD_LOG and LEAVES voxels on an earth-archetype body', () => {
+    const blocks = scanForBlocks(earthParams, 3);
+    expect(blocks.has(BLOCK.WOOD_LOG)).toBe(true);
+    expect(blocks.has(BLOCK.LEAVES)).toBe(true);
+  });
+
+  it('places no tree voxels at all on a non-earth archetype (regression guard on the archetype gate)', () => {
+    const rockParams = { ...earthParams, archetype: 'rock' } as VoxelTerrainParams;
+    const blocks = scanForBlocks(rockParams, 3);
+    expect(blocks.has(BLOCK.WOOD_LOG)).toBe(false);
+    expect(blocks.has(BLOCK.LEAVES)).toBe(false);
+  });
+
+  it('is byte-identical across two generations with the same seed', () => {
+    const a = new Chunk(1, 1, 1);
+    const b = new Chunk(1, 1, 1);
+    generateChunk(a, earthParams, seed);
+    generateChunk(b, earthParams, seed);
+    expect(a.voxels).toEqual(b.voxels);
+  });
+});

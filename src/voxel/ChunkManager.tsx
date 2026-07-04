@@ -47,6 +47,7 @@ import { MesherPool, buildGeometry } from './mesher';
 import { generateChunk, scanOreDirection } from './worldGen';
 import { getVoxelPalette, getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
+import { findDecayedLeavesNear } from './treeDecay';
 import {
   loadBodyEdits,
   saveBodyEdits,
@@ -355,6 +356,7 @@ export function ChunkManager({
       positions: res.waterPositions,
       normals: res.waterNormals,
       colors: res.waterColors,
+      uvs: new Float32Array(0), // water stays untextured
       indices: res.waterIndices,
       indexCount: res.waterIndexCount,
     });
@@ -490,25 +492,51 @@ export function ChunkManager({
     }
 
     if (frac >= 1) {
-      const res = blockToResource(block);
-      if (res) {
-        useStore
-          .getState()
-          .mineResource(res, 1, planet, [a[0] + 0.5, a[1] + 0.5, a[2] + 0.5]);
+      if (block === BLOCK.WOOD_LOG) {
+        audio.playMineBreak();
+        chopTrunkUpward(a[0], a[1], a[2]);
+      } else {
+        const res = blockToResource(block);
+        if (res) {
+          useStore
+            .getState()
+            .mineResource(res, 1, planet, [a[0] + 0.5, a[1] + 0.5, a[2] + 0.5]);
+        }
+        spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
+        audio.playMineBreak();
+        // Mining a structure core removes the entity (silos spill their contents).
+        if (STRUCTURE_CORE_BLOCKS.has(block)) {
+          const st = useStore
+            .getState()
+            .structures.find((s) => s.pos[0] === a[0] && s.pos[1] === a[1] && s.pos[2] === a[2]);
+          if (st) useStore.getState().removeStructure(st.id);
+        }
+        editVoxel(a[0], a[1], a[2], BLOCK.AIR);
       }
-      spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
-      audio.playMineBreak();
-      // Mining a structure core removes the entity (silos spill their contents).
-      if (STRUCTURE_CORE_BLOCKS.has(block)) {
-        const st = useStore
-          .getState()
-          .structures.find((s) => s.pos[0] === a[0] && s.pos[1] === a[1] && s.pos[2] === a[2]);
-        if (st) useStore.getState().removeStructure(st.id);
-      }
-      editVoxel(a[0], a[1], a[2], BLOCK.AIR);
       ms.key = null;
       ms.progress = 0;
       crack.visible = false;
+    }
+  };
+
+  /** Chopping a WOOD_LOG voxel fells every log voxel directly above it in the
+   *  same column (cascading upward until a non-log voxel is hit) — chop the
+   *  base to fell the whole trunk, or chop partway up to remove only the top.
+   *  Each removed log yields one 'wood'; afterward, any LEAVES voxel left
+   *  with no nearby log decays (see treeDecay.ts), same as a real tree. */
+  const MAX_TRUNK_CHOP = 32; // generous vs. the tallest authored tree (<= 9)
+  const chopTrunkUpward = (wx: number, wy: number, wz: number) => {
+    let y = wy;
+    let n = 0;
+    while (n < MAX_TRUNK_CHOP && blockAtApi(wx, y, wz) === BLOCK.WOOD_LOG) {
+      useStore.getState().mineResource('wood', 1, planet, [wx + 0.5, y + 0.5, wz + 0.5]);
+      spawnBurst(wx + 0.5, y + 0.5, wz + 0.5, BLOCK.WOOD_LOG);
+      editVoxel(wx, y, wz, BLOCK.AIR);
+      y++;
+      n++;
+    }
+    for (const [lx, ly, lz] of findDecayedLeavesNear(wx, wy, y - 1, wz, blockAtApi)) {
+      editVoxel(lx, ly, lz, BLOCK.AIR); // silent decay — no resource, no burst
     }
   };
 

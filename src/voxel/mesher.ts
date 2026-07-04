@@ -14,6 +14,9 @@ export interface GeometryBuffers {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
+  /** Per-vertex (uLocal, vLocal, tileIndex) into the material atlas. Pass an
+   *  empty array for geometry that has no texture (e.g. the water surface). */
+  uvs: Float32Array;
   indices: Uint32Array;
   indexCount: number;
 }
@@ -88,6 +91,7 @@ export function buildGeometry(res: GeometryBuffers): BufferGeometry | null {
   geo.setAttribute('position', new BufferAttribute(res.positions, 3));
   geo.setAttribute('normal', new BufferAttribute(res.normals, 3));
   geo.setAttribute('color', new BufferAttribute(res.colors, 4));
+  if (res.uvs.length > 0) geo.setAttribute('materialUV', new BufferAttribute(res.uvs, 3));
   geo.setIndex(new BufferAttribute(res.indices, 1));
   geo.computeBoundingSphere();
   return geo;

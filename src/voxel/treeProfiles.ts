@@ -1,10 +1,17 @@
-// World Richness Phase 7 — procedural trees. A tree is a small parameterized
-// prefab (trunk + optional canopy sphere), not a full L-system: cheap,
-// deterministic, and easy to instance (VoxelTrees.tsx). Real biology only on
-// Earth; sparse, deliberately ambiguous alien-analog growths on bodies whose
-// life question is still open (lifeAmbiguous in contentProfiles.ts) — the
-// same narrative gate the ground-clutter scatter already uses. Every other
-// body gets no trees at all.
+// World Richness Phase 7 — cosmetic (non-voxel) procedural trees. A tree is a
+// small parameterized prefab (trunk + optional canopy sphere), not a full
+// L-system: cheap, deterministic, and easy to instance (VoxelTrees.tsx).
+//
+// Material Identity pass: Earth's forest is no longer generated here — real
+// trees are now voxel-embedded, choppable assemblies stamped directly into
+// the chunk grid (see trees.ts's generateTree + worldGen.ts's stampTrees),
+// which lets them be mined for wood like any other terrain. This file now
+// only covers the sparse, deliberately ambiguous alien-analog growths on
+// bodies whose life question is still open (lifeAmbiguous in
+// contentProfiles.ts) — the same narrative gate the ground-clutter scatter
+// uses. Those stay purely decorative/non-interactive by design (chopping
+// wouldn't fit their deliberately-ambiguous framing), so they keep the older
+// cosmetic InstancedMesh system unchanged. Every other body gets no trees.
 //
 // Scope note: this deliberately does not attempt visible branch geometry,
 // exposed roots, or hollow trunks — a canopy sphere on a trunk cylinder
@@ -48,27 +55,6 @@ export interface TreeProfile {
   forestThreshold: number;
 }
 
-function earthForest(): TreeProfile {
-  return {
-    species: {
-      trunkColor: [0.32, 0.22, 0.14],
-      canopyColor: [0.16, 0.42, 0.14],
-      canopyEmissive: [0, 0, 0],
-      canopyEmissiveIntensity: 0,
-      minHeight: 4,
-      maxHeight: 9,
-      trunkRadius: 0.35,
-      canopyRadiusFactor: 0.4,
-      deadChance: 0.08,
-      fallenChance: 0.05,
-    },
-    density: 0.22,
-    cell: 4,
-    forestFreq: 0.006,
-    forestThreshold: 0.52,
-  };
-}
-
 /** Sparse, deliberately ambiguous alien-analog growths — tinted from the
  *  body's own high-elevation colour (same approach as scatterProfiles.ts's
  *  ambiguousGrowth) so each qualifying world's growths read as belonging to
@@ -96,11 +82,14 @@ function ambiguousGrowths(planet: string): TreeProfile {
   };
 }
 
-/** Tree profiles for a body: one real forest on Earth, one sparse ambiguous
- *  grove on bodies whose life question is still open, none anywhere else —
- *  per the game's existing no-confirmed-life narrative rule. */
+/** Cosmetic (non-voxel) tree profiles for a body: a sparse ambiguous grove on
+ *  bodies whose life question is still open, none anywhere else. Earth is
+ *  excluded explicitly (even though its own baseline science note also
+ *  satisfies lifeAmbiguous) because its real forest is voxel-embedded now
+ *  (see trees.ts/worldGen.ts's stampTrees) — the two systems never coexist
+ *  on the same body. */
 export function getTrees(planet: string): TreeProfile[] {
-  if (archetypeFor(planet) === 'earth') return [earthForest()];
+  if (archetypeFor(planet) === 'earth') return [];
   if (lifeAmbiguous(planet)) return [ambiguousGrowths(planet)];
   return [];
 }

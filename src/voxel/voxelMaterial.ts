@@ -9,19 +9,25 @@
 import { DoubleSide, MeshStandardNodeMaterial } from 'three/webgpu';
 import {
   attribute,
+  vec2,
   vec3,
   float,
   mix,
+  mod,
+  floor,
+  fract,
   smoothstep,
   abs,
   normalLocal,
   normalize,
   positionWorld,
   positionView,
+  texture,
   mx_fractal_noise_vec3,
 } from 'three/tsl';
 import type { BiomeProfile } from '../terrain/biomes';
 import { LATITUDE_SPAN } from './voxelBiomes';
+import { getMaterialAtlasTexture, ATLAS_GRID } from './textureAtlas';
 
 /** True if this body actually authored a distinct polar colour (most bodies
  *  just repeat colorHigh) — skips the blend entirely, at zero cost, on
@@ -35,10 +41,29 @@ function hasPolarColor(biome: BiomeProfile): boolean {
 export function createVoxelMaterial(biome: BiomeProfile): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial();
 
-  // Vertex colour is RGBA: rgb = albedo with baked AO, a = emissive strength
-  // (lava, glowing ice). Emissive isn't AO-darkened so it reads in shadow/caves.
+  // Vertex colour is RGBA: rgb = biome tint with baked AO, a = emissive
+  // strength (lava, glowing ice). Emissive isn't AO-darkened so it reads in
+  // shadow/caves.
   const vcol = attribute('color', 'vec4');
-  let albedo = vcol.xyz;
+
+  // Material Identity pass — the mesher bakes a per-vertex (uLocal, vLocal,
+  // tileIndex) attribute (see greedyMesh.ts's emitQuad); sample the shared
+  // procedural atlas so every block's primary visual identity is a real
+  // material texture, not just a flat colour. The vertex colour above (now
+  // diluted toward white for natural blocks in greedyMesh.ts) multiplies on
+  // top as the biome-tint overlay — material identity stays primary.
+  const materialUV = attribute('materialUV', 'vec3');
+  const tileGrid = float(ATLAS_GRID);
+  const tileSize = float(1 / ATLAS_GRID);
+  const tileOrigin = vec2(mod(materialUV.z, tileGrid), floor(materialUV.z.div(tileGrid))).mul(tileSize);
+  const atlasUV = tileOrigin.add(fract(materialUV.xy).mul(tileSize));
+  const texColor = texture(getMaterialAtlasTexture(), atlasUV);
+
+  // Re-swizzled (a harmless no-op) so `albedo`'s inferred type stays the same
+  // broad shader-node shape as every later reassignment (mix() for the polar
+  // blend and fog) — .mul()'s own return type is narrower and would otherwise
+  // reject those reassignments.
+  let albedo = texColor.rgb.mul(vcol.xyz).rgb;
 
   // Break up flat faces: a low-amplitude world-space normal perturbation. Kept
   // small so lighting stays clean but faces no longer read as mirror-flat.

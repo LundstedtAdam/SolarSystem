@@ -13,6 +13,28 @@
 // steady-state meshing does no per-quad allocation (only one copy-out per mesh).
 
 import { CHUNK_SIZE, PALETTE_STRIDE, paddedIndex, voxelId, BLOCK } from './voxelTypes';
+import { getBlockFaceTileIndex } from './textureAtlas';
+
+// Material Identity pass — natural terrain/tree blocks let the biome palette
+// tint blend only partway with the atlas texture (TINT_STRENGTH), so the
+// procedural material (grass/dirt/stone/bark/leaves) stays the primary visual
+// identity and biome color reads as an overlay, not a replacement. Player-built
+// and ore blocks keep their existing full-strength saturated tint unchanged —
+// that's deliberate (see voxelBiomes.ts) so built things read as artificial.
+const NATURAL_TINT: ReadonlySet<number> = new Set([
+  BLOCK.SURFACE,
+  BLOCK.SUBSOIL,
+  BLOCK.ROCK,
+  BLOCK.GRASS,
+  BLOCK.SAND,
+  BLOCK.ICE,
+  BLOCK.ICE_GLOW,
+  BLOCK.LAVA,
+  BLOCK.SULPHUR,
+  BLOCK.WOOD_LOG,
+  BLOCK.LEAVES,
+]);
+const TINT_STRENGTH = 0.4;
 
 const N = CHUNK_SIZE;
 
@@ -26,6 +48,8 @@ export interface MeshArrays {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
+  /** Per-vertex (uLocal, vLocal, tileIndex) into the material atlas. */
+  uvs: Float32Array;
   indices: Uint32Array;
   indexCount: number;
 }
@@ -39,6 +63,7 @@ export interface GreedyMeshResult {
 let posPool = new Float32Array(0);
 let normPool = new Float32Array(0);
 let colPool = new Float32Array(0);
+let uvPool = new Float32Array(0);
 let idxPool = new Uint32Array(0);
 let vCount = 0;
 let iCount = 0;
@@ -53,6 +78,8 @@ function ensureVertexCapacity(extraVerts: number) {
   // Colours are RGBA (rgb = albedo*AO, a = emissive), so 4 floats per vertex.
   const cap4 = (cap / 3) * 4;
   const nc = new Float32Array(cap4); nc.set(colPool.subarray(0, vCount * 4)); colPool = nc;
+  // UVs are (uLocal, vLocal, tileIndex), 3 floats per vertex — same stride as position.
+  const nu = new Float32Array(cap); nu.set(uvPool.subarray(0, vCount * 3)); uvPool = nu;
 }
 
 function ensureIndexCapacity(extra: number) {
@@ -104,10 +131,12 @@ function pushVertex(
   px: number, py: number, pz: number,
   nx: number, ny: number, nz: number,
   cr: number, cg: number, cb: number, ce: number,
+  um: number, vm: number, tileIdx: number,
 ) {
   const o = vCount * 3;
   posPool[o] = px; posPool[o + 1] = py; posPool[o + 2] = pz;
   normPool[o] = nx; normPool[o + 1] = ny; normPool[o + 2] = nz;
+  uvPool[o] = um; uvPool[o + 1] = vm; uvPool[o + 2] = tileIdx;
   const c = vCount * 4;
   colPool[c] = cr; colPool[c + 1] = cg; colPool[c + 2] = cb; colPool[c + 3] = ce;
   vCount++;
@@ -145,19 +174,28 @@ function emitQuad(
   const nx = d === 0 ? dir : 0;
   const ny = d === 1 ? dir : 0;
   const nz = d === 2 ? dir : 0;
-  const r = palette[id * PALETTE_STRIDE];
-  const g = palette[id * PALETTE_STRIDE + 1];
-  const b = palette[id * PALETTE_STRIDE + 2];
+  let r = palette[id * PALETTE_STRIDE];
+  let g = palette[id * PALETTE_STRIDE + 1];
+  let b = palette[id * PALETTE_STRIDE + 2];
   const em = palette[id * PALETTE_STRIDE + 3]; // emissive (not AO-darkened)
+  // Dilute the biome tint toward white on natural terrain/tree blocks so the
+  // atlas texture (sampled in voxelMaterial.ts) stays the primary material
+  // identity — biome color is an overlay, not a replacement.
+  if (NATURAL_TINT.has(id)) {
+    r = r * TINT_STRENGTH + (1 - TINT_STRENGTH);
+    g = g * TINT_STRENGTH + (1 - TINT_STRENGTH);
+    b = b * TINT_STRENGTH + (1 - TINT_STRENGTH);
+  }
+  const tileIdx = getBlockFaceTileIndex(id, d, dir);
 
   const v0 = vCount;
-  pushVertex(p[0], p[1], p[2], nx, ny, nz, r * c00, g * c00, b * c00, em);
-  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10, em);
+  pushVertex(p[0], p[1], p[2], nx, ny, nz, r * c00, g * c00, b * c00, em, 0, 0, tileIdx);
+  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10, em, w, 0, tileIdx);
   pushVertex(
     p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2],
-    nx, ny, nz, r * c11, g * c11, b * c11, em,
+    nx, ny, nz, r * c11, g * c11, b * c11, em, w, h, tileIdx,
   );
-  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01, em);
+  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01, em, 0, h, tileIdx);
 
   const a00 = ao & 3;
   const a10 = (ao >> 2) & 3;
@@ -254,6 +292,7 @@ function meshPass(voxels: Uint32Array, palette: Float32Array): MeshArrays {
     positions: new Float32Array(posPool.subarray(0, vCount * 3)),
     normals: new Float32Array(normPool.subarray(0, vCount * 3)),
     colors: new Float32Array(colPool.subarray(0, vCount * 4)),
+    uvs: new Float32Array(uvPool.subarray(0, vCount * 3)),
     indices: new Uint32Array(idxPool.subarray(0, iCount)),
     indexCount: iCount,
   };
@@ -266,6 +305,7 @@ function emptyMesh(): MeshArrays {
     positions: new Float32Array(0),
     normals: new Float32Array(0),
     colors: new Float32Array(0),
+    uvs: new Float32Array(0),
     indices: new Uint32Array(0),
     indexCount: 0,
   };

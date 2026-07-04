@@ -191,6 +191,9 @@ export function getVoxelPalette(planet: string): Float32Array {
   // condenser as a cool intake vent (self-lit so they're visible at night).
   rgb(pal, BLOCK.EXTRACTOR, 0.65, 0.42, 0.18, 0.18);
   rgb(pal, BLOCK.CONDENSER, 0.35, 0.55, 0.68, 0.2);
+  // Material Identity pass — choppable voxel-embedded trees (Earth only).
+  rgb(pal, BLOCK.WOOD_LOG, 0.32, 0.22, 0.14);
+  rgb(pal, BLOCK.LEAVES, 0.16, 0.42, 0.14);
   return pal;
 }
 

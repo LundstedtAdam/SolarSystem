@@ -20,6 +20,7 @@ ctx.onmessage = (e: MessageEvent<MeshRequest>) => {
     positions: opaque.positions,
     normals: opaque.normals,
     colors: opaque.colors,
+    uvs: opaque.uvs,
     indices: opaque.indices,
     indexCount: opaque.indexCount,
     waterPositions: water.positions,

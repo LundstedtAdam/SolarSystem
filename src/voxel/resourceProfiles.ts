@@ -22,6 +22,7 @@ export const RESOURCE_LABEL: Record<ResourceType, string> = {
   hematite: 'Hematite',
   lithium: 'Lithium',
   artifact: 'Artifact',
+  wood: 'Wood',
 };
 
 /** Display colour per resource — shared by ground drops and silo stacks. */
@@ -39,6 +40,7 @@ export const RESOURCE_COLOR: Record<ResourceType, [number, number, number]> = {
   hematite: [0.52, 0.29, 0.27],
   lithium: [0.85, 0.6, 0.7],
   artifact: [0.6, 0.3, 0.9],
+  wood: [0.42, 0.29, 0.16],
 };
 
 export interface ResourceVein {
