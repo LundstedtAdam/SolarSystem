@@ -9,6 +9,7 @@ import { VoxelSky } from './VoxelSky';
 import { VoxelWeather } from './VoxelWeather';
 import { VoxelScatter } from './VoxelScatter';
 import { Emitters } from './Emitters';
+import { RiverWaterfalls } from './RiverWaterfalls';
 import { DropItems } from './DropItems';
 import { SiloVisuals } from './SiloVisuals';
 import { StationVisuals } from './StationVisuals';
@@ -90,6 +91,7 @@ export function VoxelScene() {
       <VoxelSky planet={planet} />
       <VoxelScatter planet={planet} />
       <Emitters planet={planet} />
+      <RiverWaterfalls planet={planet} />
       <DropItems planet={planet} />
       <SiloVisuals planet={planet} />
       <StationVisuals planet={planet} />

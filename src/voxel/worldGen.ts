@@ -10,6 +10,7 @@ import type { Chunk } from './chunk';
 import { getVoxelTerrain, type VoxelTerrainParams } from './voxelBiomes';
 import type {
   LandmarkSpec,
+  LakeSpec,
   POISpec,
   ScienceNoteSpec,
   DeepDiscoverySpec,
@@ -92,9 +93,64 @@ function landmarkDelta(wx: number, wz: number, lm: LandmarkSpec): number {
         ? -lm.amplitude * (1 - t * t) * taper // trench
         : lm.amplitude * (1 - t) * taper; // wall
     }
+    case 'river': {
+      // A short polyline trench (World Richness Phase 6): each consecutive
+      // point pair is one canyon-style segment (no end taper between
+      // segments, so a multi-segment river reads as continuous; the
+      // outermost ends do taper, same as a canyon, so the river doesn't
+      // stop in an abrupt wall).
+      if (!lm.points || lm.points.length < 2) return 0;
+      let deepest = 0;
+      for (let i = 0; i < lm.points.length - 1; i++) {
+        const [ax, az] = lm.points[i];
+        const [bx, bz] = lm.points[i + 1];
+        const dirX = bx - ax;
+        const dirZ = bz - az;
+        const segLen = Math.hypot(dirX, dirZ) || 1;
+        const ux = dirX / segLen;
+        const uz = dirZ / segLen;
+        const segDx = wx - ax;
+        const segDz = wz - az;
+        const along = segDx * ux + segDz * uz;
+        if (along < 0 || along > segLen) continue; // outside this segment's span
+        const perp = Math.abs(-segDx * uz + segDz * ux);
+        if (perp > lm.radius) continue;
+        const isEndSegment = i === 0 || i === lm.points.length - 2;
+        const distFromNearEnd = i === 0 ? along : segLen - along;
+        const taper = isEndSegment ? Math.min(1, distFromNearEnd / (lm.radius * 2)) : 1;
+        const t = perp / lm.radius;
+        const delta = -lm.amplitude * (1 - t * t) * taper;
+        if (delta < deepest) deepest = delta;
+      }
+      return deepest;
+    }
     default:
       return 0;
   }
+}
+
+/** Bowl delta (voxels) from a single procedurally-placed lake instance at its
+ *  jittered anchor within the 3x3 neighbourhood of `spec.cell`-sized cells —
+ *  identical placement mechanism to craterDelta above, applied per-LakeSpec.
+ *  Returns 0 outside any instance's radius. */
+function lakeDelta(wx: number, wz: number, seed: number, spec: LakeSpec): number {
+  const sSeed = seed + (seedFromName(spec.id) % 100000);
+  const gx0 = Math.floor(wx / spec.cell);
+  const gz0 = Math.floor(wz / spec.cell);
+  for (let oz = -1; oz <= 1; oz++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      const gx = gx0 + ox;
+      const gz = gz0 + oz;
+      if (cellHash(gx, gz, sSeed + 17) > spec.density) continue;
+      const ax = (gx + cellHash(gx, gz, sSeed + 1)) * spec.cell;
+      const az = (gz + cellHash(gx, gz, sSeed + 2)) * spec.cell;
+      const t = Math.hypot(wx - ax, wz - az) / spec.radius;
+      if (t >= 1) continue;
+      const f = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3; // flat floor, ramping to the rim
+      return -spec.depth * f;
+    }
+  }
+  return 0;
 }
 
 /** Surface height (voxels) of the column at world (wx, wz). */
@@ -119,6 +175,7 @@ function columnHeight(wx: number, wz: number, p: VoxelTerrainParams, seed: numbe
   }
   if (p.craters > 0) h += craterDelta(wx, wz, seed, p.craters);
   for (let i = 0; i < p.landmarks.length; i++) h += landmarkDelta(wx, wz, p.landmarks[i]);
+  for (let i = 0; i < p.lakes.length; i++) h += lakeDelta(wx, wz, seed, p.lakes[i]);
   return Math.floor(h);
 }
 
@@ -208,6 +265,35 @@ function layerBlock(
   }
 }
 
+/** Local water ceiling at a column: the higher of the body's global sea
+ *  level (earth only) and any lake/river depression's own natural rim
+ *  height active at this exact column (World Richness Phase 6). A
+ *  depression's rim height is `h + dip`, where `dip` is the exact amount
+ *  that lake/river subtracted from the natural terrain at this column — so
+ *  no separate rim-sampling is needed, and the water surface naturally
+ *  follows the depression's own taper down to 0 at its edge. Shared by
+ *  generateChunk's fill decision and surfaceHeightAt's spawn-safety check. */
+export function localWaterCeilingAt(
+  wx: number,
+  wz: number,
+  h: number,
+  p: VoxelTerrainParams,
+  seed: number,
+): number {
+  let ceiling = p.archetype === 'earth' ? p.waterLevel : -1;
+  for (let i = 0; i < p.lakes.length; i++) {
+    const dip = -lakeDelta(wx, wz, seed, p.lakes[i]);
+    if (dip > 0.5) ceiling = Math.max(ceiling, h + dip);
+  }
+  for (let i = 0; i < p.landmarks.length; i++) {
+    const lm = p.landmarks[i];
+    if (lm.kind !== 'river') continue;
+    const dip = -landmarkDelta(wx, wz, lm);
+    if (dip > 0.5) ceiling = Math.max(ceiling, h + dip);
+  }
+  return ceiling;
+}
+
 export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: number): void {
   const { voxels } = chunk;
   const arche = params.archetype;
@@ -221,7 +307,8 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
       const wz = baseZ + lz;
       const h = columnHeight(wx, wz, params, seed);
-      const topFill = Math.max(params.waterLevel, params.lavaLevel, h);
+      const localWaterCeiling = localWaterCeilingAt(wx, wz, h, params, seed);
+      const topFill = Math.max(params.waterLevel, params.lavaLevel, h, localWaterCeiling);
       if (baseY > topFill) continue; // wholly above terrain and any liquid
 
       // Local slope (once per column, not per voxel) — a cheap 4-sample cross
@@ -241,7 +328,7 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
 
         if (wy > h) {
           // Above the solid surface: fill liquids in the lowlands.
-          if (arche === 'earth' && wy <= params.waterLevel) block = BLOCK.WATER;
+          if (wy <= localWaterCeiling) block = BLOCK.WATER;
           else if (arche === 'lava' && wy <= params.lavaLevel) block = BLOCK.LAVA;
         } else if (wy <= 0) {
           block = BLOCK.ROCK; // solid floor
@@ -397,8 +484,11 @@ export function surfaceHeightAt(
   params: VoxelTerrainParams,
   seed: number,
 ): number {
-  // Spawn above any sea/lava surface too, so the player never starts submerged.
-  return Math.max(columnHeight(wx, wz, params, seed), params.waterLevel, params.lavaLevel);
+  // Spawn above any sea/lava/local-lake-or-river surface too, so the player
+  // never starts submerged (including the rare case of a procedural lake
+  // landing on the disembark origin).
+  const h = columnHeight(wx, wz, params, seed);
+  return Math.max(h, params.waterLevel, params.lavaLevel, localWaterCeilingAt(wx, wz, h, params, seed));
 }
 
 /** A cell-grid-placed spec found near the player (anchor + distance). */

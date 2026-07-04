@@ -75,6 +75,19 @@ const VISUALS: Record<EmitterSpec['kind'], EmitterVisual> = {
     swirl: 0,
     additive: false,
   },
+  // World Richness Phase 6 — falling mist column (negative rise), placed at
+  // a fixed point derived from a 'river' landmark's own polyline wherever it
+  // crosses a steep drop (RiverWaterfalls.tsx), never cell-hash scattered.
+  waterfall: {
+    color: [0.8, 0.88, 0.96],
+    size: 0.4,
+    particles: 26,
+    rise: -7,
+    spread: 1.4,
+    height: 14,
+    swirl: 0.4,
+    additive: false,
+  },
 };
 
 export function getEmitterVisual(kind: EmitterSpec['kind']): EmitterVisual {

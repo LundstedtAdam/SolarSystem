@@ -20,7 +20,7 @@ import { QUALITY } from '../systems/quality';
 import { getScatter, getGroundClutter, type ScatterKind, type ScatterProfile } from './scatterProfiles';
 import { getContent } from './contentProfiles';
 import { getVoxelTerrain, latitudeOf } from './voxelBiomes';
-import { landHeightAt, oreAt } from './worldGen';
+import { landHeightAt, oreAt, localWaterCeilingAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
 
 /** Two crossed vertical quads (an X-shaped billboard), base at local y=0 so it
@@ -142,13 +142,18 @@ function PropLayer({
           const wx = (gx + cellHash(gx, gz, seed + 1)) * cell;
           const wz = (gz + cellHash(gx, gz, seed + 2)) * cell;
           const land = landHeightAt(wx, wz, terrain, seed);
-          if (terrain.waterLevel >= 0 && land < terrain.waterLevel) continue; // underwater
+          // Local water ceiling (World Richness Phase 6) — the higher of the
+          // global sea and any lake/river's own rim active here, so scatter
+          // correctly avoids/hugs the new procedural water bodies too, not
+          // just the pre-existing earth-archetype global sea.
+          const waterCeiling = localWaterCeilingAt(wx, wz, land, terrain, seed);
+          if (waterCeiling >= 0 && land < waterCeiling) continue; // underwater
           if (terrain.lavaLevel >= 0 && land < terrain.lavaLevel) continue; // in lava
           // Shoreline/wetland dressing: only within a couple voxels of the
           // water surface, on either side (reeds need shore, not open water).
           if (
             profile.waterAdjacent &&
-            !(terrain.waterLevel >= 0 && land >= terrain.waterLevel - 2 && land <= terrain.waterLevel + 1)
+            !(waterCeiling >= 0 && land >= waterCeiling - 2 && land <= waterCeiling + 1)
           ) {
             continue;
           }

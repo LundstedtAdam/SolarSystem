@@ -190,15 +190,59 @@ function ambiguousGrowth(planet: string): ScatterProfile {
   };
 }
 
+/** Wet, dark mineral dressing along any shoreline (World Richness Phase 6) —
+ *  abiotic, so every body gets this regardless of life status; the
+ *  waterAdjacent filter (VoxelScatter.tsx) means it silently places nothing
+ *  on a body with no water/lake at all, at negligible cost. Reuses 'rock'. */
+function shorelineMinerals(planet: string): ScatterProfile {
+  const b = getBiome(planet);
+  return {
+    kind: 'rock',
+    color: [b.colorLow[0] * 0.5, b.colorLow[1] * 0.5, b.colorLow[2] * 0.55],
+    emissive: [0, 0, 0],
+    emissiveIntensity: 0,
+    density: 0.3,
+    cell: 3,
+    minScale: 0.15,
+    maxScale: 0.35,
+    scaleXYZ: [1, 0.5, 1],
+    yFactor: 0.25,
+    waterAdjacent: true,
+  };
+}
+
+/** Earth-only reeds along the shoreline — real plant matter, so (unlike
+ *  shorelineMinerals) this is not offered on ambiguous-life bodies: "reeds"
+ *  reads as a much stronger, less deniable life claim than the deliberately
+ *  vague growths used elsewhere. */
+function shorelineReeds(): ScatterProfile {
+  return {
+    kind: 'blade',
+    color: [0.28, 0.4, 0.2],
+    emissive: [0, 0, 0],
+    emissiveIntensity: 0,
+    density: 0.35,
+    cell: 3,
+    minScale: 0.7,
+    maxScale: 1.3,
+    scaleXYZ: [1, 1.4, 1],
+    yFactor: 0,
+    waterAdjacent: true,
+    latitudeFalloff: true,
+  };
+}
+
 /** Ground-level clutter layers for a body: always includes fine abiotic
- *  grit; additionally includes flora-like accents on Earth (real biology,
- *  unconditional) or bodies whose life question is still open (deliberately
- *  ambiguous — see lifeAmbiguous()). Every other body stays abiotic-only, by
- *  design, per the game's existing no-confirmed-life narrative rule. */
+ *  grit, a universal ore-tell fleck, and shoreline mineral dressing;
+ *  additionally includes flora-like accents on Earth (real biology,
+ *  unconditional, plus reeds) or bodies whose life question is still open
+ *  (deliberately ambiguous — see lifeAmbiguous()). Every other body stays
+ *  abiotic-only, by design, per the game's existing no-confirmed-life
+ *  narrative rule. */
 export function getGroundClutter(planet: string): ScatterProfile[] {
-  const layers: ScatterProfile[] = [abioticGrit(planet), oreGlint()];
+  const layers: ScatterProfile[] = [abioticGrit(planet), oreGlint(), shorelineMinerals(planet)];
   if (archetypeFor(planet) === 'earth') {
-    layers.push(earthGrass(), earthFlora());
+    layers.push(earthGrass(), earthFlora(), shorelineReeds());
   } else if (lifeAmbiguous(planet)) {
     layers.push(ambiguousGrowth(planet));
   }

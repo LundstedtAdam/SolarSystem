@@ -8,8 +8,10 @@ import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
 import {
   getContent,
   MICRO_DISCOVERY,
+  lakesFor,
   type LandmarkSpec,
   type POISpec,
+  type LakeSpec,
   type ScienceNoteSpec,
   type DeepDiscoverySpec,
   type TranslationFragmentSpec,
@@ -97,6 +99,8 @@ export interface VoxelTerrainParams {
   cellNoiseAmp: number;
   /** Named procedural landmarks carved into the height field (Phase 10.1). */
   landmarks: LandmarkSpec[];
+  /** Procedurally-placed lakes, gated by archetype (World Richness Phase 6). */
+  lakes: LakeSpec[];
   /** Modular ruined points-of-interest stamped into chunks (Phase 10.2). */
   pois: POISpec[];
   /** Mineable ore veins for this body (Phase 11). */
@@ -130,7 +134,11 @@ export function getVoxelPalette(planet: string): Float32Array {
   // Archetype-specific materials.
   rgb(pal, BLOCK.GRASS, b.colorMid[0] * 0.75, b.colorMid[1], b.colorMid[2] * 0.5);
   rgb(pal, BLOCK.SAND, ...(b.colorMid as [number, number, number]));
-  rgb(pal, BLOCK.WATER, 0.08, 0.26, 0.5);
+  // Water reads blue everywhere except dune (Titan-style methane lakes,
+  // World Richness Phase 6) — a murky green-brown liquid instead of Earth
+  // seawater, since the same BLOCK.WATER id/mesh pass is reused for both.
+  if (archetypeFor(planet) === 'dune') rgb(pal, BLOCK.WATER, 0.22, 0.32, 0.18);
+  else rgb(pal, BLOCK.WATER, 0.08, 0.26, 0.5);
   rgb(pal, BLOCK.ICE, ...(b.colorHigh as [number, number, number]));
   // Glowing ice: blue-shifted toward the biome, self-lit.
   rgb(
@@ -215,6 +223,7 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     glowDepth: 0,
     lavaLevel: -1,
     landmarks: getContent(planet).landmarks,
+    lakes: lakesFor(arche),
     // Every body gets the universal micro-discovery cache on top of its own
     // authored POIs (World Richness Phase 3) — same "universal + per-body"
     // composition FUNDAMENTALS already uses for ore veins below.

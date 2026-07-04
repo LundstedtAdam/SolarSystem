@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import {
-  BufferGeometry,
-  BufferAttribute,
-  Points,
-  PointsMaterial,
-  AdditiveBlending,
-  NormalBlending,
-  Color,
-  type Material,
-} from 'three/webgpu';
+import { BufferAttribute, type Material } from 'three/webgpu';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
 import { getContent } from './contentProfiles';
@@ -19,33 +10,9 @@ import { getVoxelTerrain } from './voxelBiomes';
 import { getSurfacePhysics } from './voxelPhysics';
 import { landHeightAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
+import { makePoints, HIDDEN_Y } from './emitterPoints';
 
-const HIDDEN_Y = -100000; // park dead/idle particles far below the world
 const MAX_ANCHORS = 12; // bound active column emitters around the player
-
-function makePoints(
-  capacity: number,
-  color: [number, number, number],
-  size: number,
-  additive: boolean,
-): Points {
-  const positions = new Float32Array(capacity * 3);
-  for (let i = 0; i < capacity; i++) positions[i * 3 + 1] = HIDDEN_Y;
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new BufferAttribute(positions, 3));
-  const material = new PointsMaterial({
-    size,
-    sizeAttenuation: true,
-    color: new Color(...color),
-    transparent: true,
-    opacity: additive ? 0.7 : 0.55,
-    depthWrite: false,
-    blending: additive ? AdditiveBlending : NormalBlending,
-  });
-  const p = new Points(geometry, material);
-  p.frustumCulled = false;
-  return p;
-}
 
 /** Deterministically-placed column emitters around the player (dust devils,
  *  fumaroles, geysers, methane bubbles). Anchors are rebuilt when the player

@@ -5,7 +5,7 @@ import { cellHash, seedFromName } from './noise';
 import { Chunk } from './chunk';
 import { BLOCK, voxelId, chunkIndex, CHUNK_SIZE } from './voxelTypes';
 import type { VoxelTerrainParams } from './voxelBiomes';
-import type { POISpec, DeepDiscoverySpec } from './contentProfiles';
+import type { POISpec, DeepDiscoverySpec, LakeSpec, LandmarkSpec } from './contentProfiles';
 
 // Synthetic specs so the tests don't depend on shipped content data.
 const ALWAYS = { id: 'test-poi', cell: 20, density: 1 }; // density 1: every cell places one
@@ -127,6 +127,7 @@ describe('findNearbyDeepSite cylinder clamp', () => {
     duneAmp: 0,
     craters: 0,
     landmarks: [],
+    lakes: [],
     deepSites: [
       {
         id: 'deep-test',
@@ -179,6 +180,7 @@ describe('detail/micro terrain perturbation', () => {
     duneAmp: 0,
     craters: 0,
     landmarks: [],
+    lakes: [],
   } as unknown as VoxelTerrainParams;
   const seed = 42;
 
@@ -233,6 +235,7 @@ describe('worm-tunnel cave carve (World Richness Phase 4)', () => {
     glowDepth: 0,
     lavaLevel: -1,
     landmarks: [],
+    lakes: [],
     pois: [],
     resources: [],
     scienceNotes: [],
@@ -292,6 +295,7 @@ describe('layered rock band jitter (World Richness Phase 4)', () => {
     glowDepth: 0,
     lavaLevel: -1,
     landmarks: [],
+    lakes: [],
     pois: [],
     resources: [],
     scienceNotes: [],
@@ -322,5 +326,154 @@ describe('layered rock band jitter (World Richness Phase 4)', () => {
     const params = { ...baseParams, cellNoiseAmp: 0.6 } as VoxelTerrainParams;
     const found = blocksAtDepth4(params);
     expect(found.has(BLOCK.SUBSOIL)).toBe(true);
+  });
+});
+
+describe('lake carving + local water fill (World Richness Phase 6)', () => {
+  // rock archetype + waterLevel/lavaLevel both -1: any WATER voxel found can
+  // only come from the lake's own local fill, never a global sea.
+  const lake: LakeSpec = { id: 'test-lake', cell: 100, density: 1, radius: 10, depth: 5 };
+  const baseParams = {
+    archetype: 'rock',
+    baseHeight: 50,
+    rollAmp: 0,
+    rollFreq: 1,
+    mountainAmp: 0,
+    mountainFreq: 1,
+    ridged: false,
+    octaves: 1,
+    caveFreq: 0.1,
+    caveThreshold: 1.1,
+    caveTunnelWidth: 0,
+    detailAmp: 0,
+    detailFreq: 1,
+    microAmp: 0,
+    microFreq: 1,
+    cellNoiseAmp: 0,
+    cellNoiseFreq: 1,
+    craters: 0,
+    waterLevel: -1,
+    duneAmp: 0,
+    glowDepth: 0,
+    lavaLevel: -1,
+    landmarks: [],
+    lakes: [lake],
+    pois: [],
+    resources: [],
+    scienceNotes: [],
+    deepSites: [],
+    translationFragments: [],
+  } as unknown as VoxelTerrainParams;
+  const seed = 555;
+
+  function scanForBlock(params: VoxelTerrainParams, block: number, chunkSpan: number): boolean {
+    for (let cx = 0; cx < chunkSpan; cx++) {
+      for (let cz = 0; cz < chunkSpan; cz++) {
+        for (let cy = 0; cy < 3; cy++) {
+          const chunk = new Chunk(cx, cy, cz);
+          generateChunk(chunk, params, seed);
+          for (let i = 0; i < chunk.voxels.length; i++) {
+            if (voxelId(chunk.voxels[i]) === block) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  it('dips the height field at the lake (deterministic, same seed/position)', () => {
+    // density=1 guarantees every checked cell registers an instance, so the
+    // origin cell's own anchor is a real lake; its centre must be lower than
+    // the flat 50 baseline everywhere else on this synthetic body.
+    const atOrigin = landHeightAt(0, 0, baseParams, seed);
+    const farAway = landHeightAt(1000, 1000, baseParams, seed);
+    expect(farAway).toBe(50);
+    expect(atOrigin).toBeLessThanOrEqual(farAway);
+  });
+
+  it('fills the basin with water even though the body has no global sea', () => {
+    expect(scanForBlock(baseParams, BLOCK.WATER, 2)).toBe(true);
+  });
+
+  it('places no water at all when there are no lakes (no regression on dry archetypes)', () => {
+    const dry = { ...baseParams, lakes: [] } as VoxelTerrainParams;
+    expect(scanForBlock(dry, BLOCK.WATER, 2)).toBe(false);
+  });
+});
+
+describe('river carving + water fill (World Richness Phase 6)', () => {
+  const river: LandmarkSpec = {
+    name: 'Test River',
+    kind: 'river',
+    position: [0, 0],
+    radius: 4,
+    amplitude: 6,
+    points: [
+      [10, 10],
+      [10, 90],
+    ],
+  };
+  const baseParams = {
+    archetype: 'rock',
+    baseHeight: 50,
+    rollAmp: 0,
+    rollFreq: 1,
+    mountainAmp: 0,
+    mountainFreq: 1,
+    ridged: false,
+    octaves: 1,
+    caveFreq: 0.1,
+    caveThreshold: 1.1,
+    caveTunnelWidth: 0,
+    detailAmp: 0,
+    detailFreq: 1,
+    microAmp: 0,
+    microFreq: 1,
+    cellNoiseAmp: 0,
+    cellNoiseFreq: 1,
+    craters: 0,
+    waterLevel: -1,
+    duneAmp: 0,
+    glowDepth: 0,
+    lavaLevel: -1,
+    landmarks: [river],
+    lakes: [],
+    pois: [],
+    resources: [],
+    scienceNotes: [],
+    deepSites: [],
+    translationFragments: [],
+  } as unknown as VoxelTerrainParams;
+  const seed = 777;
+
+  it('carves a trench along the polyline but leaves terrain off the path flat', () => {
+    const onPath = landHeightAt(10, 50, baseParams, seed); // mid-segment
+    const offPath = landHeightAt(500, 500, baseParams, seed); // far from the river
+    expect(offPath).toBe(50);
+    expect(onPath).toBeLessThan(offPath);
+  });
+
+  it('tapers to nothing well past the trench radius', () => {
+    const farAcross = landHeightAt(10 + 100, 50, baseParams, seed); // 100 > radius(4)
+    expect(farAcross).toBe(50);
+  });
+
+  it('fills the trench with water even though the body has no global sea', () => {
+    let foundWater = false;
+    for (let cx = 0; cx < 1 && !foundWater; cx++) {
+      for (let cz = 0; cz < 3 && !foundWater; cz++) {
+        for (let cy = 0; cy < 3 && !foundWater; cy++) {
+          const chunk = new Chunk(cx, cy, cz);
+          generateChunk(chunk, baseParams, seed);
+          for (let i = 0; i < chunk.voxels.length; i++) {
+            if (voxelId(chunk.voxels[i]) === BLOCK.WATER) {
+              foundWater = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+    expect(foundWater).toBe(true);
   });
 });

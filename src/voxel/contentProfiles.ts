@@ -8,6 +8,7 @@
 
 import type { ScatterProfile } from './scatterProfiles';
 import { assertNoLifeClaim } from './contentValidation';
+import type { Archetype } from './voxelBiomes';
 
 /** A surface scatter prop. Same shape as the archetype ScatterProfile, but
  *  authored explicitly per body so a world can mix several distinct, science-
@@ -15,13 +16,18 @@ import { assertNoLifeClaim } from './contentValidation';
 export type PropSpec = ScatterProfile;
 
 /** A large procedural geological landmark, carved into the height field at a
- *  body-relative anchor (consumed in Phase 10.1). */
+ *  body-relative anchor (consumed in Phase 10.1). 'river' is a World
+ *  Richness Phase 6 addition — see `points` below; every other kind is
+ *  unchanged and still uses `position`/`radius`/`length`/`angleDeg`. */
 export interface LandmarkSpec {
   name: string;
-  kind: 'volcano' | 'canyon' | 'basin' | 'ridge' | 'crater' | 'lake';
-  /** World anchor (voxel coords) relative to the disembark origin. */
+  kind: 'volcano' | 'canyon' | 'basin' | 'ridge' | 'crater' | 'lake' | 'river';
+  /** World anchor (voxel coords) relative to the disembark origin. Unused
+   *  for 'river' (use `points` instead) but kept required so every other
+   *  kind's call sites don't need a schema change. */
   position: [number, number];
-  /** Radial footprint radius, or half-width for linear features (voxels). */
+  /** Radial footprint radius, or half-width for linear features (voxels).
+   *  For 'river', the trench's half-width. */
   radius: number;
   /** Peak/trench amplitude in voxels (magnitude; sign is applied by kind). */
   amplitude: number;
@@ -29,7 +35,43 @@ export interface LandmarkSpec {
   length?: number;
   /** Linear features: axis orientation in degrees (0 = +X). */
   angleDeg?: number;
+  /** 'river' only: a short polyline (2-4 points) the trench follows: each
+   *  consecutive pair is one canyon-style segment. The water fill along a
+   *  river interpolates naturally from the carve depth (see worldGen.ts),
+   *  so no separate per-point elevation needs authoring. */
+  points?: [number, number][];
   description?: string;
+}
+
+/** A procedurally-placed lake — a cell-hash-scattered basin (same mechanism
+ *  as craters/POIs) that carves a bowl and fills it with liquid up to its
+ *  own local rim height, independent of the body's global sea level.
+ *  World Richness Phase 6. */
+export interface LakeSpec {
+  id: string;
+  cell: number;
+  density: number;
+  /** Bowl radius (voxels). */
+  radius: number;
+  /** Bowl depth at the centre (voxels) — also how far above the floor the
+   *  local water fill rises (the natural undisturbed ground level). */
+  depth: number;
+}
+
+/** Lakes are gated by archetype (only where a liquid cycle reads naturally),
+ *  not hand-authored per body: earth gets ordinary lakes; dune (Titan) gets
+ *  sparser, larger methane lakes. Every other archetype gets none — a lake
+ *  on a dry rock/regolith/ice world would look like a bug, not a feature.
+ *  Applied in voxelBiomes.ts getVoxelTerrain, same universal-per-archetype
+ *  composition as MICRO_DISCOVERY above (one definition, not 16 copies). */
+const LAKE_SPECS: Partial<Record<Archetype, LakeSpec>> = {
+  earth: { id: 'lake-earth', cell: 260, density: 0.12, radius: 22, depth: 6 },
+  dune: { id: 'lake-dune-methane', cell: 320, density: 0.08, radius: 18, depth: 4 },
+};
+
+export function lakesFor(archetype: Archetype): LakeSpec[] {
+  const spec = LAKE_SPECS[archetype];
+  return spec ? [spec] : [];
 }
 
 /** Structural archetype of a POI; selects the module pool + materials.
@@ -98,10 +140,17 @@ export interface TranslationFragmentSpec {
 }
 
 /** A world-anchored particle emitter (dust devil, fumarole, geyser, bubbles…)
- *  distinct from the camera-box weather system (consumed in Phase 10.3). */
+ *  distinct from the camera-box weather system (consumed in Phase 10.3).
+ *  'waterfall' (World Richness Phase 6) is never placed via density/cell
+ *  like the others — it's derived automatically from 'river' landmark
+ *  points wherever the polyline crosses a steep drop (RiverWaterfalls.tsx),
+ *  so a waterfall can never drift out of sync with its river's geometry.
+ *  Kept in this union (rather than a separate type) so getEmitterVisual's
+ *  Record stays the single place every emitter kind's look is defined. */
 export interface EmitterSpec {
-  kind: 'dust_devil' | 'fumarole' | 'geyser' | 'methane_bubble' | 'vacuum_dust';
-  /** Probability per emitter cell; emitters are placed deterministically. */
+  kind: 'dust_devil' | 'fumarole' | 'geyser' | 'methane_bubble' | 'vacuum_dust' | 'waterfall';
+  /** Probability per emitter cell; emitters are placed deterministically.
+   *  Unused for 'waterfall' (position is derived, not cell-hash placed). */
   density: number;
   cell: number;
 }
@@ -907,6 +956,26 @@ const CONTENT: Record<string, ContentProfile> = {
     ],
     landmarks: [
       { name: 'Elevator Anchor', kind: 'ridge', position: [0, 400], radius: 50, amplitude: 60, length: 200, angleDeg: 0, description: 'The ruined ground anchor of a space elevator.' },
+      // World Richness Phase 6 demonstration river: a shallow, winding
+      // trench with local water fill (worldGen.ts localWaterCeilingAt) and
+      // an automatically-derived waterfall wherever a segment's natural
+      // terrain height drops enough (RiverWaterfalls.tsx). Exact visual
+      // placement/aesthetics have not been playtested — the noise-driven
+      // terrain height at these specific points was not inspected live.
+      {
+        name: 'Meander Creek',
+        kind: 'river',
+        position: [100, 100], // unused for 'river'; points[] carries the path
+        radius: 6,
+        amplitude: 4,
+        points: [
+          [100, 100],
+          [180, 160],
+          [260, 240],
+          [340, 280],
+        ],
+        description: 'A shallow creek winding through the lowlands.',
+      },
     ],
     pois: [
       {
