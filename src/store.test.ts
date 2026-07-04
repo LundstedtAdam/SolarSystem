@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useStore, nextStructureId, backpackUsed, type Structure } from './store';
+import { useStore, nextStructureId, backpackUsed, MAX_OFFLINE_SECONDS, type Structure } from './store';
 import { DEFAULT_UPGRADES } from './ship/upgrades';
 
 // Pristine state captured before any test runs; actions never mutate state
@@ -195,5 +195,134 @@ describe('refineTick', () => {
     });
     useStore.getState().refineTick('Mars');
     expect(useStore.getState().items.iron_ingot ?? 0).toBe(0);
+  });
+});
+
+describe('extractTick', () => {
+  it('accumulates fractional progress and deposits whole units when powered', () => {
+    // Jorden has an atmosphere, so one wind turbine (2 power) covers the
+    // extractor's 1-power draw.
+    seedStructure({ planet: 'Jorden', type: 'wind', pos: [0, 0, 0], stored: {}, capacity: 0 });
+    const extractor = seedStructure({
+      planet: 'Jorden',
+      type: 'extractor',
+      pos: [2, 0, 0],
+      stored: {},
+      capacity: 120,
+      resourceType: 'iron',
+    });
+
+    // Rate is 1/6 unit/sec: 3s isn't enough for a whole unit yet.
+    useStore.getState().extractTick('Jorden', 3);
+    let s = useStore.getState().structures.find((x) => x.id === extractor.id)!;
+    expect(s.stored.iron ?? 0).toBe(0);
+    expect(s.progress).toBeCloseTo(0.5);
+
+    // Another 3s crosses the 1-unit threshold.
+    useStore.getState().extractTick('Jorden', 3);
+    s = useStore.getState().structures.find((x) => x.id === extractor.id)!;
+    expect(s.stored.iron).toBe(1);
+    expect(s.progress).toBeCloseTo(0);
+  });
+
+  it('does nothing without power', () => {
+    seedStructure({
+      planet: 'Mars',
+      type: 'extractor',
+      pos: [0, 0, 0],
+      stored: {},
+      capacity: 120,
+      resourceType: 'iron',
+    });
+    useStore.getState().extractTick('Mars', 60);
+    const s = useStore.getState().structures[0];
+    expect(s.stored.iron ?? 0).toBe(0);
+    expect(s.progress ?? 0).toBe(0);
+  });
+
+  it('spills overflow to a ground drop once the extractor is full', () => {
+    seedStructure({ planet: 'Jorden', type: 'wind', pos: [0, 0, 0], stored: {}, capacity: 0 });
+    const extractor = seedStructure({
+      planet: 'Jorden',
+      type: 'extractor',
+      pos: [2, 0, 0],
+      stored: { iron: 1 },
+      capacity: 1, // already full
+      resourceType: 'iron',
+    });
+    useStore.getState().extractTick('Jorden', 6); // exactly 1 unit produced
+    const s = useStore.getState();
+    const st = s.structures.find((x) => x.id === extractor.id)!;
+    expect(st.stored.iron).toBe(1); // unchanged — no room
+    expect(s.drops).toHaveLength(1);
+    expect(s.drops[0]).toMatchObject({ planet: 'Jorden', type: 'iron', amount: 1 });
+  });
+
+  it('gates condensers on whether the body has an atmosphere', () => {
+    // Merkurius is airless: even with generation available, a condenser
+    // there never draws power or produces.
+    seedStructure({ planet: 'Merkurius', type: 'solar', pos: [0, 0, 0], stored: {}, capacity: 0 });
+    const condenser = seedStructure({
+      planet: 'Merkurius',
+      type: 'condenser',
+      pos: [2, 0, 0],
+      stored: {},
+      capacity: 100,
+      resourceType: 'carbon',
+    });
+    useStore.getState().extractTick('Merkurius', 60);
+    const s = useStore.getState().structures.find((x) => x.id === condenser.id)!;
+    expect(s.stored.carbon ?? 0).toBe(0);
+    expect(s.progress ?? 0).toBe(0);
+  });
+});
+
+describe('applyOfflineProduction', () => {
+  it('catches up production for the elapsed real-world time, capped at capacity, without spilling to the ground', () => {
+    seedStructure({ planet: 'Jorden', type: 'wind', pos: [0, 0, 0], stored: {}, capacity: 0 });
+    const extractor = seedStructure({
+      planet: 'Jorden',
+      type: 'extractor',
+      pos: [2, 0, 0],
+      stored: {},
+      capacity: 5,
+      resourceType: 'iron',
+    });
+    // 60s at 1/6 unit/sec = 10 units produced, but capacity is only 5.
+    useStore.getState().applyOfflineProduction('Jorden', 60);
+    const s = useStore.getState();
+    const st = s.structures.find((x) => x.id === extractor.id)!;
+    expect(st.stored.iron).toBe(5);
+    expect(s.drops).toHaveLength(0); // capped silently, not dropped on the ground
+  });
+
+  it('clamps negative elapsed time (clock wound backward) to a no-op', () => {
+    seedStructure({ planet: 'Jorden', type: 'wind', pos: [0, 0, 0], stored: {}, capacity: 0 });
+    const extractor = seedStructure({
+      planet: 'Jorden',
+      type: 'extractor',
+      pos: [2, 0, 0],
+      stored: {},
+      capacity: 120,
+      resourceType: 'iron',
+    });
+    useStore.getState().applyOfflineProduction('Jorden', -1000);
+    const s = useStore.getState().structures.find((x) => x.id === extractor.id)!;
+    expect(s.stored.iron ?? 0).toBe(0);
+  });
+
+  it('caps the counted duration at MAX_OFFLINE_SECONDS', () => {
+    seedStructure({ planet: 'Jorden', type: 'wind', pos: [0, 0, 0], stored: {}, capacity: 0 });
+    const extractor = seedStructure({
+      planet: 'Jorden',
+      type: 'extractor',
+      pos: [2, 0, 0],
+      stored: {},
+      capacity: 1_000_000,
+      resourceType: 'iron',
+    });
+    useStore.getState().applyOfflineProduction('Jorden', MAX_OFFLINE_SECONDS * 10);
+    const s = useStore.getState().structures.find((x) => x.id === extractor.id)!;
+    expect(s.stored.iron).toBe(Math.floor(MAX_OFFLINE_SECONDS / 6));
   });
 });

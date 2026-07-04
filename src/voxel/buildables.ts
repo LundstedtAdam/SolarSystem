@@ -15,7 +15,9 @@ export type BuildableId =
   | 'wind'
   | 'thermal'
   | 'refinery'
-  | 'tether';
+  | 'tether'
+  | 'extractor'
+  | 'condenser';
 
 export interface StampVoxel {
   dx: number;
@@ -41,8 +43,10 @@ export interface Buildable {
     | 'wind'
     | 'thermal'
     | 'refinery'
-    | 'tether';
-  /** For silos: storage capacity (total units). */
+    | 'tether'
+    | 'extractor'
+    | 'condenser';
+  /** For silos (and extractors/condensers): storage capacity (total units). */
   capacity?: number;
 }
 
@@ -153,6 +157,34 @@ export const BUILDABLES: Record<BuildableId, Buildable> = {
     structureType: 'tether',
     stamp: [{ dx: 0, dy: 0, dz: 0, block: BLOCK.TETHER }],
   },
+  extractor: {
+    id: 'extractor',
+    cost: { iron: 8 },
+    // Gives the Mining Drill (11.2) its first use: build a drill to build a
+    // drill rig, rather than the item being a dead end.
+    itemCost: { drill: 1 },
+    structureType: 'extractor',
+    // Assigned the vein it's aimed at when placed (ChunkManager.placeApi);
+    // idle (no resourceType) if placed away from any detectable ore.
+    capacity: 120,
+    stamp: [
+      { dx: 0, dy: 0, dz: 0, block: BLOCK.EXTRACTOR },
+      { dx: 0, dy: 1, dz: 0, block: BLOCK.METAL },
+    ],
+  },
+  condenser: {
+    id: 'condenser',
+    cost: { silicon: 10 },
+    itemCost: { circuit: 1 },
+    structureType: 'condenser',
+    // Only produces on a body with an atmosphere to draw from (power.ts);
+    // placeable everywhere, but idle on airless worlds.
+    capacity: 100,
+    stamp: [
+      { dx: 0, dy: 0, dz: 0, block: BLOCK.CONDENSER },
+      { dx: 0, dy: 1, dz: 0, block: BLOCK.GLASS },
+    ],
+  },
 };
 
 export const BUILDABLE_IDS: BuildableId[] = [
@@ -165,4 +197,6 @@ export const BUILDABLE_IDS: BuildableId[] = [
   'thermal',
   'refinery',
   'tether',
+  'extractor',
+  'condenser',
 ];

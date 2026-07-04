@@ -21,7 +21,7 @@ import {
   Color,
   type PerspectiveCamera,
 } from 'three';
-import { useStore, nextStructureId, type Structure } from '../store';
+import { useStore, nextStructureId, type Structure, type StructureType } from '../store';
 import { getBiome } from '../terrain/biomes';
 import { audio } from '../audio/AudioManager';
 import { BUILDABLES } from './buildables';
@@ -38,12 +38,13 @@ import {
   blockHardness,
   blockToResource,
   STRUCTURE_CORE_BLOCKS,
+  ORE_TO_RESOURCE,
   type MeshRequest,
   type MeshResult,
 } from './voxelTypes';
 import { Chunk, chunkKey } from './chunk';
 import { MesherPool, buildGeometry } from './mesher';
-import { generateChunk } from './worldGen';
+import { generateChunk, scanOreDirection } from './worldGen';
 import { getVoxelPalette, getVoxelTerrain } from './voxelBiomes';
 import { seedFromName } from './noise';
 import {
@@ -56,6 +57,8 @@ import {
   saveDrops,
   saveItems,
   saveSeen,
+  loadLastActive,
+  saveLastActive,
   type BodyEdits,
 } from './persistence';
 import type { VoxelApi } from './player';
@@ -176,11 +179,22 @@ export function ChunkManager({
   useEffect(() => {
     let alive = true;
     savedEdits.current = {};
-    // Restore placed structures (silos) for this body.
+    // Restore placed structures (silos) for this body, then catch up any
+    // extractors/condensers for the real-world time since this body was last
+    // active (Phase 11.6 offline progression). The catch-up is computed from
+    // the structures being restored, not whatever else is already loaded.
     loadStructures(planet).then((list) => {
       if (!alive) return;
       const others = useStore.getState().structures.filter((s) => s.planet !== planet);
       useStore.getState().setStructures([...others, ...list]);
+      loadLastActive(planet).then((ts) => {
+        if (!alive) return;
+        if (ts !== null) {
+          const elapsedSec = (Date.now() - ts) / 1000;
+          useStore.getState().applyOfflineProduction(planet, elapsedSec);
+        }
+        void saveLastActive(planet, Date.now());
+      });
     });
     // Restore ground drops (backpack-overflow yield) for this body.
     loadDrops(planet).then((list) => {
@@ -222,6 +236,7 @@ export function ChunkManager({
       void saveDrops(planet, useStore.getState().drops);
       void saveItems(useStore.getState().items);
       void saveSeen(useStore.getState().seenResources);
+      void saveLastActive(planet, Date.now());
     };
 
     const onHide = () => {
@@ -497,6 +512,27 @@ export function ChunkManager({
     }
   };
 
+  /** Phase 11.6: the resource an extractor/condenser produces, fixed at
+   *  placement. Extractors take the ore vein the player was aiming at (the
+   *  solid face the target cell is adjacent to); if that face isn't ore,
+   *  fall back to the same direction-scan the orbital scanner UI uses to
+   *  find the nearest vein. Condensers always draw atmospheric volatiles
+   *  (gated to zero output on airless bodies in power.ts, not here). */
+  const producerResourceFor = (
+    type: StructureType,
+    pos: [number, number, number],
+    aimed: [number, number, number] | null,
+  ) => {
+    if (type === 'condenser') return 'carbon' as const;
+    if (type !== 'extractor') return undefined;
+    if (aimed) {
+      const res = ORE_TO_RESOURCE[blockAtApi(aimed[0], aimed[1], aimed[2])];
+      if (res) return res;
+    }
+    const heat = scanOreDirection(params, seed, pos[0], pos[1], pos[2], 16, 12);
+    return heat ? ORE_TO_RESOURCE[heat.block] : undefined;
+  };
+
   /** Place the active buildable in the cell adjacent to the aimed face. Air
    *  and water cells are placeable (placing into water displaces it). */
   const placeApi = () => {
@@ -526,6 +562,7 @@ export function ChunkManager({
         pos: [p[0], p[1], p[2]],
         stored: {},
         capacity: b.capacity ?? 0,
+        resourceType: producerResourceFor(b.structureType, p, aimVoxel.current),
       };
       store.addStructure(structure);
     }

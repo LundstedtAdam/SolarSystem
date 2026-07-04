@@ -242,7 +242,10 @@ export function PlayerController({
         }
         continue; // stations don't store/absorb
       }
-      if (s.type !== 'silo') continue; // habitat/solar/wind/thermal/refinery don't store either
+      // habitat/solar/wind/thermal/refinery don't store; extractor/condenser
+      // reuse the silo affordance so the player can collect what they've
+      // passively produced without having to mine the structure.
+      if (s.type !== 'silo' && s.type !== 'extractor' && s.type !== 'condenser') continue;
       if (sq < siloNearSq) {
         siloNearSq = sq;
         siloNear = s.id;
@@ -264,12 +267,16 @@ export function PlayerController({
     voxelStation.id = stationNear;
     if (consumeDeposit() && siloNear >= 0) st.depositToStructure(siloNear);
 
-    // Refineries: background simulation, throttled to ~1 cycle/second so it
-    // doesn't hammer the store every frame.
+    // Refineries + extractors/condensers: background simulation, throttled to
+    // ~1 cycle/second so it doesn't hammer the store every frame. extractTick
+    // gets the real elapsed time since the last cycle so its rate integrates
+    // correctly even if a frame hitch delays a cycle past 1s.
     refineAcc.current += dt;
     if (refineAcc.current >= 1) {
+      const elapsed = refineAcc.current;
       refineAcc.current = 0;
       st.refineTick(planet);
+      st.extractTick(planet, elapsed);
     }
 
     // --- Phase 11.4 survival: oxygen / tethers / death ---------------------

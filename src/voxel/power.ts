@@ -12,6 +12,10 @@ import type { Structure } from '../store';
 
 /** Power drawn by one running refinery. */
 export const REFINERY_DRAW = 2;
+/** Power drawn by one running extractor / condenser (Phase 11.6). Cheaper than
+ *  a refinery — they're the base of the chain, meant to run before it does. */
+export const EXTRACTOR_DRAW = 1;
+export const CONDENSER_DRAW = 1;
 
 /** Whether a body (planet or moon) has any atmosphere — wind needs one. */
 export function hasAtmosphere(name: string): boolean {
@@ -45,20 +49,41 @@ export interface PowerBalance {
   consumed: number;
   /** How many refineries the current generation can actually run. */
   poweredRefineries: number;
+  /** How many extractors / condensers the remaining generation can run,
+   *  allocated after refineries (extraction feeds refining, so refineries
+   *  keep priority when power is short). */
+  poweredExtractors: number;
+  poweredCondensers: number;
 }
 
-/** Power balance for a body from its placed structures. */
+/** Power balance for a body from its placed structures. Allocation is
+ *  priority-ordered — refinery, then extractor, then condenser — each
+ *  consuming from whatever generation is left after the previous kind. */
 export function planetPower(structures: Structure[], planet: string): PowerBalance {
   let generated = 0;
   let refineries = 0;
+  let extractors = 0;
+  let condensers = 0;
   for (const s of structures) {
     if (s.planet !== planet) continue;
     if (s.type === 'solar' || s.type === 'wind' || s.type === 'thermal') {
       generated += generatorOutput(s.type, planet);
     } else if (s.type === 'refinery') {
       refineries++;
+    } else if (s.type === 'extractor') {
+      extractors++;
+    } else if (s.type === 'condenser') {
+      // Condensing needs vapour to pull from — a condenser on an airless
+      // body never draws power or counts toward consumption, same as wind.
+      if (hasAtmosphere(planet)) condensers++;
     }
   }
   const poweredRefineries = Math.min(refineries, Math.floor(generated / REFINERY_DRAW));
-  return { generated, consumed: refineries * REFINERY_DRAW, poweredRefineries };
+  let remaining = generated - poweredRefineries * REFINERY_DRAW;
+  const poweredExtractors = Math.min(extractors, Math.floor(remaining / EXTRACTOR_DRAW));
+  remaining -= poweredExtractors * EXTRACTOR_DRAW;
+  const poweredCondensers = Math.min(condensers, Math.floor(remaining / CONDENSER_DRAW));
+  const consumed =
+    refineries * REFINERY_DRAW + extractors * EXTRACTOR_DRAW + condensers * CONDENSER_DRAW;
+  return { generated, consumed, poweredRefineries, poweredExtractors, poweredCondensers };
 }

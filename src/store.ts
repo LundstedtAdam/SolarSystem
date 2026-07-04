@@ -44,6 +44,43 @@ const SMELT_RATIO = 2;
 /** Radius (voxels) within which a crafting station pulls from nearby silos. */
 const PULL_RADIUS_SQ = 12 * 12;
 
+/** Phase 11.6 passive producers: units/second while powered. Deliberately
+ *  slow — these are meant to reward leaving the base running, not to replace
+ *  hand-mining as the fast path. */
+const EXTRACT_RATE = 1 / 6;
+const CONDENSE_RATE = 1 / 10;
+/** Cap on how much real-world elapsed time an offline catch-up will honor
+ *  (72h). A determined player can still repeat the exploit of winding a
+ *  device clock forward and reloading, but this bounds each single "jump" to
+ *  a plausible away-from-the-game absence rather than an unbounded windfall,
+ *  and negative/zero elapsed time (clock wound backward) is clamped to 0 by
+ *  the caller. This is a soft mitigation, not a fix — there is no trusted
+ *  clock available client-side. */
+export const MAX_OFFLINE_SECONDS = 72 * 3600;
+
+/** Advance one producer's fractional progress by `elapsedSec` at `rate`
+ *  units/sec, depositing whole units into its own storage (capped at
+ *  capacity). Returns the updated structure and any whole units that didn't
+ *  fit, for the caller to spill (ground drop) or discard (offline cap). */
+function advanceProducer(
+  st: Structure,
+  elapsedSec: number,
+  rate: number,
+): { structure: Structure; overflow: number } {
+  if (!st.resourceType || elapsedSec <= 0) return { structure: st, overflow: 0 };
+  const progress = (st.progress ?? 0) + elapsedSec * rate;
+  const whole = Math.floor(progress);
+  if (whole <= 0) return { structure: { ...st, progress }, overflow: 0 };
+  const space = Math.max(0, st.capacity - structureUsed(st));
+  const added = Math.min(whole, space);
+  const overflow = whole - added;
+  const stored =
+    added > 0
+      ? { ...st.stored, [st.resourceType]: (st.stored[st.resourceType] ?? 0) + added }
+      : st.stored;
+  return { structure: { ...st, stored, progress: progress - whole }, overflow };
+}
+
 function dist2(a: [number, number, number], b: [number, number, number]): number {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];
@@ -146,7 +183,9 @@ export type StructureType =
   | 'wind'
   | 'thermal'
   | 'refinery'
-  | 'tether';
+  | 'tether'
+  | 'extractor'
+  | 'condenser';
 
 export interface Structure {
   id: number;
@@ -156,6 +195,13 @@ export interface Structure {
   pos: [number, number, number];
   stored: Partial<Record<ResourceType, number>>;
   capacity: number;
+  /** Extractor/condenser only: the resource it produces, fixed at placement
+   *  time from the vein/atmosphere under it (see scanOreDirection use in
+   *  ChunkManager's placeApi). Absent for every other structure type. */
+  resourceType?: ResourceType;
+  /** Extractor/condenser only: fractional progress (0..1) toward the next
+   *  unit, carried across ticks so slow rates still accumulate smoothly. */
+  progress?: number;
 }
 
 /** Total units stored across a structure's stacks. */
@@ -573,6 +619,19 @@ interface SimState {
   /** One refinery cycle on a body: each POWERED refinery pulls raw ore from
    *  silos within pull radius and smelts 2 ore -> 1 ingot. */
   refineTick: (planet: string) => void;
+
+  /** Phase 11.6 passive producers. Advances every POWERED extractor/condenser
+   *  on the body by `elapsedSec` of real time, depositing into its own
+   *  storage (spilling to the ground once full, same as mining overflow). */
+  extractTick: (planet: string, elapsedSec: number) => void;
+  /** Assign the resource an extractor/condenser produces at placement time
+   *  (fixed for the structure's lifetime — mirrors how a silo's capacity is
+   *  fixed at placement). */
+  setStructureResource: (id: number, resourceType: ResourceType) => void;
+  /** Catch-up production for every producer on a body across a real-world gap
+   *  (e.g. the app was closed). Called once when a body's structures are
+   *  loaded; `elapsedSec` is clamped by the caller before being passed in. */
+  applyOfflineProduction: (planet: string, elapsedSec: number) => void;
 }
 
 export const useStore = create<SimState>((set, get) => ({
@@ -1222,6 +1281,79 @@ export const useStore = create<SimState>((set, get) => ({
       siloStored.has(x.id) ? { ...x, stored: siloStored.get(x.id)! } : x,
     );
     set({ items, structures });
+  },
+
+  setStructureResource: (id, resourceType) =>
+    set((s) => ({
+      structures: s.structures.map((x) => (x.id === id ? { ...x, resourceType } : x)),
+    })),
+
+  extractTick: (planet, elapsedSec) => {
+    const s = get();
+    const { poweredExtractors, poweredCondensers } = planetPower(s.structures, planet);
+    if (poweredExtractors <= 0 && poweredCondensers <= 0) return;
+    const extractors = s.structures
+      .filter((x) => x.type === 'extractor' && x.planet === planet)
+      .slice(0, poweredExtractors);
+    const condensers = s.structures
+      .filter((x) => x.type === 'condenser' && x.planet === planet)
+      .slice(0, poweredCondensers);
+    if (extractors.length === 0 && condensers.length === 0) return;
+
+    const updated = new Map<number, Structure>();
+    const newDrops: ResourceDrop[] = [];
+    for (const [group, rate] of [
+      [extractors, EXTRACT_RATE],
+      [condensers, CONDENSE_RATE],
+    ] as const) {
+      for (const st of group) {
+        const { structure, overflow } = advanceProducer(st, elapsedSec, rate);
+        updated.set(st.id, structure);
+        if (overflow > 0 && structure.resourceType) {
+          newDrops.push({
+            id: nextDropId++,
+            planet,
+            pos: structure.pos,
+            type: structure.resourceType,
+            amount: overflow,
+          });
+        }
+      }
+    }
+    if (updated.size === 0) return;
+    const structures = s.structures.map((x) => updated.get(x.id) ?? x);
+    set({ structures, drops: newDrops.length ? [...s.drops, ...newDrops] : s.drops });
+  },
+
+  applyOfflineProduction: (planet, elapsedSec) => {
+    const capped = Math.min(Math.max(0, elapsedSec), MAX_OFFLINE_SECONDS);
+    if (capped <= 0) return;
+    const s = get();
+    const { poweredExtractors, poweredCondensers } = planetPower(s.structures, planet);
+    if (poweredExtractors <= 0 && poweredCondensers <= 0) return;
+    const extractors = s.structures
+      .filter((x) => x.type === 'extractor' && x.planet === planet)
+      .slice(0, poweredExtractors);
+    const condensers = s.structures
+      .filter((x) => x.type === 'condenser' && x.planet === planet)
+      .slice(0, poweredCondensers);
+    if (extractors.length === 0 && condensers.length === 0) return;
+
+    // Offline catch-up never spills to the ground (there's no one there to
+    // watch it happen) — excess production while away is simply capped by
+    // whatever storage the producer already has, same as a full silo.
+    const updated = new Map<number, Structure>();
+    for (const [group, rate] of [
+      [extractors, EXTRACT_RATE],
+      [condensers, CONDENSE_RATE],
+    ] as const) {
+      for (const st of group) {
+        updated.set(st.id, advanceProducer(st, capped, rate).structure);
+      }
+    }
+    if (updated.size === 0) return;
+    const structures = s.structures.map((x) => updated.get(x.id) ?? x);
+    set({ structures });
   },
 }));
 

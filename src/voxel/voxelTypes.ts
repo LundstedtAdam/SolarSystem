@@ -72,10 +72,14 @@ export const BLOCK = {
   REFINERY: 34,
   // Phase 11.4 — survival: oxygen tether post (entity anchor).
   TETHER: 35,
+  // Phase 11.6 — passive producers (entity anchors): extractor pulls a
+  // resource from the vein it was placed on, condenser harvests atmosphere.
+  EXTRACTOR: 36,
+  CONDENSER: 37,
 } as const;
 
 /** Number of block ids, including AIR. */
-export const BLOCK_COUNT = 36;
+export const BLOCK_COUNT = 38;
 
 /** Block ids that anchor a placed Structure entity — mining one removes the
  *  entity (silos spill their contents). */
@@ -88,6 +92,8 @@ export const STRUCTURE_CORE_BLOCKS: ReadonlySet<number> = new Set([
   BLOCK.THERMAL,
   BLOCK.REFINERY,
   BLOCK.TETHER,
+  BLOCK.EXTRACTOR,
+  BLOCK.CONDENSER,
 ]);
 
 /** Floats per palette entry: r, g, b, emissive. */
@@ -158,6 +164,8 @@ const HOST_RESOURCE: Partial<Record<number, ResourceType>> = {
   [BLOCK.THERMAL]: 'iron',
   [BLOCK.REFINERY]: 'iron',
   [BLOCK.TETHER]: 'carbon',
+  [BLOCK.EXTRACTOR]: 'iron',
+  [BLOCK.CONDENSER]: 'silicon',
 };
 
 /** The resource a mined block yields, or undefined if it yields nothing.
@@ -205,6 +213,8 @@ const HARDNESS: Partial<Record<number, number>> = {
   [BLOCK.THERMAL]: 1.3,
   [BLOCK.REFINERY]: 1.4,
   [BLOCK.TETHER]: 0.4, // quick to reclaim — repositioning a line shouldn't hurt
+  [BLOCK.EXTRACTOR]: 1.3,
+  [BLOCK.CONDENSER]: 1.2,
 };
 
 /** Seconds of continuous mining required to break the given block. */

@@ -183,3 +183,27 @@ export async function saveDrops(planet: string, all: ResourceDrop[]): Promise<vo
     /* ignore */
   }
 }
+
+function lastActiveKey(planet: string): string {
+  return `lastActive.${SCHEMA}.${planet}`;
+}
+
+/** Wall-clock timestamp (ms, Date.now()) of the last time this body's
+ *  producers were ticked, used to catch up extractor/condenser output for
+ *  the real-world time the player was away (Phase 11.6). null if never
+ *  recorded (e.g. first visit — no catch-up to apply). */
+export async function loadLastActive(planet: string): Promise<number | null> {
+  try {
+    return (await store.getItem<number>(lastActiveKey(planet))) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveLastActive(planet: string, ts: number): Promise<void> {
+  try {
+    await store.setItem(lastActiveKey(planet), ts);
+  } catch {
+    /* ignore */
+  }
+}

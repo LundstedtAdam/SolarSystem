@@ -242,7 +242,7 @@ function SiloSheet({ structureId, onClose }: { structureId: number; onClose: () 
       <div className="voxel-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="voxel-sheet-head">
           <span>
-            {t('silo')} {used}/{silo.capacity}
+            {t(silo.type)} {used}/{silo.capacity}
           </span>
           <button className="voxel-sheet-close" onClick={onClose}>
             {t('close')}
@@ -478,7 +478,12 @@ export function VoxelHUD() {
   const hasPowerStructures = structures.some(
     (s) =>
       s.planet === sceneMode.planet &&
-      (s.type === 'solar' || s.type === 'wind' || s.type === 'thermal' || s.type === 'refinery'),
+      (s.type === 'solar' ||
+        s.type === 'wind' ||
+        s.type === 'thermal' ||
+        s.type === 'refinery' ||
+        s.type === 'extractor' ||
+        s.type === 'condenser'),
   );
 
   return (
