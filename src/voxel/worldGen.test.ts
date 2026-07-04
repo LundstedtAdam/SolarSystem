@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { findNearestCellSpec, findNearbyPOI, findNearbyDeepSite, landHeightAt } from './worldGen';
+import { findNearestCellSpec, findNearbyPOI, findNearbyDeepSite, landHeightAt, generateChunk } from './worldGen';
 import { generatePOI } from './structures';
 import { cellHash, seedFromName } from './noise';
+import { Chunk } from './chunk';
+import { BLOCK, voxelId, chunkIndex, CHUNK_SIZE } from './voxelTypes';
 import type { VoxelTerrainParams } from './voxelBiomes';
 import type { POISpec, DeepDiscoverySpec } from './contentProfiles';
 
@@ -199,5 +201,126 @@ describe('detail/micro terrain perturbation', () => {
   it('is a no-op when detailAmp/microAmp are both 0 (unaffected bodies stay unaffected)', () => {
     const flat = { ...params, detailAmp: 0, microAmp: 0 } as VoxelTerrainParams;
     expect(landHeightAt(17, -9, flat, seed)).toBe(params.baseHeight);
+  });
+});
+
+describe('worm-tunnel cave carve (World Richness Phase 4)', () => {
+  // Flat height field (baseHeight=50, every amplitude 0) so every voxel in a
+  // chunk at cy=0 (wy 0..31) is deep underground (depth 19..50, always > 2).
+  // caveThreshold is set above valueNoise3's max (1) so the existing blobby
+  // cavern test can never fire — any AIR found must come from the new
+  // worm-tunnel test in isolation.
+  const baseParams = {
+    archetype: 'rock',
+    baseHeight: 50,
+    rollAmp: 0,
+    rollFreq: 1,
+    mountainAmp: 0,
+    mountainFreq: 1,
+    ridged: false,
+    octaves: 1,
+    caveFreq: 0.1,
+    caveThreshold: 1.1,
+    detailAmp: 0,
+    detailFreq: 1,
+    microAmp: 0,
+    microFreq: 1,
+    cellNoiseAmp: 0,
+    cellNoiseFreq: 1,
+    craters: 0,
+    waterLevel: -1,
+    duneAmp: 0,
+    glowDepth: 0,
+    lavaLevel: -1,
+    landmarks: [],
+    pois: [],
+    resources: [],
+    scienceNotes: [],
+    deepSites: [],
+    translationFragments: [],
+  } as unknown as VoxelTerrainParams;
+
+  function countAir(params: VoxelTerrainParams): number {
+    const chunk = new Chunk(0, 0, 0);
+    generateChunk(chunk, params, 9001);
+    let air = 0;
+    for (let x = 0; x < CHUNK_SIZE; x++)
+      for (let y = 0; y < CHUNK_SIZE; y++)
+        for (let z = 0; z < CHUNK_SIZE; z++)
+          if (voxelId(chunk.voxels[chunkIndex(x, y, z)]) === BLOCK.AIR) air++;
+    return air;
+  }
+
+  it('carves nothing when caveTunnelWidth is 0 (disabled)', () => {
+    const params = { ...baseParams, caveTunnelWidth: 0 } as VoxelTerrainParams;
+    expect(countAir(params)).toBe(0);
+  });
+
+  it('carves worm-tunnel voids when caveTunnelWidth > 0, additive to the cavern test', () => {
+    const params = { ...baseParams, caveTunnelWidth: 0.05 } as VoxelTerrainParams;
+    // ~1% of the 32768 voxels are expected to fall inside the tunnel band;
+    // the probability of zero hits given that rate is astronomically small.
+    expect(countAir(params)).toBeGreaterThan(0);
+  });
+});
+
+describe('layered rock band jitter (World Richness Phase 4)', () => {
+  // Earth archetype: subsoil/rock boundary is a flat depth<=3 cutoff unless
+  // cellNoiseAmp perturbs it. baseHeight=50 (flat) so depth is exactly
+  // predictable at every column; the whole chunk at cy=0 sits below the
+  // surface (wy 0..31, all depth > 0).
+  const baseParams = {
+    archetype: 'earth',
+    baseHeight: 50,
+    rollAmp: 0,
+    rollFreq: 1,
+    mountainAmp: 0,
+    mountainFreq: 1,
+    ridged: false,
+    octaves: 1,
+    caveFreq: 0.1,
+    caveThreshold: 1.1, // no caves — isolate the layering logic
+    caveTunnelWidth: 0,
+    detailAmp: 0,
+    detailFreq: 1,
+    microAmp: 0,
+    microFreq: 1,
+    cellNoiseFreq: 0.05,
+    craters: 0,
+    waterLevel: -1,
+    duneAmp: 0,
+    glowDepth: 0,
+    lavaLevel: -1,
+    landmarks: [],
+    pois: [],
+    resources: [],
+    scienceNotes: [],
+    deepSites: [],
+    translationFragments: [],
+  } as unknown as VoxelTerrainParams;
+
+  // depth = h - wy = 50 - wy; depth === 4 at wy === 46, which is chunk cy=1
+  // (wy 32..63), local ly = 46 - 32 = 14.
+  const DEPTH_4_LY = 14;
+
+  function blocksAtDepth4(params: VoxelTerrainParams): Set<number> {
+    const chunk = new Chunk(0, 1, 0);
+    generateChunk(chunk, params, 9001);
+    const found = new Set<number>();
+    for (let x = 0; x < CHUNK_SIZE; x++)
+      for (let z = 0; z < CHUNK_SIZE; z++)
+        found.add(voxelId(chunk.voxels[chunkIndex(x, DEPTH_4_LY, z)]));
+    return found;
+  }
+
+  it('is a flat ROCK boundary at depth 4 when cellNoiseAmp is 0', () => {
+    const params = { ...baseParams, cellNoiseAmp: 0 } as VoxelTerrainParams;
+    expect(blocksAtDepth4(params)).toEqual(new Set([BLOCK.ROCK]));
+  });
+
+  it('pushes SUBSOIL deeper at some columns when cellNoiseAmp > 0', () => {
+    const params = { ...baseParams, cellNoiseAmp: 0.6 } as VoxelTerrainParams;
+    const found = blocksAtDepth4(params);
+    expect(found.has(BLOCK.SUBSOIL)).toBe(true);
   });
 });

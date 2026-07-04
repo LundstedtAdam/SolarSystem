@@ -54,6 +54,11 @@ export interface VoxelTerrainParams {
   octaves: number;
   caveFreq: number;
   caveThreshold: number;
+  /** Worm-tunnel carve width (0..~0.1) — how close two independent noise
+   *  fields must both be to their midpoint to count as "inside a tunnel".
+   *  Wider = thicker, more frequent tunnels. Additive to the existing
+   *  cavern carve, never replaces it. */
+  caveTunnelWidth: number;
   /** Impact-crater intensity 0..1 (regolith). */
   craters: number;
   /** Sea level in voxels for earth seas, or -1 (none). */
@@ -73,6 +78,11 @@ export interface VoxelTerrainParams {
    *  (microFreq/microAmp), previously GPU-shader-only. */
   microFreq: number;
   microAmp: number;
+  /** Lateral rock-strata perturbation strength — sourced from BiomeProfile
+   *  (cellNoiseFreq/cellNoiseAmp), previously GPU-shader-only. 0 on bodies
+   *  that author cellNoiseAmp=0 (e.g. Earth). */
+  cellNoiseFreq: number;
+  cellNoiseAmp: number;
   /** Named procedural landmarks carved into the height field (Phase 10.1). */
   landmarks: LandmarkSpec[];
   /** Modular ruined points-of-interest stamped into chunks (Phase 10.2). */
@@ -180,10 +190,13 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     octaves: Math.max(3, b.octaves),
     caveFreq: 0.07,
     caveThreshold: 0.8,
+    caveTunnelWidth: 0.05,
     detailFreq: b.detailFreq,
     detailAmp: b.detailAmp,
     microFreq: b.microFreq,
     microAmp: b.microAmp,
+    cellNoiseFreq: b.cellNoiseFreq,
+    cellNoiseAmp: b.cellNoiseAmp,
     craters: 0,
     waterLevel: -1,
     duneAmp: 0,

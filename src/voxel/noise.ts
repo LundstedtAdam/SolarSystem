@@ -70,6 +70,31 @@ export function fbm2(
   return sum / norm;
 }
 
+/** Fractal Brownian motion of 3D value noise, returned in [0,1]. 3D analogue
+ *  of fbm2 above — used where a single raw valueNoise3 octave is too blobby
+ *  (e.g. worm-like cave carving), same lacunarity/gain defaults. */
+export function fbm3(
+  x: number,
+  y: number,
+  z: number,
+  seed: number,
+  octaves: number,
+  lacunarity = 2,
+  gain = 0.5,
+): number {
+  let sum = 0;
+  let amp = 1;
+  let freq = 1;
+  let norm = 0;
+  for (let o = 0; o < octaves; o++) {
+    sum += amp * valueNoise3(x * freq, y * freq, z * freq, seed + o * 1013);
+    norm += amp;
+    amp *= gain;
+    freq *= lacunarity;
+  }
+  return sum / norm;
+}
+
 /** Deterministic 0..1 hash for integer cell coordinates (craters, veins). */
 export function cellHash(x: number, z: number, seed: number): number {
   let h = Math.imul(x | 0, 374761393) ^ Math.imul(z | 0, 668265263) ^ Math.imul(seed | 0, 0x9e3779b1);

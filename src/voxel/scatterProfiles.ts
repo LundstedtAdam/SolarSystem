@@ -29,6 +29,10 @@ export interface ScatterProfile {
    *  shoreline/wetland dressing (reeds, wet-ground clumps). Unused (undefined)
    *  everywhere else. */
   waterAdjacent?: boolean;
+  /** Only place where an ore vein surfaces within a few voxels of the ground
+   *  (queried directly against oreAt() by the caller) — a visual hint at
+   *  what's below without a HUD marker. */
+  oreTell?: boolean;
 }
 
 /** True if this body's own science note leaves the life question open
@@ -101,6 +105,27 @@ function abioticGrit(planet: string): ScatterProfile {
   };
 }
 
+/** A rare glinting mineral fleck, only placed where an ore vein actually
+ *  surfaces within a few voxels (VoxelScatter.tsx checks oreTell against
+ *  oreAt() directly) — a visual hint at what's below without a HUD marker.
+ *  Universal (every archetype has ore veins via resourceProfiles.ts's
+ *  FUNDAMENTALS), so this is unconditional like abioticGrit above. */
+function oreGlint(): ScatterProfile {
+  return {
+    kind: 'crystal',
+    color: [0.75, 0.72, 0.6],
+    emissive: [0.3, 0.28, 0.15],
+    emissiveIntensity: 0.2,
+    density: 0.05,
+    cell: 6,
+    minScale: 0.15,
+    maxScale: 0.3,
+    scaleXYZ: [1, 1, 1],
+    yFactor: 0.3,
+    oreTell: true,
+  };
+}
+
 /** Earth's grass tufts — dense, cheap crossed-quad billboards. */
 function earthGrass(): ScatterProfile {
   return {
@@ -163,7 +188,7 @@ function ambiguousGrowth(planet: string): ScatterProfile {
  *  ambiguous — see lifeAmbiguous()). Every other body stays abiotic-only, by
  *  design, per the game's existing no-confirmed-life narrative rule. */
 export function getGroundClutter(planet: string): ScatterProfile[] {
-  const layers: ScatterProfile[] = [abioticGrit(planet)];
+  const layers: ScatterProfile[] = [abioticGrit(planet), oreGlint()];
   if (archetypeFor(planet) === 'earth') {
     layers.push(earthGrass(), earthFlora());
   } else if (lifeAmbiguous(planet)) {

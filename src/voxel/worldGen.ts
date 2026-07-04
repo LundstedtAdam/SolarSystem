@@ -5,7 +5,7 @@
 
 import { Vector3 } from 'three';
 import { CHUNK_SIZE, chunkIndex, packVoxel, BLOCK } from './voxelTypes';
-import { fbm2, valueNoise3, valueNoise2, cellHash, seedFromName } from './noise';
+import { fbm2, fbm3, valueNoise3, valueNoise2, cellHash, seedFromName } from './noise';
 import type { Chunk } from './chunk';
 import { getVoxelTerrain, type VoxelTerrainParams } from './voxelBiomes';
 import type {
@@ -124,8 +124,11 @@ function columnHeight(wx: number, wz: number, p: VoxelTerrainParams, seed: numbe
 
 /** Ore vein for a stone voxel at (wx,wy,wz) and surface-relative depth, or -1.
  *  First matching vein wins; rarer/deeper veins are listed later so they don't
- *  shadow the common ones. Only host stone is replaced (caller decides). */
-function oreAt(
+ *  shadow the common ones. Only host stone is replaced (caller decides).
+ *  Exported for scanOreDirection (below) and for VoxelScatter's surface
+ *  "ore tell" prop layer, which queries this directly rather than duplicating
+ *  the vein-matching logic. */
+export function oreAt(
   depth: number,
   wx: number,
   wy: number,
@@ -142,6 +145,17 @@ function oreAt(
     }
   }
   return -1;
+}
+
+/** Lateral perturbation (voxels, signed) to the subsoil/rock depth threshold —
+ *  sourced from the body's own cellNoiseFreq/cellNoiseAmp (BiomeProfile,
+ *  previously GPU-shader-only, same idle-data reuse as Phase 1's detail/micro
+ *  octaves). Makes strata boundaries wave across a cliff face instead of
+ *  forming a perfectly flat plane; 0 on bodies that author cellNoiseAmp=0
+ *  (e.g. Earth), so their layering is unaffected. */
+function bandJitter(wx: number, wz: number, p: VoxelTerrainParams, seed: number): number {
+  if (p.cellNoiseAmp <= 0) return 0;
+  return Math.round((valueNoise2(wx * p.cellNoiseFreq, wz * p.cellNoiseFreq, seed + 7701) - 0.5) * 6 * p.cellNoiseAmp);
 }
 
 /** Pick the solid block for a voxel below the surface. */
@@ -163,10 +177,10 @@ function layerBlock(
   switch (arche) {
     case 'earth':
       if (depth <= 0) return BLOCK.GRASS;
-      if (depth <= 3) return BLOCK.SUBSOIL;
+      if (depth <= 3 + bandJitter(wx, wz, p, seed)) return BLOCK.SUBSOIL;
       return BLOCK.ROCK;
     case 'dune':
-      if (depth <= 2) return BLOCK.SAND;
+      if (depth <= 2 + bandJitter(wx, wz, p, seed)) return BLOCK.SAND;
       return BLOCK.ROCK;
     case 'ice': {
       if (depth <= 1) return BLOCK.ICE; // bright ice top
@@ -177,7 +191,7 @@ function layerBlock(
       ) {
         return BLOCK.ICE_GLOW; // luminous veins
       }
-      return depth > 22 ? BLOCK.ROCK : BLOCK.ICE;
+      return depth > 22 + bandJitter(wx, wz, p, seed) ? BLOCK.ROCK : BLOCK.ICE;
     }
     case 'lava':
       if (depth <= 0) return BLOCK.SURFACE;
@@ -185,11 +199,11 @@ function layerBlock(
       return BLOCK.ROCK;
     case 'regolith':
       if (depth <= 0) return BLOCK.SURFACE;
-      if (depth <= 4) return BLOCK.SUBSOIL;
+      if (depth <= 4 + bandJitter(wx, wz, p, seed)) return BLOCK.SUBSOIL;
       return BLOCK.ROCK;
     default: // rock (dust)
       if (depth <= 0) return BLOCK.SURFACE;
-      if (depth <= 4) return BLOCK.SUBSOIL;
+      if (depth <= 4 + bandJitter(wx, wz, p, seed)) return BLOCK.SUBSOIL;
       return BLOCK.ROCK;
   }
 }
@@ -210,6 +224,17 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
       const topFill = Math.max(params.waterLevel, params.lavaLevel, h);
       if (baseY > topFill) continue; // wholly above terrain and any liquid
 
+      // Local slope (once per column, not per voxel) — a cheap 4-sample cross
+      // probe against columnHeight() gates the overhang carve below to steep
+      // cliff faces only, leaving interior/flat-ground caves untouched.
+      const isCliff =
+        Math.max(
+          Math.abs(h - columnHeight(wx + 2, wz, params, seed)),
+          Math.abs(h - columnHeight(wx - 2, wz, params, seed)),
+          Math.abs(h - columnHeight(wx, wz + 2, params, seed)),
+          Math.abs(h - columnHeight(wx, wz - 2, params, seed)),
+        ) >= 4;
+
       for (let ly = 0; ly < CHUNK_SIZE; ly++) {
         const wy = baseY + ly;
         let block: number = BLOCK.AIR;
@@ -222,10 +247,28 @@ export function generateChunk(chunk: Chunk, params: VoxelTerrainParams, seed: nu
           block = BLOCK.ROCK; // solid floor
         } else {
           const depth = h - wy;
-          const carve =
-            depth > 2 &&
-            valueNoise3(wx * params.caveFreq, wy * params.caveFreq, wz * params.caveFreq, seed + 4201) >
+          let carve = false;
+          if (depth > 2) {
+            const cavern =
+              valueNoise3(wx * params.caveFreq, wy * params.caveFreq, wz * params.caveFreq, seed + 4201) >
               params.caveThreshold;
+            if (cavern) {
+              carve = true;
+            } else if (params.caveTunnelWidth > 0) {
+              // Worm-tunnel carve: intersect two independent noise fields
+              // near their midpoint. Additive to the blobby cavern test
+              // above (never replaces it) — gives winding tunnel-like voids
+              // alongside the existing caverns instead of only caverns.
+              const f = params.caveFreq * 1.7;
+              const a = fbm3(wx * f, wy * f, wz * f, seed + 8802, 2);
+              const b = fbm3(wx * f, wy * f, wz * f, seed + 9103, 2);
+              carve =
+                Math.abs(a - 0.5) < params.caveTunnelWidth && Math.abs(b - 0.5) < params.caveTunnelWidth;
+            }
+          } else if (isCliff && depth >= 1) {
+            // Overhang/alcove: rare shallow undercut, only on steep faces.
+            carve = valueNoise3(wx * 0.09, wy * 0.09, wz * 0.09, seed + 6301) > 0.86;
+          }
           if (carve) {
             // Lava archetypes flood deep caverns instead of leaving air.
             block = arche === 'lava' && wy <= params.lavaLevel ? BLOCK.LAVA : BLOCK.AIR;

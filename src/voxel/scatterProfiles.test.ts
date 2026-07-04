@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { getGroundClutter } from './scatterProfiles';
 
-// World-richness Phase 2: ground clutter must respect the game's existing
+// World-richness Phase 2/4: ground clutter must respect the game's existing
 // no-confirmed-life rule (contentProfiles.ts scienceNotes.lifeStatus) —
 // flora-like kinds ('blade' grass, 'fungus' blooms/growths) only ever appear
 // on Earth (real biology) or on bodies whose life question is still open
-// ('theoretical'/'inconclusive'). Everywhere else stays abiotic ('rock' only).
+// ('theoretical'/'inconclusive'). Everywhere else stays abiotic: 'rock' grit
+// plus the universal 'crystal' ore-tell fleck (Phase 4), both non-living.
+const ABIOTIC_KINDS = ['rock', 'crystal'];
+
 describe('getGroundClutter narrative gating', () => {
   it('always includes an abiotic grit layer first, regardless of body', () => {
     for (const planet of ['Jorden', 'Mars', 'Merkurius']) {
@@ -24,7 +27,7 @@ describe('getGroundClutter narrative gating', () => {
   it('gives a not_detected body abiotic-only clutter (no life-like kinds)', () => {
     // Merkurius: scienceNotes.lifeStatus === 'not_detected'.
     const layers = getGroundClutter('Merkurius');
-    expect(layers.every((l) => l.kind === 'rock')).toBe(true);
+    expect(layers.every((l) => ABIOTIC_KINDS.includes(l.kind))).toBe(true);
   });
 
   it('gives a theoretical/inconclusive body sparse ambiguous growths, never grass', () => {

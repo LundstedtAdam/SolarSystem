@@ -20,7 +20,7 @@ import { QUALITY } from '../systems/quality';
 import { getScatter, getGroundClutter, type ScatterKind, type ScatterProfile } from './scatterProfiles';
 import { getContent } from './contentProfiles';
 import { getVoxelTerrain } from './voxelBiomes';
-import { landHeightAt } from './worldGen';
+import { landHeightAt, oreAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
 
 /** Two crossed vertical quads (an X-shaped billboard), base at local y=0 so it
@@ -151,6 +151,19 @@ function PropLayer({
             !(terrain.waterLevel >= 0 && land >= terrain.waterLevel - 2 && land <= terrain.waterLevel + 1)
           ) {
             continue;
+          }
+          // Ore tell: only where a vein actually surfaces a few voxels down —
+          // reuses the exact same oreAt() worldgen and the orbital scanner
+          // already agree on, so the hint never lies about what's below.
+          if (profile.oreTell) {
+            const ix = Math.round(wx);
+            const iz = Math.round(wz);
+            const iy = Math.round(land);
+            let veined = false;
+            for (let d = 2; d <= 5 && !veined; d++) {
+              if (oreAt(d, ix, iy - d, iz, terrain, seed) >= 0) veined = true;
+            }
+            if (!veined) continue;
           }
           const s = minScale + cellHash(gx, gz, seed + 3) * (maxScale - minScale);
           dummy.position.set(wx, land + s * yFactor, wz);
