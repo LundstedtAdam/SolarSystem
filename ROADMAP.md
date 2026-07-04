@@ -135,13 +135,24 @@ Android) for a true standalone release. Not started.
 
 ## Technical audit & hardening (PR #8 — not a numbered phase)
 
-A cross-cutting audit pass plus six follow-up rounds, spanning bug fixes,
+A cross-cutting audit pass plus follow-up rounds, spanning bug fixes,
 performance, settings/FOV, water physics, localization, scan-range accuracy,
-and (per the note above) work that substantively fulfills Phase 11.6/11.7.
-This was never assigned a phase number because it isn't new capability along
-the roadmap's arc — it's maintenance and correctness work across everything
-built so far. Currently open as **PR #8** (draft, `storyline` → `master`,
-unmerged). Its status is tracked here rather than by renaming or re-committing
-history: the roadmap file is the source of truth for status, git history
-stays as-is. Once Round 6 (11.6) and Round 1 (11.7) have been played through
-and confirmed, update their status lines above accordingly.
+work that substantively fulfills Phase 11.6/11.7 (Round 6), and — unlike the
+rest, genuinely new capability rather than maintenance — an 8-phase "World
+Richness" pass (Round 8) increasing procedural environmental density across
+the voxel walking layer on every landable body: per-body detail/micro terrain
+noise, layered ground scatter (grass/flowers/stones/ore-tells), new POI module
+kinds plus a high-frequency micro-discovery channel, worm-tunnel caves and
+cliff overhangs, latitude-based colour/scatter biome transitions, procedural
+lakes/rivers/wetlands/derived waterfalls, instanced trees, and ambient
+wildlife — all gated by the existing no-confirmed-life narrative rule (real
+biology only on Earth; sparse deliberately-ambiguous life-like content only
+on the handful of bodies already flagged `theoretical`/`inconclusive`).
+None of this was assigned a phase number since it deepens the existing
+Phase 9-11 voxel world rather than opening new roadmap arcs. Currently open
+as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is tracked
+here rather than by renaming or re-committing history: the roadmap file is
+the source of truth for status, git history stays as-is. Manual in-game
+playtesting of the World Richness pass has not been done. Once Round 6
+(11.6) and Round 1 (11.7) have been played through and confirmed, update
+their status lines above accordingly.
