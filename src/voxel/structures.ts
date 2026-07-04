@@ -30,7 +30,18 @@ export interface BuiltStructure {
 /** Module footprint edge (voxels). Each assembler grid cell is MW×MW. */
 const MW = 8;
 
-type ModuleKind = 'room' | 'tower' | 'dome' | 'tank' | 'pipe';
+type ModuleKind =
+  | 'room'
+  | 'tower'
+  | 'dome'
+  | 'tank'
+  | 'pipe'
+  // World Richness Phase 3 — visual variety for the 'outpost' POIType.
+  | 'bridge'
+  | 'collapsed'
+  // World Richness Phase 3 — the micro-discovery channel's sole module kind
+  // (POI_CFG.cache, budget [1,1]): a tiny debris cluster, not a room.
+  | 'cache';
 
 // --- deterministic RNG (mulberry32) -----------------------------------------
 function rng32(seed: number): () => number {
@@ -94,7 +105,12 @@ function heightFor(kind: ModuleKind, rng: () => number): number {
   }
 }
 
-/** Build one module into the grid at cell origin (ox,oz), floor at y=0. */
+/** Build one module into the grid at cell origin (ox,oz), floor at y=0.
+ *  `rng` is the same deterministic stream `build()` already threads through
+ *  assemble()/heightFor()/damage() — consumed here by 'cache' (crate layout)
+ *  and 'collapsed' (which wall voxels have already failed), still
+ *  deterministic for a given seed since every module's calls happen in a
+ *  fixed order. */
 function buildModule(
   g: Grid,
   ox: number,
@@ -103,8 +119,24 @@ function buildModule(
   h: number,
   open: Openings,
   cfg: BuildCfg,
+  rng: () => number,
 ): void {
-  // Floor for every module.
+  if (kind === 'cache') {
+    // A tiny debris/crate cluster stacked near the cell centre — no floor
+    // pad, deliberately not room-scale. This is what POI_CFG.cache (the
+    // micro-discovery channel, budget [1,1]) builds: a single small find.
+    const cx = ox + Math.floor(MW / 2);
+    const cz = oz + Math.floor(MW / 2);
+    const n = 4 + Math.floor(rng() * 3); // 4-6 voxels
+    for (let i = 0; i < n; i++) {
+      const dx = Math.floor(rng() * 3) - 1;
+      const dz = Math.floor(rng() * 3) - 1;
+      g.set(cx + dx, 1 + i, cz + dz, cfg.wall);
+    }
+    return;
+  }
+
+  // Floor for every remaining module kind.
   for (let x = 0; x < MW; x++)
     for (let z = 0; z < MW; z++) g.set(ox + x, 0, oz + z, cfg.floor);
 
@@ -121,20 +153,45 @@ function buildModule(
     return;
   }
 
-  // Perimeter walls with doorways toward neighbouring modules.
+  if (kind === 'bridge') {
+    // An elevated gangway fragment: a narrow raised walkway with corner
+    // support pillars and low rails. A visual-variety piece — it doesn't
+    // structurally connect to a neighbour's own floor height, which reads
+    // fine given these are ruins, not functioning structures.
+    const deckY = Math.min(h - 2, 4);
+    const mid = Math.floor(MW / 2);
+    for (let x = 0; x < MW; x++) {
+      g.set(ox + x, deckY, oz + mid - 1, cfg.floor);
+      g.set(ox + x, deckY, oz + mid, cfg.floor);
+      g.set(ox + x, deckY, oz + mid + 1, cfg.floor);
+      g.set(ox + x, deckY + 1, oz + mid - 1, cfg.wall);
+      g.set(ox + x, deckY + 1, oz + mid + 1, cfg.wall);
+    }
+    for (let y = 0; y < deckY; y++) {
+      g.set(ox + 1, y, oz + mid, cfg.wall);
+      g.set(ox + MW - 2, y, oz + mid, cfg.wall);
+    }
+    return;
+  }
+
+  // Perimeter walls with doorways toward neighbouring modules. 'collapsed'
+  // randomly drops wall voxels up front (always ruined, independent of the
+  // shared damage() pass's roll) and skips the roof entirely — open to sky.
   const mid = MW / 2;
   const door = (side: 'N' | 'S' | 'E' | 'W', a: number, y: number): boolean =>
     open[side] && y <= 2 && a >= mid - 1 && a <= mid;
+  const ruined = kind === 'collapsed';
   for (let y = 1; y < h; y++) {
     for (let x = 0; x < MW; x++) {
-      if (!door('N', x, y)) g.set(ox + x, y, oz + 0, cfg.wall);
-      if (!door('S', x, y)) g.set(ox + x, y, oz + MW - 1, cfg.wall);
+      if (!door('N', x, y) && !(ruined && rng() < 0.35)) g.set(ox + x, y, oz + 0, cfg.wall);
+      if (!door('S', x, y) && !(ruined && rng() < 0.35)) g.set(ox + x, y, oz + MW - 1, cfg.wall);
     }
     for (let z = 0; z < MW; z++) {
-      if (!door('W', z, y)) g.set(ox + 0, y, oz + z, cfg.wall);
-      if (!door('E', z, y)) g.set(ox + MW - 1, y, oz + z, cfg.wall);
+      if (!door('W', z, y) && !(ruined && rng() < 0.35)) g.set(ox + 0, y, oz + z, cfg.wall);
+      if (!door('E', z, y) && !(ruined && rng() < 0.35)) g.set(ox + MW - 1, y, oz + z, cfg.wall);
     }
   }
+  if (ruined) return;
 
   // Roof: flat panel, or a glass dome for dome modules.
   if (kind === 'dome' && cfg.glassRoof) {
@@ -241,6 +298,9 @@ const POI_CFG: Record<
   dome: { pool: ['dome', 'room', 'pipe'], budget: [3, 4], wall: BLOCK.PANEL, floor: BLOCK.PANEL, roof: BLOCK.GLASS, glassRoof: true },
   geothermal: { pool: ['tank', 'pipe', 'room'], budget: [4, 6], wall: BLOCK.METAL, floor: BLOCK.METAL, roof: BLOCK.METAL, glassRoof: false },
   relay: { pool: ['tower', 'room', 'pipe'], budget: [4, 5], wall: BLOCK.PANEL, floor: BLOCK.PANEL, roof: BLOCK.METAL, glassRoof: false },
+  // World Richness Phase 3 additions.
+  outpost: { pool: ['room', 'collapsed', 'bridge', 'tower'], budget: [4, 7], wall: BLOCK.METAL, floor: BLOCK.PANEL, roof: BLOCK.METAL, glassRoof: false },
+  cache: { pool: ['cache'], budget: [1, 1], wall: BLOCK.METAL, floor: BLOCK.PANEL, roof: BLOCK.METAL, glassRoof: false },
 };
 
 function reclaimBlock(archetype: Archetype): number {
@@ -294,7 +354,7 @@ function build(type: POIType, seed: number, archetype: Archetype): BuiltStructur
       W: cellSet.has(`${p.gx - 1},${p.gz}`),
       E: cellSet.has(`${p.gx + 1},${p.gz}`),
     };
-    buildModule(g, (p.gx - minGx) * MW, (p.gz - minGz) * MW, p.kind, p.h, open, buildCfg);
+    buildModule(g, (p.gx - minGx) * MW, (p.gz - minGz) * MW, p.kind, p.h, open, buildCfg, rng);
   }
 
   damage(g, reclaimBlock(archetype), rng);

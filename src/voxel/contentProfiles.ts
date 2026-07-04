@@ -32,8 +32,12 @@ export interface LandmarkSpec {
   description?: string;
 }
 
-/** Structural archetype of a POI; selects the module pool + materials. */
-export type POIType = 'processor' | 'dome' | 'geothermal' | 'relay';
+/** Structural archetype of a POI; selects the module pool + materials.
+ *  'outpost' and 'cache' are World Richness Phase 3 additions: 'outpost' adds
+ *  visual variety (elevated gangways, caved-in rooms) to the existing 4
+ *  archetypes; 'cache' is the micro-discovery channel — a single small find
+ *  (budget [1,1] in POI_CFG), not a structure to walk into. */
+export type POIType = 'processor' | 'dome' | 'geothermal' | 'relay' | 'outpost' | 'cache';
 
 /** A modular ruined point-of-interest, assembled + damaged from voxel templates
  *  and scannable for its layered story (consumed in Phase 10.2 / 10.4). */
@@ -61,6 +65,22 @@ export interface POISpec {
    *  so a future tier 3+ language family doesn't need a schema change. */
   translationTierRequired?: number;
 }
+
+/** World Richness Phase 3 — the micro-discovery channel: a small, frequent,
+ *  cosmetic-only find (a debris cache) with no story/clue/act, so the
+ *  journal just logs "found: Debris Cache" without needing hand-authored
+ *  prose per instance (unlike every other POISpec, which is authored once
+ *  per body below). Applied to every body identically in voxelBiomes.ts
+ *  getVoxelTerrain (concatenated onto that body's authored `pois`), the same
+ *  way resourceProfiles.ts's FUNDAMENTALS apply to every body regardless of
+ *  archetype — one universal definition instead of 16 near-identical copies. */
+export const MICRO_DISCOVERY: POISpec = {
+  id: 'micro-cache',
+  name: 'Debris Cache',
+  type: 'cache',
+  cell: 24,
+  density: 0.18,
+};
 
 /** A discoverable Translation Fragment (Phase 10.5): found in the world like a
  *  POI (same deterministic cell-hash placement), never crafted or purchased.

@@ -7,6 +7,7 @@ import { getBiome } from '../terrain/biomes';
 import { BLOCK, BLOCK_COUNT, PALETTE_STRIDE } from './voxelTypes';
 import {
   getContent,
+  MICRO_DISCOVERY,
   type LandmarkSpec,
   type POISpec,
   type ScienceNoteSpec,
@@ -189,7 +190,10 @@ export function getVoxelTerrain(planet: string): VoxelTerrainParams {
     glowDepth: 0,
     lavaLevel: -1,
     landmarks: getContent(planet).landmarks,
-    pois: getContent(planet).pois,
+    // Every body gets the universal micro-discovery cache on top of its own
+    // authored POIs (World Richness Phase 3) — same "universal + per-body"
+    // composition FUNDAMENTALS already uses for ore veins below.
+    pois: [...getContent(planet).pois, MICRO_DISCOVERY],
     resources: getBodyResources(arche),
     scienceNotes: getContent(planet).scienceNotes,
     deepSites: getContent(planet).deepSites,
