@@ -17,7 +17,6 @@ class AudioManager {
   private droneFilter?: BiquadFilterNode;
   private engineGain?: GainNode;
   private engineFilter?: BiquadFilterNode;
-  private miningGain?: GainNode;
   private started = false;
 
   // Surface ambience graph (built lazily on first landing, reused after).
@@ -138,25 +137,6 @@ class AudioManager {
     this.engineGain = engineGain;
     this.engineFilter = engineFilter;
 
-    // --- Space mining beam: a resonant buzz that swells while firing and
-    // on-target, distinct in timbre from the engine hum so the two never
-    // read as the same sound. ---
-    const miningFilter = ctx.createBiquadFilter();
-    miningFilter.type = 'bandpass';
-    miningFilter.Q.value = 4;
-    miningFilter.frequency.value = 900;
-    const miningGain = ctx.createGain();
-    miningGain.gain.value = 0;
-    miningFilter.connect(miningGain).connect(master);
-    const miningOsc = ctx.createOscillator();
-    miningOsc.type = 'sawtooth';
-    miningOsc.frequency.value = 220;
-    const miningOscGain = ctx.createGain();
-    miningOscGain.gain.value = 0.5;
-    miningOsc.connect(miningOscGain).connect(miningFilter);
-    miningOsc.start();
-    this.miningGain = miningGain;
-
     this.started = true;
   }
 
@@ -194,14 +174,30 @@ class AudioManager {
     this.engineFilter.frequency.setTargetAtTime(150 + throttle * 500, t, 0.15);
   }
 
-  /** Mining beam feedback: `firing` is whether the trigger is held, `onTarget`
-   *  whether the ray currently hits a live asteroid — the tone only sounds
-   *  while both are true, distinguishing "firing into empty space" from
-   *  "firing and actually hitting something" audibly. */
-  setMiningBeam(firing: boolean, onTarget: boolean) {
-    if (!this.miningGain || !this.ctx) return;
-    const t = this.ctx.currentTime;
-    this.miningGain.gain.setTargetAtTime(firing && onTarget ? 0.05 : 0, t, 0.05);
+  /** One discrete mining-beam shot: a short laser-ish blip (sawtooth chirp +
+   *  a touch of noise crack), pitched a bit higher and louder when the shot
+   *  actually connects with an asteroid vs. firing into empty space — so
+   *  automatic fire reads as a rhythm of individual shots, not a sustained
+   *  tone, and hits vs. misses are audibly distinguishable. */
+  playMiningShot(onTarget: boolean) {
+    if (!this.master || !this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.05;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(onTarget ? 780 : 520, t);
+    osc.frequency.exponentialRampToValueAtTime(onTarget ? 420 : 300, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(onTarget ? 0.07 : 0.045, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 3;
+    osc.connect(filter).connect(g).connect(this.master);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
   }
 
   // --- Surface ambience --------------------------------------------------

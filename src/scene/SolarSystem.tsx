@@ -15,6 +15,7 @@ import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
 import { AsteroidBelt } from './AsteroidBelt';
 import { AsteroidDebris } from './AsteroidDebris';
+import { MiningSparks } from './MiningSparks';
 import { ShipTrail } from './ShipTrail';
 import { SpaceMiningController } from './SpaceMiningController';
 import { SpacePoiField } from './SpacePoiField';
@@ -126,6 +127,7 @@ export function SolarSystem() {
           <SolarWind />
           <AsteroidBelt />
           <AsteroidDebris />
+          <MiningSparks />
           <SpacePoiField />
           <Orbits />
           {PLANETS.map((p) => (

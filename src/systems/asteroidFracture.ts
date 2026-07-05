@@ -33,6 +33,12 @@ const HIGH_DEBRIS_RANGE: [number, number] = [4, 8];
 const ORE_FRACTION = 0.4;
 const ORE_TYPES: ResourceType[] = ['iron', 'silicon', 'titanite', 'hematite', 'lithium'];
 
+/** Knockback impulse per unit of damage (world units/s per damage point) —
+ *  every hit nudges the asteroid in the shot's direction of travel, not just
+ *  fracturing ones. Tuned so a solid hit visibly shifts a rock without
+ *  flinging it; actual on-screen drift is also damped in AsteroidBelt.tsx. */
+const KNOCKBACK_PER_DAMAGE = 0.35;
+
 const _dir = new Vector3();
 const _jitter = new Vector3();
 
@@ -55,6 +61,16 @@ export function applyAsteroidDamage(
     return { tier: 'none', debrisSpawned: [] };
   }
 
+  _dir.copy(impactVelocity);
+  const speed = _dir.length();
+  if (speed < 1e-6) _dir.set(0, 0, -1);
+  else _dir.normalize();
+
+  // Knockback: every hit nudges the asteroid in the shot's direction of
+  // travel, whether or not it fractures — a physical reaction to being hit,
+  // not just a destruction effect. Integrated/damped in AsteroidBelt.tsx.
+  state.vel.addScaledVector(_dir, amount * KNOCKBACK_PER_DAMAGE);
+
   state.health -= amount;
   if (state.health > 0) {
     return { tier: 'none', debrisSpawned: [] }; // low impact: crater only, no debris
@@ -71,11 +87,6 @@ export function applyAsteroidDamage(
   state.hitSeq += 1;
   const countHash = cellHash(globalIdx, state.hitSeq, state.seed + 6000);
   const count = minN + Math.floor(countHash * (maxN - minN + 1));
-
-  _dir.copy(impactVelocity);
-  if (_dir.lengthSq() < 1e-6) _dir.set(0, 0, -1);
-  else _dir.normalize();
-  const speed = impactVelocity.length();
 
   const debrisSpawned: DebrisSpawnSpec[] = [];
   for (let k = 0; k < count; k++) {

@@ -46,6 +46,8 @@ export interface QualitySettings {
   debrisLifetimeSec: number;
   /** Debris beyond this distance from the ship is force-culled each frame. */
   debrisCullDistance: number;
+  /** Max simultaneous mining impact-chip spark particles (cosmetic only). */
+  miningVfxBudget: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -76,6 +78,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisMax: 0,
     debrisLifetimeSec: 0,
     debrisCullDistance: 0,
+    miningVfxBudget: 0,
   },
   medium: {
     planetSegments: 40,
@@ -104,6 +107,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisMax: 24,
     debrisLifetimeSec: 12,
     debrisCullDistance: 400,
+    miningVfxBudget: 16,
   },
   high: {
     planetSegments: 64,
@@ -132,6 +136,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisMax: 64,
     debrisLifetimeSec: 18,
     debrisCullDistance: 700,
+    miningVfxBudget: 32,
   },
   ultra: {
     planetSegments: 96,
@@ -160,6 +165,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisMax: 128,
     debrisLifetimeSec: 24,
     debrisCullDistance: 1000,
+    miningVfxBudget: 48,
   },
 };
 

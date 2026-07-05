@@ -11,6 +11,7 @@ function mkState(overrides: Partial<AsteroidState> = {}): AsteroidState {
     variantIdx: 0,
     instIdx: 0,
     pos: new Vector3(0, 0, 0),
+    vel: new Vector3(),
     radius: 2,
     health: 20,
     maxHealth: 20,
@@ -32,6 +33,26 @@ describe('applyAsteroidDamage', () => {
     asteroidRuntime.killAsteroid = null;
     debrisRuntime.list = [];
     debrisRuntime.maxCount = 1000;
+  });
+
+  it('applies a knockback impulse in the shot direction even on a non-lethal hit', () => {
+    const state = mkState({ health: 20, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    expect(state.vel.length()).toBe(0);
+
+    applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL); // low-impact, survives
+    expect(state.vel.length()).toBeGreaterThan(0);
+    // Knockback direction matches the shot's direction of travel (IMPACT_VEL is -x).
+    expect(state.vel.x).toBeLessThan(0);
+    expect(state.vel.y).toBe(0);
+    expect(state.vel.z).toBe(0);
+  });
+
+  it('a zero-length impactVelocity does not throw and falls back to a default direction', () => {
+    const state = mkState({ health: 20, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    expect(() => applyAsteroidDamage(0, 2, IMPACT_POINT, new Vector3(0, 0, 0))).not.toThrow();
+    expect(state.vel.length()).toBeGreaterThan(0);
   });
 
   it('low-impact damage (health remains) spawns no debris and does not kill', () => {

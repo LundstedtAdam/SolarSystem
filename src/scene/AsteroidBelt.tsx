@@ -36,6 +36,12 @@ interface BeltMesh {
 
 const _zeroScale = new Matrix4().makeScale(0, 0, 0);
 
+/** Per-frame (@60fps) velocity retention for impact-knockback drift — settles
+ *  a hit rock back to rest within a couple of seconds rather than drifting
+ *  indefinitely. Below this squared speed, velocity snaps to exactly zero. */
+const KNOCKBACK_DAMPING = 0.9;
+const KNOCKBACK_MIN_VEL_SQ = 1e-4;
+
 /**
  * Asteroid belt rendered as a handful of InstancedMeshes (a few draw calls for
  * thousands of rocks), split into size/detail tiers for natural variety and
@@ -66,8 +72,14 @@ export function AsteroidBelt() {
     // Single source of truth for which (tier, variant) groups exist and how
     // many instances each has — shared with `buildAsteroidStates` below so
     // the render loop's running global-index counter and the state array's
-    // indices agree without either side passing data to the other.
+    // indices agree without either side passing data to the other. Built
+    // first (not after, as before) so the render loop below can share the
+    // exact same position Vector3 with each state — impact-knockback physics
+    // mutates `state.pos` in place, and the tumble loop renders whatever
+    // `pos` its RotItem holds, so sharing the object means drift is rendered
+    // automatically with no separate update path.
     const groups = computeTierVariantCounts(count);
+    const states = buildAsteroidStates(count);
     let globalOffset = 0;
 
     for (const g of groups) {
@@ -81,11 +93,12 @@ export function AsteroidBelt() {
         // Deterministic placement — see asteroidLayout.ts. Index `i` always
         // resolves to the same rock regardless of quality tier.
         const placed = placeAsteroid(g.tierIdx, g.variantIdx, i, BELT_SEED);
-        m.compose(placed.pos, placed.quat, placed.scale);
+        const statePos = states[globalOffset + i].pos;
+        m.compose(statePos, placed.quat, placed.scale);
         inst.setMatrixAt(i, m);
         if (tier.rotates && placed.tumbleAxis) {
           items.push({
-            pos: placed.pos,
+            pos: statePos, // shared with AsteroidState — see note above
             scale: placed.scale,
             axis: placed.tumbleAxis,
             speed: placed.tumbleSpeed!,
@@ -98,7 +111,6 @@ export function AsteroidBelt() {
       globalOffset += g.n;
     }
 
-    const states = buildAsteroidStates(count);
     const grid = buildAsteroidGrid(states);
 
     return { meshes, geometries, material, states, grid };
@@ -149,7 +161,7 @@ export function AsteroidBelt() {
   // Reused scratch objects for the per-frame tumble update.
   const scratch = useRef({ m: new Matrix4(), q: new Quaternion() });
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!built) return;
     // Whole-belt orbital drift (respects sim time scale / pause). Published
     // to the runtime so ship/debris code can transform world-space queries
@@ -158,6 +170,7 @@ export function AsteroidBelt() {
     if (group.current) group.current.rotation.y = yaw;
     asteroidRuntime.groupYaw = yaw;
     // Individual tumble for the larger tiers (continues regardless of pause).
+    const dt = Math.min(delta, 0.05);
     const t = state.clock.elapsedTime;
     const { m, q } = scratch.current;
     for (const bm of built.meshes) {
@@ -165,7 +178,19 @@ export function AsteroidBelt() {
       for (let i = 0; i < bm.items.length; i++) {
         const it = bm.items[i];
         const globalIdx = bm.globalOffset + i;
-        if (!built.states[globalIdx]?.alive) continue; // fractured — stays zero-scaled
+        const s = built.states[globalIdx];
+        if (!s?.alive) continue; // fractured — stays zero-scaled
+
+        // Impact-knockback drift: `it.pos` and `s.pos` are the same Vector3
+        // (see the build loop above), so integrating here is all rendering
+        // needs — no separate update path for hit asteroids.
+        if (s.vel.lengthSq() > KNOCKBACK_MIN_VEL_SQ) {
+          s.pos.addScaledVector(s.vel, dt);
+          s.vel.multiplyScalar(KNOCKBACK_DAMPING ** (dt * 60));
+        } else if (s.vel.x !== 0 || s.vel.y !== 0 || s.vel.z !== 0) {
+          s.vel.set(0, 0, 0); // snap to rest once negligible
+        }
+
         q.setFromAxisAngle(it.axis, it.phase + t * it.speed);
         m.compose(it.pos, q, it.scale);
         bm.inst.setMatrixAt(i, m);

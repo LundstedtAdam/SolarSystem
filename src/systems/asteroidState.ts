@@ -6,7 +6,7 @@
 // Mirrors the `Debris[]` convention already used for voxel mining debris
 // (`src/voxel/ChunkManager.tsx`), not a Map or class hierarchy.
 
-import type { Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { placeAsteroid, computeTierVariantCounts, BELT_SEED } from './asteroidLayout';
 
 export interface AsteroidState {
@@ -15,6 +15,12 @@ export interface AsteroidState {
   /** Index within this asteroid's (tier, variant) InstancedMesh. */
   instIdx: number;
   pos: Vector3;
+  /** Impact-knockback velocity (world units/s) — zero unless something has
+   *  hit this rock recently. Only visually applied for tumbling tiers (see
+   *  AsteroidBelt.tsx); non-rotating dust-tier instances never redraw their
+   *  matrix after the initial build, so knockback there would be invisible
+   *  anyway. Integrated + damped in AsteroidBelt.tsx's per-frame tumble loop. */
+  vel: Vector3;
   /** Approximate bounding radius (world units), from the baked scale. */
   radius: number;
   health: number;
@@ -52,6 +58,7 @@ export function buildAsteroidStates(count: number, seed: number = BELT_SEED): As
         variantIdx: g.variantIdx,
         instIdx: i,
         pos: placed.pos.clone(),
+        vel: new Vector3(),
         radius: placed.radius,
         health: maxHealth,
         maxHealth,

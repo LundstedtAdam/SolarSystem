@@ -72,6 +72,7 @@ function mkState(x: number, z: number): AsteroidState {
     variantIdx: 0,
     instIdx: 0,
     pos: new Vector3(x, 0, z),
+    vel: new Vector3(),
     radius: 2,
     health: 10,
     maxHealth: 10,

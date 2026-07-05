@@ -2,9 +2,11 @@
 // combat, no NPCs; this repo has no combat system at all today). Aiming
 // mirrors the voxel mining convention (a fixed screen-center ray), broadphased
 // through the belt's spatial grid so it never iterates the full asteroid
-// population. Sustained fire feeds the same `applyAsteroidDamage` pipeline
-// collision damage uses, naturally producing low/medium/high fracture
-// outcomes depending on how long the beam stays on target.
+// population. Fire is discrete, automatic shots at a fixed cadence while held
+// (not a continuous beam) — each shot is hitscan (instant), but visible as a
+// brief flash/tracer and an impact spark burst, feeding the same
+// `applyAsteroidDamage` pipeline collision damage uses so sustained fire
+// naturally produces low/medium/high fracture outcomes over several shots.
 
 import { Vector3 } from 'three';
 import { queryNearby } from '../systems/asteroidGrid';
@@ -14,10 +16,12 @@ import { rotateY } from './shipCollision';
 
 /** Max range (world units) the mining beam can reach. */
 export const MINING_RANGE = 60;
-/** Damage per second while the beam stays on target. */
-export const MINING_DPS = 14;
+/** Automatic fire cadence while the trigger is held (shots/sec). */
+export const FIRE_RATE = 6;
+/** Damage dealt per individual shot. */
+export const SHOT_DAMAGE = 3;
 /** Pseudo-"impact speed" fed into the fracture debris-ejection direction —
- *  not a real projectile velocity, just biases fragments away from the beam. */
+ *  not a real projectile velocity, just biases fragments away from the shot. */
 export const MINING_IMPACT_SPEED = 30;
 
 const MAX_ASTEROID_RADIUS = Math.max(...TIERS.map((t) => t.max));

@@ -65,6 +65,7 @@ describe('updateDebrisBodies', () => {
       variantIdx: 0,
       instIdx: 0,
       pos: new Vector3(50, 0, 0),
+      vel: new Vector3(),
       radius: 2,
       health: 10,
       maxHealth: 10,
