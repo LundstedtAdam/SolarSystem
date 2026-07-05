@@ -15,6 +15,7 @@ import { Quaternion, Vector3 } from 'three';
 import { cellHash } from '../voxel/noise';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
 import { debrisRuntime, type DebrisSpawnSpec } from '../scene/debrisRuntime';
+import { rotateY } from '../ship/shipCollision';
 import {
   getFracturePatterns,
   pickPatternIndex,
@@ -53,11 +54,17 @@ const KNOCKBACK_PER_DAMAGE = 0.35;
 const MAX_SPIN_RATE = 6;
 
 const _dir = new Vector3();
+const _dirLocal = new Vector3();
 const _centroid = new Vector3();
-const _worldOffset = new Vector3();
+const _parentOffset = new Vector3();
 const _angVelCross = new Vector3();
 const _fragVel = new Vector3();
 const _fragQuat = new Quaternion();
+const _yawQuat = new Quaternion();
+const _yAxis = new Vector3(0, 1, 0);
+const _localPos = new Vector3();
+const _worldPos = new Vector3();
+const _worldVel = new Vector3();
 
 interface SharedFragmentProps {
   jitter: Vector3;
@@ -136,10 +143,20 @@ export function applyAsteroidDamage(
   if (speed < 1e-6) _dir.set(0, 0, -1);
   else _dir.normalize();
 
+  // The impact direction arrives in world space, but `state.pos`/`state.vel`
+  // live in belt-local space (the whole belt group is rotated by `groupYaw`
+  // each frame, and the tumble loop integrates pos/vel in that local frame) —
+  // rotate the direction into the belt frame before using it for anything
+  // that feeds local state, and rotate spawned debris back out to world
+  // (debris simulates in world space, so a local-frame spawn position would
+  // be off by the full belt rotation — thousands of units at belt radius).
+  const yaw = asteroidRuntime.groupYaw;
+  rotateY(_dir, -yaw, _dirLocal);
+
   // Knockback: every hit nudges the asteroid in the shot's direction of
   // travel, whether or not it fractures — a physical reaction to being hit,
   // not just a destruction effect. Integrated/damped in AsteroidBelt.tsx.
-  state.vel.addScaledVector(_dir, amount * KNOCKBACK_PER_DAMAGE);
+  state.vel.addScaledVector(_dirLocal, amount * KNOCKBACK_PER_DAMAGE);
 
   // Promote on the first damaging hit (tier/budget permitting — see
   // AsteroidBelt.tsx's promotion API) so local damage has a standalone,
@@ -183,25 +200,34 @@ export function applyAsteroidDamage(
     const pattern = patterns[patternIdx];
     const clusterIndices = pickClusterIndices(pattern, count, globalIdx, state.hitSeq, state.seed);
 
+    // Fragment kinematics are computed in the belt-local frame (state.pos/
+    // state.vel/momentum.quat/momentum.angVel all live there), then rotated
+    // to world for the spawn — debris simulates in world space.
+    _yawQuat.setFromAxisAngle(_yAxis, yaw);
+
     for (let k = 0; k < clusterIndices.length; k++) {
       const stream = state.hitSeq * 100 + k;
       const shared = computeSharedFragmentProps(globalIdx, stream, state.seed, speed, state.radius);
 
       computeClusterCentroid(geometry, pattern, clusterIndices[k], _centroid);
-      _worldOffset.copy(_centroid).multiply(momentum.scale).applyQuaternion(momentum.quat);
+      _parentOffset.copy(_centroid).multiply(momentum.scale).applyQuaternion(momentum.quat);
 
       _fragVel
         .copy(state.vel)
-        .add(_angVelCross.copy(momentum.angVel).cross(_worldOffset))
+        .add(_angVelCross.copy(momentum.angVel).cross(_parentOffset))
         .addScaledVector(shared.jitter, shared.outwardSpeed)
-        .addScaledVector(_dir, speed * 0.3);
+        .addScaledVector(_dirLocal, speed * 0.3);
 
-      const pos = state.pos.clone().add(_worldOffset);
-      _fragQuat.copy(momentum.quat); // fragment starts oriented like the parent it broke from
+      _localPos.copy(state.pos).add(_parentOffset);
+      rotateY(_localPos, yaw, _worldPos);
+      rotateY(_fragVel, yaw, _worldVel);
+      // Fragment starts oriented like the parent it broke from — the
+      // parent's local orientation composed with the belt's own rotation.
+      _fragQuat.copy(_yawQuat).multiply(momentum.quat);
 
       debrisSpawned.push({
-        pos,
-        vel: _fragVel.clone(),
+        pos: _worldPos.clone(),
+        vel: _worldVel.clone(),
         radius: shared.fragRadius,
         isOre: shared.isOre,
         resourceType: shared.resourceType,

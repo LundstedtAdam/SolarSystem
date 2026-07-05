@@ -32,6 +32,7 @@ describe('applyAsteroidDamage', () => {
   beforeEach(() => {
     asteroidRuntime.states = [];
     asteroidRuntime.grid = null;
+    asteroidRuntime.groupYaw = 0;
     asteroidRuntime.killAsteroid = null;
     asteroidRuntime.promotion = null;
     debrisRuntime.list = [];
@@ -218,6 +219,7 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
   beforeEach(() => {
     asteroidRuntime.states = [];
     asteroidRuntime.grid = null;
+    asteroidRuntime.groupYaw = 0;
     asteroidRuntime.killAsteroid = () => {};
     debrisRuntime.list = [];
     debrisRuntime.maxCount = 1000;
@@ -308,6 +310,42 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       if (a.distanceTo(b) > 1e-6) anyDiffers = true;
     }
     expect(anyDiffers).toBe(true);
+  });
+
+  it('spawns fragments at the WORLD position of the asteroid when the belt is rotated (regression: local-frame spawn was instantly distance-culled)', () => {
+    // state.pos is belt-local; with groupYaw = π/2 the asteroid's world
+    // position is (0, 0, -100) — debris must spawn near there (world space,
+    // where the debris system simulates), not near the local (100, 0, 0).
+    const state = mkState({ health: 5, maxHealth: 20, pos: new Vector3(100, 0, 0) });
+    asteroidRuntime.states = [state];
+    asteroidRuntime.groupYaw = Math.PI / 2;
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: () => {},
+      getMomentumInputs: () => mkMomentum(),
+      getSourceGeometry: () => geom,
+      getBaseGeometry: () => null,
+    };
+
+    const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
+    expect(result.debrisSpawned.length).toBeGreaterThan(0);
+    const worldPos = new Vector3(0, 0, -100);
+    for (const spec of result.debrisSpawned) {
+      expect(spec.pos.distanceTo(worldPos)).toBeLessThan(10); // near the world position...
+      expect(spec.pos.distanceTo(state.pos)).toBeGreaterThan(50); // ...not the local one
+    }
+  });
+
+  it('applies knockback in the belt-local frame when the belt is rotated (regression: world-frame impulse pushed rocks ~yaw degrees off the shot direction)', () => {
+    const state = mkState({ health: 20, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    asteroidRuntime.groupYaw = Math.PI / 2;
+
+    // World-space shot direction -x; rotated into belt-local space by -π/2
+    // that becomes -z (rotateY convention: local = R(-yaw) · world).
+    applyAsteroidDamage(0, 2, IMPACT_POINT, new Vector3(-10, 0, 0));
+    expect(state.vel.z).toBeLessThan(0);
+    expect(Math.abs(state.vel.x)).toBeLessThan(1e-9);
   });
 
   it('a fragment\'s position offset scales with the parent scale and rotates with the parent orientation', () => {

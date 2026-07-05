@@ -39,6 +39,8 @@ const _origin = new Vector3();
 const _dir = new Vector3();
 const _hardpointLocal = new Vector3();
 const _hardpointWorld = new Vector3();
+const _aimPoint = new Vector3();
+const _shotDir = new Vector3();
 const _shotVel = new Vector3();
 const _toShip = new Vector3();
 
@@ -71,7 +73,7 @@ export function SpaceMiningController() {
   const fireAcc = useRef(0);
   const wasFiring = useRef(false);
 
-  const fireShot = () => {
+  const fireShot = (hit: ReturnType<typeof raycastAsteroids>) => {
     // Launch sound plays immediately; a distinct higher-pitched hit chirp
     // plays separately, later, only if this specific shot actually connects
     // (projectilePhysics.ts) — travel time means we don't know that yet.
@@ -79,7 +81,21 @@ export function SpaceMiningController() {
 
     _hardpointLocal.set(0, -HARDPOINT_DOWN, -HARDPOINT_FORWARD);
     _hardpointWorld.copy(_hardpointLocal).applyQuaternion(shipTelemetry.rotation).add(shipTelemetry.position);
-    _shotVel.copy(shipTelemetry.velocity).addScaledVector(_dir, PROJECTILE_SPEED);
+
+    // Converged aim: the shot flies from the hardpoint TOWARD the point the
+    // crosshair is actually on (the aimed asteroid's surface, or the
+    // crosshair ray's far point when aiming at empty space) — NOT parallel
+    // to the camera ray. The chase camera sits behind/above the ship, so a
+    // parallel launch is laterally offset from the crosshair line by more
+    // than a small asteroid's radius and would consistently miss exactly
+    // what the reticle says is targetable.
+    if (hit) _aimPoint.copy(hit.point);
+    else _aimPoint.copy(_origin).addScaledVector(_dir, MINING_RANGE);
+    _shotDir.copy(_aimPoint).sub(_hardpointWorld);
+    if (_shotDir.lengthSq() < 1e-6) _shotDir.copy(_dir);
+    else _shotDir.normalize();
+
+    _shotVel.copy(shipTelemetry.velocity).addScaledVector(_shotDir, PROJECTILE_SPEED);
     projectileRuntime.spawn({ pos: _hardpointWorld, vel: _shotVel });
   };
 
@@ -113,7 +129,7 @@ export function SpaceMiningController() {
       fireAcc.current += dt;
       while (fireAcc.current >= FIRE_INTERVAL) {
         fireAcc.current -= FIRE_INTERVAL;
-        fireShot();
+        fireShot(hit);
       }
     } else {
       wasFiring.current = false;
