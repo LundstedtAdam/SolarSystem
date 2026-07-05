@@ -30,8 +30,12 @@ export function VoxelSky({ planet }: { planet: string }) {
     if (biome.skyHasSun) {
       const sunDir = vec3(0.3, 0.6, 0.4).normalize();
       const sunDot = normalLocal.normalize().dot(sunDir).max(0);
-      const sunDisc = smoothstep(0.997, 0.999, sunDot).mul(float(8.0));
-      const sunGlow = sunDot.pow(128).mul(float(0.6));
+      // Peaks kept modest (2.2 + 0.4 = 2.6x) — a much higher, unbounded
+      // magnitude here previously pushed ACES filmic tonemapping into a
+      // hue-shift-toward-green artifact once bloom picked it up at
+      // higher quality tiers (lower bloomThreshold admits more of it).
+      const sunDisc = smoothstep(0.997, 0.999, sunDot).mul(float(2.2));
+      const sunGlow = sunDot.pow(128).mul(float(0.4));
       m.colorNode = full.add(vec3(1.0, 0.95, 0.85).mul(sunDisc.add(sunGlow)));
     } else {
       m.colorNode = full;

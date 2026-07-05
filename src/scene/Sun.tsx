@@ -38,8 +38,12 @@ export function Sun() {
     const m = new MeshBasicNodeMaterial();
     const viewDir = cameraPosition.sub(positionWorld).normalize();
     const fresnel = float(1).sub(normalWorld.normalize().dot(viewDir).max(0));
-    // Two-layer corona: warm inner rim + cooler outer halo
-    const inner = fresnel.pow(2.0).mul(vec3(1.0, 0.55, 0.2)).mul(2.4);
+    // Two-layer corona: warm inner rim + cooler outer halo. The inner ring's
+    // color/magnitude are kept close to the sun core's own tuned values
+    // (peak ~1.6-2.0x, a less extreme ratio spread) — the previous, more
+    // extreme values (2.4x at a 1:0.55:0.2 ratio) were a second, previously
+    // unfixed source of the ACES hue-shift-toward-green artifact under bloom.
+    const inner = fresnel.pow(2.0).mul(vec3(1.0, 0.8, 0.6)).mul(1.6);
     const outer = fresnel.pow(4.5).mul(vec3(1.0, 0.8, 0.5)).mul(0.6);
     m.colorNode = inner.add(outer);
     m.opacityNode = fresnel.pow(1.8);
