@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3, BufferGeometry, BufferAttribute, Line, LineBasicMaterial, AdditiveBlending } from 'three/webgpu';
+import { Vector3, Quaternion, CylinderGeometry, Mesh, MeshBasicMaterial, AdditiveBlending } from 'three/webgpu';
 import { useStore } from '../store';
 import { shipTelemetry } from '../ship/shipTelemetry';
 import {
@@ -34,11 +34,19 @@ const ORE_YIELD = 1;
 const FLASH_DURATION = 0.1;
 const SPARKS_PER_SHOT = 4;
 const FIRE_INTERVAL = 1 / FIRE_RATE;
+/** Tracer bolt radius (world units) — a `Line` is a hairline in WebGL/WebGPU
+ *  (browsers don't honor `linewidth` beyond 1px), which reads as invisible
+ *  at a 0.1s flash against a starfield. A real cylinder mesh guarantees
+ *  actual on-screen width regardless of backend. */
+const BEAM_RADIUS = 0.08;
 
 const _origin = new Vector3();
 const _dir = new Vector3();
 const _impactVel = new Vector3();
 const _toShip = new Vector3();
+const _mid = new Vector3();
+const _beamQuat = new Quaternion();
+const _beamUp = new Vector3(0, 1, 0);
 
 /**
  * Space mining/weapon system: aims a fixed screen-center ray (mirroring the
@@ -61,13 +69,14 @@ export function SpaceMiningController() {
     return () => removeMiningInput();
   }, []);
 
-  // Visual beam — a single line updated in place each frame, flashed on for
-  // FLASH_DURATION per shot rather than held continuously visible. No
-  // pooling needed: this is one object, not a population.
+  // Visual beam — a single thin cylinder mesh (not a `Line`, which is a
+  // hairline in WebGL/WebGPU regardless of `linewidth`) repositioned/rescaled
+  // in place each frame, flashed on for FLASH_DURATION per shot rather than
+  // held continuously visible. No pooling needed: this is one object, not a
+  // population.
   const beam = useMemo(() => {
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
-    const material = new LineBasicMaterial({
+    const geometry = new CylinderGeometry(BEAM_RADIUS, BEAM_RADIUS, 1, 6, 1, true);
+    const material = new MeshBasicMaterial({
       color: 0xff8850,
       transparent: true,
       opacity: 0.9,
@@ -75,16 +84,16 @@ export function SpaceMiningController() {
       depthWrite: false,
       toneMapped: false,
     });
-    const line = new Line(geometry, material);
-    line.frustumCulled = false;
-    line.visible = false;
-    return line;
+    const mesh = new Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    return mesh;
   }, []);
 
   useEffect(() => {
     return () => {
       beam.geometry.dispose();
-      (beam.material as LineBasicMaterial).dispose();
+      (beam.material as MeshBasicMaterial).dispose();
     };
   }, [beam]);
 
@@ -145,10 +154,12 @@ export function SpaceMiningController() {
     beam.visible = flashTimer.current > 0;
     if (beam.visible) {
       const endPoint = hit ? hit.point : _origin.clone().addScaledVector(_dir, MINING_RANGE);
-      const posAttr = beam.geometry.attributes.position as BufferAttribute;
-      posAttr.setXYZ(0, _origin.x, _origin.y, _origin.z);
-      posAttr.setXYZ(1, endPoint.x, endPoint.y, endPoint.z);
-      posAttr.needsUpdate = true;
+      const length = _origin.distanceTo(endPoint);
+      _mid.copy(_origin).add(endPoint).multiplyScalar(0.5);
+      beam.position.copy(_mid);
+      beam.scale.set(1, length, 1);
+      _beamQuat.setFromUnitVectors(_beamUp, _dir);
+      beam.quaternion.copy(_beamQuat);
     }
 
     // Ore magnetism + collection — backward swap-remove, safe regardless of
