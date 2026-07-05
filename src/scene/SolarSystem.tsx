@@ -1,13 +1,14 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import type { PerspectiveCamera } from 'three';
-import { AmbientLight, PointLight } from 'three';
+import { AmbientLight, DirectionalLight, PointLight } from 'three';
 import {
   WebGPURenderer,
   ACESFilmicToneMapping,
   PCFSoftShadowMap,
   AmbientLightNode,
   PointLightNode,
+  DirectionalLightNode,
 } from 'three/webgpu';
 import { Starfield } from './Starfield';
 import { Sun } from './Sun';
@@ -74,6 +75,7 @@ export function SolarSystem() {
     const library = (renderer as any).nodes.library;
     library.addLight(AmbientLightNode, AmbientLight);
     library.addLight(PointLightNode, PointLight);
+    library.addLight(DirectionalLightNode, DirectionalLight);
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
