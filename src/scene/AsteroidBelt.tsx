@@ -7,32 +7,13 @@ import {
   Matrix4,
   Quaternion,
   Vector3,
-  Euler,
   type BufferGeometry,
   type Group,
 } from 'three/webgpu';
 import { vec3, float } from 'three/tsl';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
-import { WORLD_SCALE } from '../systems/bodies';
-
-// Belt sits between Mars and Jupiter, kept inside Jupiter's inner moon shell so
-// nothing crosses orbits. Scaled by WORLD_SCALE alongside the body layout.
-const INNER = 645 * WORLD_SCALE;
-const OUTER = 755 * WORLD_SCALE;
-const THICKNESS = 16 * WORLD_SCALE; // full vertical spread; concentrated toward the plane
-
-/**
- * Size/detail tiers — a realistic belt is mostly dust with a few large bodies.
- * Geometry detail (poly count) scales with size so the big rocks that read up
- * close are high-poly, while the abundant tiny ones stay cheap. Only the
- * larger, visibly-tumbling tiers animate per frame, keeping the cost low.
- */
-const TIERS = [
-  { frac: 0.78, detail: 0, min: 0.12, max: 0.5, variants: 1, rotates: false },
-  { frac: 0.18, detail: 1, min: 0.5, max: 1.9, variants: 2, rotates: true },
-  { frac: 0.04, detail: 2, min: 1.9, max: 5.2, variants: 3, rotates: true },
-] as const;
+import { TIERS, BELT_SEED, placeAsteroid } from '../systems/asteroidLayout';
 
 /** Lumpy, crack-free rock from an icosahedron: displace each vertex along its
  *  own direction by a smooth function of that direction, so shared seam
@@ -90,10 +71,9 @@ export function AsteroidBelt() {
     const meshes: BeltMesh[] = [];
     const geometries: BufferGeometry[] = [];
     const m = new Matrix4();
-    const q = new Quaternion();
-    const e = new Euler();
 
-    for (const tier of TIERS) {
+    for (let tierIdx = 0; tierIdx < TIERS.length; tierIdx++) {
+      const tier = TIERS[tierIdx];
       const tierCount = Math.round(count * tier.frac);
       if (tierCount === 0) continue;
       // Split this tier's rocks across its shape variants.
@@ -108,29 +88,19 @@ export function AsteroidBelt() {
         inst.frustumCulled = false; // ring is essentially always partly on-screen
         const items: RotItem[] = [];
         for (let i = 0; i < n; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const r = INNER + Math.random() * (OUTER - INNER);
-          // concentrate toward the orbital plane (rand*rand bias)
-          const y = (Math.random() - 0.5) * (Math.random() ** 2) * THICKNESS;
-          const pos = new Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
-          const base = tier.min + Math.random() * (tier.max - tier.min);
-          // irregular, non-uniform scale so rocks aren't spheres
-          const scale = new Vector3(
-            base,
-            base * (0.6 + Math.random() * 0.7),
-            base * (0.7 + Math.random() * 0.6)
-          );
-          e.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
-          q.setFromEuler(e);
-          m.compose(pos, q, scale);
+          // Deterministic placement — see asteroidLayout.ts. Index `i` always
+          // resolves to the same rock regardless of quality tier.
+          const placed = placeAsteroid(tierIdx, vi, i, BELT_SEED);
+          m.compose(placed.pos, placed.quat, placed.scale);
           inst.setMatrixAt(i, m);
-          if (tier.rotates) {
-            const axis = new Vector3(
-              Math.random() - 0.5,
-              Math.random() - 0.5,
-              Math.random() - 0.5
-            ).normalize();
-            items.push({ pos, scale, axis, speed: 0.05 + Math.random() * 0.25, phase: Math.random() * Math.PI * 2 });
+          if (tier.rotates && placed.tumbleAxis) {
+            items.push({
+              pos: placed.pos,
+              scale: placed.scale,
+              axis: placed.tumbleAxis,
+              speed: placed.tumbleSpeed!,
+              phase: placed.tumblePhase!,
+            });
           }
         }
         inst.instanceMatrix.needsUpdate = true;
