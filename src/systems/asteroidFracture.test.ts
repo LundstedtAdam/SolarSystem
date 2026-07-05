@@ -59,7 +59,7 @@ describe('applyAsteroidDamage', () => {
     expect(state.vel.length()).toBeGreaterThan(0);
   });
 
-  it('low-impact damage (health remains) spawns no debris and does not kill', () => {
+  it('low-impact damage (health remains) chips off one small fragment and does not kill', () => {
     const state = mkState({ health: 20, maxHealth: 20 });
     asteroidRuntime.states = [state];
     let killed = false;
@@ -68,11 +68,20 @@ describe('applyAsteroidDamage', () => {
     };
 
     const result = applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
-    expect(result.tier).toBe('none');
-    expect(result.debrisSpawned).toHaveLength(0);
+    expect(result.tier).toBe('low');
+    expect(result.debrisSpawned).toHaveLength(1);
     expect(state.health).toBe(18);
     expect(killed).toBe(false);
-    expect(debrisRuntime.list).toHaveLength(0);
+    expect(debrisRuntime.list).toHaveLength(1);
+
+    const chip = result.debrisSpawned[0];
+    expect(chip.cascadeDepth).toBe(1); // chips never fracture further
+    expect(chip.radius).toBeLessThan(state.radius * 0.2); // small piece, not a fragment
+    // Pre-aged so it expires well before the full debris lifetime — sustained
+    // fire must not fill the pool and starve real fracture fragments.
+    expect(chip.life).toBeGreaterThan(0);
+    // Spawned at the impact point (world space), not the asteroid center.
+    expect(chip.pos.distanceTo(IMPACT_POINT)).toBeLessThan(state.radius);
   });
 
   it('a lethal hit with small overkill spawns 1-5 debris (medium tier) and kills the asteroid', () => {
@@ -150,7 +159,7 @@ describe('applyAsteroidDamage', () => {
     expect(promoteCalls).toBe(1);
   });
 
-  it('applies a dent (not debris) on a non-lethal hit to a promoted asteroid', () => {
+  it('applies a dent AND chips off a small fragment on a non-lethal hit to a promoted asteroid', () => {
     const state = mkState({ health: 20, maxHealth: 20 });
     asteroidRuntime.states = [state];
     let dentCalls = 0;
@@ -169,8 +178,8 @@ describe('applyAsteroidDamage', () => {
 
     const result = applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
     expect(dentCalls).toBe(1);
-    expect(result.tier).toBe('none');
-    expect(result.debrisSpawned).toHaveLength(0);
+    expect(result.tier).toBe('low');
+    expect(result.debrisSpawned).toHaveLength(1);
   });
 
   it('does not attempt promotion or dent when promotion returns false (over budget / ineligible)', () => {

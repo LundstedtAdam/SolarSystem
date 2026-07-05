@@ -48,6 +48,11 @@ export interface DebrisSpawnSpec {
   angVel?: Vector3;
   cascadeDepth?: number;
   shapeKey?: DebrisShapeKey;
+  /** Initial `life` value (seconds already "lived") — lets short-lived spawns
+   *  (per-hit impact chips) expire well before the global `maxLifeSec`
+   *  without a second lifetime field, so they can't starve the pool budget
+   *  that real fracture fragments draw from. */
+  life?: number;
 }
 
 export const debrisRuntime: {
@@ -79,7 +84,7 @@ export const debrisRuntime: {
       quat: spec.quat ? spec.quat.clone() : new Quaternion(),
       angVel: spec.angVel ? spec.angVel.clone() : new Vector3(),
       radius: spec.radius,
-      life: 0,
+      life: spec.life ?? 0,
       isOre: spec.isOre ?? false,
       resourceType: spec.resourceType,
       cascadeDepth: spec.cascadeDepth ?? 0,

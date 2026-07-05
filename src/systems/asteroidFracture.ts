@@ -49,6 +49,21 @@ const ORE_TYPES: ResourceType[] = ['iron', 'silicon', 'titanite', 'hematite', 'l
  *  fracturing ones. Tuned so a solid hit visibly shifts a rock without
  *  flinging it; actual on-screen drift is also damped in AsteroidBelt.tsx. */
 const KNOCKBACK_PER_DAMAGE = 0.35;
+/** Cap on the impact speed fed into fragment-ejection energy. The impact
+ *  velocity is the projectile's real flight velocity (~220 u/s) — using it
+ *  raw would eject fragments at 90-150 u/s, fast enough to streak out of
+ *  sight in a fraction of a second (debris read as "nothing spawned").
+ *  Physically: only a fraction of the projectile's energy transfers to
+ *  fragments. Ejection direction still follows the real impact vector. */
+const MAX_EJECTION_SPEED = 30;
+/** Every connecting hit chips off one small, short-lived real fragment at
+ *  the impact point — visible "pieces breaking off" feedback on every shot,
+ *  not just the lethal one. Short lifetime (they expire after
+ *  CHIP_LIFE_SEC, not the full debris lifetime) so sustained fire can't
+ *  fill the debris pool and starve real fracture fragments of budget. */
+const CHIP_RADIUS_FRAC = 0.12;
+const CHIP_MIN_RADIUS = 0.06;
+const CHIP_LIFE_SEC = 1.5;
 /** Fragment spin rate cap (rad/s) — faster/smaller ejecta spin faster, but
  *  never so fast it reads as jittery noise. */
 const MAX_SPIN_RATE = 6;
@@ -152,6 +167,7 @@ export function applyAsteroidDamage(
   // be off by the full belt rotation — thousands of units at belt radius).
   const yaw = asteroidRuntime.groupYaw;
   rotateY(_dir, -yaw, _dirLocal);
+  const ejectionSpeed = Math.min(speed, MAX_EJECTION_SPEED);
 
   // Knockback: every hit nudges the asteroid in the shot's direction of
   // travel, whether or not it fractures — a physical reaction to being hit,
@@ -168,19 +184,39 @@ export function applyAsteroidDamage(
   }
 
   state.health -= amount;
+  state.hitSeq += 1;
+
   if (state.health > 0) {
     // Low impact: real local damage — a persistent crater at the impact
-    // point — instead of the asteroid just silently losing health. No-op if
-    // this rock wasn't promoted (dust tier, or the promotion budget was full).
+    // point (no-op if this rock wasn't promoted: dust tier, or the promotion
+    // budget was full) — plus one small, short-lived chip knocked off at the
+    // impact point, so every connecting shot visibly breaks a piece off
+    // instead of only decrementing health. Chip position/velocity are
+    // world-frame throughout (impactPoint and _dir both arrive in world
+    // space), matching the world-space debris simulation.
     if (state.promoted) asteroidRuntime.promotion?.applyDent(globalIdx, impactPoint, amount);
-    return { tier: 'none', debrisSpawned: [] };
+
+    const shared = computeSharedFragmentProps(globalIdx, state.hitSeq * 100 + 99, state.seed, ejectionSpeed, state.radius);
+    const chipRadius = Math.max(state.radius * CHIP_RADIUS_FRAC, CHIP_MIN_RADIUS);
+    const chip: DebrisSpawnSpec = {
+      pos: impactPoint.clone().addScaledVector(shared.jitter, chipRadius),
+      vel: shared.jitter
+        .clone()
+        .multiplyScalar(shared.outwardSpeed * 0.6)
+        .addScaledVector(_dir, ejectionSpeed * 0.15),
+      radius: chipRadius,
+      isOre: false,
+      angVel: shared.angVel,
+      cascadeDepth: 1, // chips never fracture further
+      life: Math.max(0, debrisRuntime.maxLifeSec - CHIP_LIFE_SEC),
+    };
+    debrisRuntime.spawn(chip);
+    return { tier: 'low', debrisSpawned: [chip] };
   }
 
   const overkillFrac = -state.health / state.maxHealth;
   const tier: FractureTier = overkillFrac >= HIGH_OVERKILL_FRAC ? 'high' : 'medium';
   const [minN, maxN] = tier === 'high' ? HIGH_DEBRIS_RANGE : MEDIUM_DEBRIS_RANGE;
-
-  state.hitSeq += 1;
   const countHash = cellHash(globalIdx, state.hitSeq, state.seed + 6000);
   const count = minN + Math.floor(countHash * (maxN - minN + 1));
 
@@ -207,7 +243,7 @@ export function applyAsteroidDamage(
 
     for (let k = 0; k < clusterIndices.length; k++) {
       const stream = state.hitSeq * 100 + k;
-      const shared = computeSharedFragmentProps(globalIdx, stream, state.seed, speed, state.radius);
+      const shared = computeSharedFragmentProps(globalIdx, stream, state.seed, ejectionSpeed, state.radius);
 
       computeClusterCentroid(geometry, pattern, clusterIndices[k], _centroid);
       _parentOffset.copy(_centroid).multiply(momentum.scale).applyQuaternion(momentum.quat);
@@ -216,7 +252,7 @@ export function applyAsteroidDamage(
         .copy(state.vel)
         .add(_angVelCross.copy(momentum.angVel).cross(_parentOffset))
         .addScaledVector(shared.jitter, shared.outwardSpeed)
-        .addScaledVector(_dirLocal, speed * 0.3);
+        .addScaledVector(_dirLocal, ejectionSpeed * 0.3);
 
       _localPos.copy(state.pos).add(_parentOffset);
       rotateY(_localPos, yaw, _worldPos);
@@ -242,8 +278,8 @@ export function applyAsteroidDamage(
     // simpler jitter-only spawn, no momentum/geometry inputs available.
     for (let k = 0; k < count; k++) {
       const stream = state.hitSeq * 100 + k;
-      const shared = computeSharedFragmentProps(globalIdx, stream, state.seed, speed, state.radius);
-      const vel = shared.jitter.clone().multiplyScalar(shared.outwardSpeed).addScaledVector(_dir, speed * 0.3);
+      const shared = computeSharedFragmentProps(globalIdx, stream, state.seed, ejectionSpeed, state.radius);
+      const vel = shared.jitter.clone().multiplyScalar(shared.outwardSpeed).addScaledVector(_dir, ejectionSpeed * 0.3);
       const pos = impactPoint.clone().addScaledVector(shared.jitter, shared.fragRadius * 0.5);
 
       debrisSpawned.push({
