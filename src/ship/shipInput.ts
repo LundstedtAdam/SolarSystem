@@ -142,6 +142,7 @@ function readGamepadRaw(): ShipInput | null {
 let touchYaw = 0;
 let touchPitch = 0;
 let touchThrust = 0;
+let touchRoll = 0;
 let joystickActive = false;
 
 /** Raw, unshaped joystick vector — shaping happens centrally in readInput(). */
@@ -159,6 +160,11 @@ export function clearTouchJoystick() {
 
 export function setTouchThrottle(t: number) {
   touchThrust = t;
+}
+
+/** Held roll button state: -1 (roll left / ↺), 0 (released), 1 (roll right / ↻). */
+export function setTouchRoll(v: number) {
+  touchRoll = v;
 }
 
 /** Fine control softens rotation and caps thrust so close-quarters work is
@@ -208,14 +214,14 @@ export function readInput(): ShipInput {
     });
   }
 
-  if (joystickActive || Math.abs(touchThrust) > 0.01) {
+  if (joystickActive || Math.abs(touchThrust) > 0.01 || Math.abs(touchRoll) > 0.01) {
     const aim = shapeRadial(touchYaw, touchPitch, cfg.deadzone);
     return finish({
       thrust: throttleCurve(touchThrust),
       throttleRaw: Math.min(Math.abs(touchThrust), 1),
       yaw: aim.x,
       pitch: cfg.invertPitch ? -aim.y : aim.y,
-      roll: 0,
+      roll: shapeAxis(touchRoll, cfg.deadzone),
     });
   }
 

@@ -79,7 +79,15 @@ export function raycastAsteroids(origin: Vector3, dir: Vector3, maxDistance: num
 
 let spaceKeyDown = false;
 let mouseDown = false;
+let touchFiring = false;
 let installed = false;
+
+/** Touch "Fire" button state (TouchControls.tsx) — held true while pressed,
+ *  false on release. Separate from the mouse/keyboard/gamepad listeners
+ *  below since touch has no equivalent physical event to hook. */
+export function setTouchFiring(active: boolean): void {
+  touchFiring = active;
+}
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.code === 'Space') spaceKeyDown = true;
@@ -96,6 +104,7 @@ function onMouseUp(e: MouseEvent) {
 function onBlur() {
   spaceKeyDown = false;
   mouseDown = false;
+  touchFiring = false;
 }
 
 export function installMiningInput(): void {
@@ -132,5 +141,5 @@ function gamepadFiring(): boolean {
  *  matching the mouse-flight convention). */
 export function isFiring(): boolean {
   const mouseFiring = mouseDown && typeof document !== 'undefined' && !!document.pointerLockElement;
-  return spaceKeyDown || mouseFiring || gamepadFiring();
+  return spaceKeyDown || mouseFiring || gamepadFiring() || touchFiring;
 }

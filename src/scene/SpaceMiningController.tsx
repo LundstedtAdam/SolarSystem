@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3 } from 'three';
+import { Vector3, BufferGeometry, BufferAttribute, Line, LineBasicMaterial, AdditiveBlending } from 'three/webgpu';
 import { useStore } from '../store';
 import { shipTelemetry } from '../ship/shipTelemetry';
 import {
@@ -12,9 +12,11 @@ import {
   MINING_DPS,
   MINING_IMPACT_SPEED,
 } from '../ship/spaceMining';
+import { spaceMiningTelemetry } from '../ship/spaceMiningTelemetry';
 import { applyAsteroidDamage } from '../systems/asteroidFracture';
 import { debrisRuntime } from './debrisRuntime';
 import { SHIP_COLLISION_RADIUS } from '../ship/shipPhysics';
+import { audio } from '../audio/AudioManager';
 
 /** Ore chunks within this range of the ship start homing toward it (a small
  *  one-way pull on the ore, never a force on the ship — doesn't reintroduce
@@ -47,19 +49,66 @@ export function SpaceMiningController() {
     return () => removeMiningInput();
   }, []);
 
+  // Visual beam — a single line updated in place each frame, only visible
+  // while firing. No pooling needed: this is one object, not a population.
+  const beam = useMemo(() => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
+    const material = new LineBasicMaterial({
+      color: 0xff8850,
+      transparent: true,
+      opacity: 0.8,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const line = new Line(geometry, material);
+    line.frustumCulled = false;
+    line.visible = false;
+    return line;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      beam.geometry.dispose();
+      (beam.material as LineBasicMaterial).dispose();
+    };
+  }, [beam]);
+
   useFrame((_, delta) => {
     const store = useStore.getState();
-    if (store.sceneMode.type !== 'piloting') return;
+    if (store.sceneMode.type !== 'piloting') {
+      beam.visible = false;
+      audio.setMiningBeam(false, false);
+      return;
+    }
     const dt = Math.min(delta, 0.05);
 
-    if (isFiring()) {
-      _origin.copy(camera.position);
-      camera.getWorldDirection(_dir);
-      const hit = raycastAsteroids(_origin, _dir, MINING_RANGE);
-      if (hit) {
-        _impactVel.copy(_dir).multiplyScalar(MINING_IMPACT_SPEED);
-        applyAsteroidDamage(hit.globalIdx, MINING_DPS * dt, hit.point, _impactVel);
-      }
+    // Raycast every frame regardless of firing — the crosshair reacts to
+    // "is something targetable right now," not just while the trigger is
+    // held (matches the genre convention of a reticle that highlights on a
+    // valid target, e.g. Freelancer/Elite, rather than staying inert).
+    _origin.copy(camera.position);
+    camera.getWorldDirection(_dir);
+    const hit = raycastAsteroids(_origin, _dir, MINING_RANGE);
+    spaceMiningTelemetry.aiming = hit !== null;
+    spaceMiningTelemetry.hitPoint = hit ? hit.point : null;
+
+    const firing = isFiring();
+    audio.setMiningBeam(firing, hit !== null);
+
+    if (firing && hit) {
+      _impactVel.copy(_dir).multiplyScalar(MINING_IMPACT_SPEED);
+      applyAsteroidDamage(hit.globalIdx, MINING_DPS * dt, hit.point, _impactVel);
+    }
+
+    beam.visible = firing;
+    if (firing) {
+      const endPoint = hit ? hit.point : _origin.clone().addScaledVector(_dir, MINING_RANGE);
+      const posAttr = beam.geometry.attributes.position as BufferAttribute;
+      posAttr.setXYZ(0, _origin.x, _origin.y, _origin.z);
+      posAttr.setXYZ(1, endPoint.x, endPoint.y, endPoint.z);
+      posAttr.needsUpdate = true;
     }
 
     // Ore magnetism + collection — backward swap-remove, safe regardless of
@@ -87,5 +136,5 @@ export function SpaceMiningController() {
     }
   });
 
-  return null;
+  return <primitive object={beam} />;
 }

@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { raycastAsteroids } from './spaceMining';
+import { raycastAsteroids, isFiring, setTouchFiring, installMiningInput, removeMiningInput } from './spaceMining';
 import { rotateY } from './shipCollision';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
 import { buildAsteroidGrid } from '../systems/asteroidGrid';
@@ -110,5 +110,31 @@ describe('raycastAsteroids', () => {
     const hit = raycastAsteroids(ORIGIN.clone(), dir, 60);
     expect(hit).not.toBeNull();
     expect(hit!.globalIdx).toBe(0);
+  });
+});
+
+describe('isFiring / setTouchFiring', () => {
+  afterEach(() => {
+    setTouchFiring(false);
+    removeMiningInput();
+  });
+
+  it('is false when nothing is held', () => {
+    installMiningInput();
+    expect(isFiring()).toBe(false);
+  });
+
+  it('is true while the touch fire button is held (regression: touch previously had no way to fire at all)', () => {
+    installMiningInput();
+    setTouchFiring(true);
+    expect(isFiring()).toBe(true);
+  });
+
+  it('returns to false once the touch fire button is released', () => {
+    installMiningInput();
+    setTouchFiring(true);
+    expect(isFiring()).toBe(true);
+    setTouchFiring(false);
+    expect(isFiring()).toBe(false);
   });
 });

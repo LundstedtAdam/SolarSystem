@@ -13,6 +13,7 @@ import { VoxelAudio } from './audio/VoxelAudio';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { Labels } from './ui/Labels';
 import { ShipHUD } from './ui/ShipHUD';
+import { SpaceCrosshair } from './ui/SpaceCrosshair';
 import { DescentOverlay } from './ui/DescentOverlay';
 import { SurfaceHUD } from './ui/SurfaceHUD';
 import { VoxelHUD } from './ui/VoxelHUD';
@@ -53,6 +54,7 @@ export default function App() {
       <InfoPanel />
       <SettingsPanel />
       <ShipHUD />
+      <SpaceCrosshair />
       <DescentOverlay />
       <SurfaceHUD />
       <VoxelHUD />

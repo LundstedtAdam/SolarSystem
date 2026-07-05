@@ -17,6 +17,7 @@ class AudioManager {
   private droneFilter?: BiquadFilterNode;
   private engineGain?: GainNode;
   private engineFilter?: BiquadFilterNode;
+  private miningGain?: GainNode;
   private started = false;
 
   // Surface ambience graph (built lazily on first landing, reused after).
@@ -137,6 +138,25 @@ class AudioManager {
     this.engineGain = engineGain;
     this.engineFilter = engineFilter;
 
+    // --- Space mining beam: a resonant buzz that swells while firing and
+    // on-target, distinct in timbre from the engine hum so the two never
+    // read as the same sound. ---
+    const miningFilter = ctx.createBiquadFilter();
+    miningFilter.type = 'bandpass';
+    miningFilter.Q.value = 4;
+    miningFilter.frequency.value = 900;
+    const miningGain = ctx.createGain();
+    miningGain.gain.value = 0;
+    miningFilter.connect(miningGain).connect(master);
+    const miningOsc = ctx.createOscillator();
+    miningOsc.type = 'sawtooth';
+    miningOsc.frequency.value = 220;
+    const miningOscGain = ctx.createGain();
+    miningOscGain.gain.value = 0.5;
+    miningOsc.connect(miningOscGain).connect(miningFilter);
+    miningOsc.start();
+    this.miningGain = miningGain;
+
     this.started = true;
   }
 
@@ -172,6 +192,16 @@ class AudioManager {
     const t = this.ctx.currentTime;
     this.engineGain.gain.setTargetAtTime(throttle * 0.05, t, 0.15);
     this.engineFilter.frequency.setTargetAtTime(150 + throttle * 500, t, 0.15);
+  }
+
+  /** Mining beam feedback: `firing` is whether the trigger is held, `onTarget`
+   *  whether the ray currently hits a live asteroid — the tone only sounds
+   *  while both are true, distinguishing "firing into empty space" from
+   *  "firing and actually hitting something" audibly. */
+  setMiningBeam(firing: boolean, onTarget: boolean) {
+    if (!this.miningGain || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.miningGain.gain.setTargetAtTime(firing && onTarget ? 0.05 : 0, t, 0.05);
   }
 
   // --- Surface ambience --------------------------------------------------

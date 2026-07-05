@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { useStore } from '../store';
-import { setTouchJoystick, clearTouchJoystick, setTouchThrottle } from '../ship/shipInput';
+import { setTouchJoystick, clearTouchJoystick, setTouchThrottle, setTouchRoll } from '../ship/shipInput';
+import { setTouchFiring } from '../ship/spaceMining';
 import { addCameraLook, endCameraLook } from '../ship/cameraLook';
 
 const JOYSTICK_SIZE = 120;
@@ -131,6 +132,89 @@ function ThrottleSlider({ onActivity }: { onActivity: () => void }) {
   );
 }
 
+/** A simple hold button: press sets a value, release/cancel clears it. Used
+ *  for roll (±1) and fire (true/false) — same one-touch-id-per-control
+ *  pattern as Joystick/ThrottleSlider above, just without drag tracking. */
+function HoldButton({
+  className,
+  glyph,
+  onPress,
+  onRelease,
+  onActivity,
+}: {
+  className: string;
+  glyph: string;
+  onPress: () => void;
+  onRelease: () => void;
+  onActivity: () => void;
+}) {
+  const touchId = useRef<number | null>(null);
+  const [active, setActive] = useState(false);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (touchId.current !== null) return;
+    touchId.current = e.changedTouches[0].identifier;
+    setActive(true);
+    onPress();
+    onActivity();
+  }, [onPress, onActivity]);
+
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchId.current) {
+        touchId.current = null;
+        setActive(false);
+        onRelease();
+        break;
+      }
+    }
+  }, [onRelease]);
+
+  return (
+    <div
+      className={`${className}${active ? ' active' : ''}`}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
+      {glyph}
+    </div>
+  );
+}
+
+function RollButtons({ onActivity }: { onActivity: () => void }) {
+  return (
+    <>
+      <HoldButton
+        className="touch-roll-btn touch-roll-left"
+        glyph="↺"
+        onPress={() => setTouchRoll(-1)}
+        onRelease={() => setTouchRoll(0)}
+        onActivity={onActivity}
+      />
+      <HoldButton
+        className="touch-roll-btn touch-roll-right"
+        glyph="↻"
+        onPress={() => setTouchRoll(1)}
+        onRelease={() => setTouchRoll(0)}
+        onActivity={onActivity}
+      />
+    </>
+  );
+}
+
+function FireButton({ onActivity }: { onActivity: () => void }) {
+  return (
+    <HoldButton
+      className="touch-fire-btn"
+      glyph="FIRE"
+      onPress={() => setTouchFiring(true)}
+      onRelease={() => setTouchFiring(false)}
+      onActivity={onActivity}
+    />
+  );
+}
+
 /**
  * Full-screen catcher behind the joystick/throttle. A drag that starts on empty
  * space orbits the chase camera; touches that land on the controls target those
@@ -198,6 +282,8 @@ export function TouchControls() {
       if (hideTimer.current) clearTimeout(hideTimer.current);
       clearTouchJoystick();
       setTouchThrottle(0);
+      setTouchRoll(0);
+      setTouchFiring(false);
     };
   }, []);
 
@@ -212,6 +298,8 @@ export function TouchControls() {
       <div className="touch-controls-pads" style={{ opacity: visible ? 1 : 0.15 }}>
         <Joystick onActivity={onActivity} />
         <ThrottleSlider onActivity={onActivity} />
+        <RollButtons onActivity={onActivity} />
+        <FireButton onActivity={onActivity} />
       </div>
     </div>
   );
