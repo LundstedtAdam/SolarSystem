@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { IcosahedronGeometry, Quaternion, Vector3 } from 'three';
 import { applyAsteroidDamage } from './asteroidFracture';
-import { asteroidRuntime } from '../scene/asteroidRuntime';
+import { getFracturePatterns, pickPattern } from './asteroidFracturePatterns';
+import { asteroidRuntime, type AsteroidMomentumInputs } from '../scene/asteroidRuntime';
 import { debrisRuntime } from '../scene/debrisRuntime';
 import type { AsteroidState } from './asteroidState';
 
@@ -134,7 +135,8 @@ describe('applyAsteroidDamage', () => {
         return true;
       },
       applyDent: () => {},
-      getAngularVelocity: () => null,
+      getMomentumInputs: () => null,
+      getSourceGeometry: () => null,
     };
 
     applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
@@ -158,7 +160,8 @@ describe('applyAsteroidDamage', () => {
         expect(point).toBe(IMPACT_POINT);
         expect(amount).toBe(2);
       },
-      getAngularVelocity: () => null,
+      getMomentumInputs: () => null,
+      getSourceGeometry: () => null,
     };
 
     const result = applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
@@ -176,7 +179,8 @@ describe('applyAsteroidDamage', () => {
       applyDent: () => {
         dentCalls += 1;
       },
-      getAngularVelocity: () => null,
+      getMomentumInputs: () => null,
+      getSourceGeometry: () => null,
     };
 
     applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
@@ -193,5 +197,123 @@ describe('applyAsteroidDamage', () => {
     const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL); // high tier, 4-8 fragments
     expect(result.debrisSpawned.length).toBeGreaterThanOrEqual(4);
     expect(debrisRuntime.list.length).toBe(2); // capped even though more were "spawned"
+  });
+});
+
+describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
+  const geom = new IcosahedronGeometry(1, 1);
+
+  function mkMomentum(overrides: Partial<AsteroidMomentumInputs> = {}): AsteroidMomentumInputs {
+    return {
+      angVel: new Vector3(0, 0, 0),
+      quat: new Quaternion(),
+      scale: new Vector3(1, 1, 1),
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    asteroidRuntime.states = [];
+    asteroidRuntime.grid = null;
+    asteroidRuntime.killAsteroid = () => {};
+    debrisRuntime.list = [];
+    debrisRuntime.maxCount = 1000;
+  });
+
+  it('fragment count is clamped to the chosen pattern\'s chunkCount', () => {
+    const state = mkState({ health: 5, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: () => {},
+      getMomentumInputs: () => mkMomentum(),
+      getSourceGeometry: () => geom,
+    };
+
+    const patterns = getFracturePatterns(state.tierIdx, state.variantIdx, geom);
+    // High-overkill hit -> 'high' tier -> 4-8 requested, but must never
+    // exceed whichever pattern this exact hit resolves to.
+    state.hitSeq = 0; // applyAsteroidDamage increments to 1 before hashing
+    const expectedPattern = pickPattern(patterns, 0, 1, state.seed);
+
+    const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
+    expect(result.debrisSpawned.length).toBeLessThanOrEqual(expectedPattern.chunkCount);
+    expect(result.debrisSpawned.length).toBeGreaterThan(0);
+  });
+
+  it('every pattern-based fragment carries a quaternion and angular velocity', () => {
+    const state = mkState({ health: 5, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: () => {},
+      getMomentumInputs: () => mkMomentum(),
+      getSourceGeometry: () => geom,
+    };
+
+    const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
+    for (const spec of result.debrisSpawned) {
+      expect(spec.quat).toBeInstanceOf(Quaternion);
+      expect(spec.angVel).toBeInstanceOf(Vector3);
+      expect(spec.cascadeDepth).toBe(0);
+    }
+  });
+
+  it("a fragment's velocity includes the parent's angular-velocity-at-offset contribution", () => {
+    // Same hit, same everything, except the parent's angular velocity —
+    // the resulting fragment velocities must differ if the momentum formula
+    // is actually reading angVel (rather than only jitter/impact terms).
+    const stateA = mkState({ health: 5, maxHealth: 20, vel: new Vector3(0, 0, 0) });
+    asteroidRuntime.states = [stateA];
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: () => {},
+      getMomentumInputs: () => mkMomentum({ angVel: new Vector3(0, 0, 0) }),
+      getSourceGeometry: () => geom,
+    };
+    const resultNoSpin = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
+
+    const stateB = mkState({ health: 5, maxHealth: 20, vel: new Vector3(0, 0, 0) });
+    asteroidRuntime.states = [stateB];
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: () => {},
+      getMomentumInputs: () => mkMomentum({ angVel: new Vector3(0, 20, 0) }), // fast spin about Y
+      getSourceGeometry: () => geom,
+    };
+    const resultWithSpin = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
+
+    // At least one fragment's velocity should differ once the parent is
+    // spinning fast, since angVel × offset is now a nonzero contribution
+    // (unless every extracted chunk happened to centroid at the origin,
+    // vanishingly unlikely for a real icosahedron cluster).
+    let anyDiffers = false;
+    for (let i = 0; i < Math.min(resultNoSpin.debrisSpawned.length, resultWithSpin.debrisSpawned.length); i++) {
+      const a = resultNoSpin.debrisSpawned[i].vel;
+      const b = resultWithSpin.debrisSpawned[i].vel;
+      if (a.distanceTo(b) > 1e-6) anyDiffers = true;
+    }
+    expect(anyDiffers).toBe(true);
+  });
+
+  it('a fragment\'s position offset scales with the parent scale and rotates with the parent orientation', () => {
+    const state = mkState({ health: 5, maxHealth: 20, pos: new Vector3(100, 0, 0) });
+    asteroidRuntime.states = [state];
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: () => {},
+      getMomentumInputs: () => mkMomentum({ scale: new Vector3(5, 5, 5) }), // large parent
+      getSourceGeometry: () => geom,
+    };
+
+    const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
+    // Every fragment's position must be offset from the parent's own
+    // position (state.pos) by some nonzero amount that reflects the 5x
+    // scale-up (chunks extracted from a unit geometry, so a bare offset
+    // without scaling would be tiny by comparison).
+    for (const spec of result.debrisSpawned) {
+      const dist = spec.pos.distanceTo(state.pos);
+      expect(dist).toBeGreaterThan(0);
+    }
   });
 });

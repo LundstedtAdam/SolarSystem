@@ -227,8 +227,26 @@ export function AsteroidBelt() {
         entry.mesh.worldToLocal(_dentLocalPoint);
         applyDentToGeometry(entry.geometry, _dentLocalPoint, amount);
       },
-      getAngularVelocity: (globalIdx: number): Vector3 | null => {
-        return built.promoted.get(globalIdx)?.angVel ?? null;
+      getMomentumInputs: (globalIdx: number) => {
+        const entry = built.promoted.get(globalIdx);
+        if (entry) return { angVel: entry.angVel, quat: entry.quat, scale: entry.mesh.scale };
+        const state = built.states[globalIdx];
+        if (!state) return null;
+        // Graceful degradation: not promoted (dust tier or budget-full) —
+        // recompute the pristine placement fresh rather than special-casing
+        // a null angular velocity in the momentum formula.
+        const placed = placeAsteroid(state.tierIdx, state.variantIdx, state.instIdx, state.seed);
+        const angVel = placed.tumbleAxis
+          ? placed.tumbleAxis.clone().multiplyScalar(placed.tumbleSpeed ?? 0)
+          : new Vector3();
+        return { angVel, quat: placed.quat, scale: placed.scale };
+      },
+      getSourceGeometry: (globalIdx: number) => {
+        const entry = built.promoted.get(globalIdx);
+        if (entry) return entry.geometry;
+        const state = built.states[globalIdx];
+        if (!state) return null;
+        return built.geometryByKey.get(`${state.tierIdx}:${state.variantIdx}`) ?? null;
       },
     };
     return () => {

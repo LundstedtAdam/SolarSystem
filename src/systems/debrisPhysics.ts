@@ -12,7 +12,7 @@
 // debris-vs-debris pass is cheap, while debris-vs-asteroid reuses the belt's
 // existing spatial grid (population there can be thousands).
 
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { integrate, DEBRIS_DAMPING } from '../ship/shipPhysics';
 import { sphereVsPlanets, rotateY } from '../ship/shipCollision';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
@@ -24,6 +24,8 @@ const MAX_ASTEROID_RADIUS = Math.max(...TIERS.map((t) => t.max));
 
 const _localPos = new Vector3();
 const ZERO_ACCEL = new Vector3(0, 0, 0);
+const _spinAxis = new Vector3();
+const _spinDeltaQ = new Quaternion();
 
 /** True if `debris` overlaps a live asteroid in the belt's spatial grid
  *  (converts world position into the belt-local frame the grid is indexed
@@ -64,6 +66,11 @@ export function updateDebrisBodies(
 
     if (!expired) {
       integrate(d.pos, d.vel, ZERO_ACCEL, DEBRIS_DAMPING, dt);
+      if (d.angVel.lengthSq() > 1e-8) {
+        _spinAxis.copy(d.angVel).normalize();
+        _spinDeltaQ.setFromAxisAngle(_spinAxis, d.angVel.length() * dt);
+        d.quat.multiply(_spinDeltaQ);
+      }
       // Any contact sticks-and-expires — no continued bouncing.
       if (sphereVsPlanets(d.pos, d.vel, simTimeDays, d.radius, 0)) expired = true;
       else if (hitsAsteroid(d)) expired = true;

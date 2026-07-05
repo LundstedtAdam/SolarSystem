@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { updateDebrisBodies } from './debrisPhysics';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
 import { buildAsteroidGrid } from './asteroidGrid';
@@ -18,7 +18,7 @@ function mercuryCenter(): Vector3 {
 }
 
 function mkDebris(pos: Vector3, vel = new Vector3(), radius = 0.3): DebrisBody {
-  return { pos, vel, radius, life: 0, isOre: false };
+  return { pos, vel, radius, life: 0, isOre: false, quat: new Quaternion(), angVel: new Vector3(), cascadeDepth: 0 };
 }
 
 describe('updateDebrisBodies', () => {

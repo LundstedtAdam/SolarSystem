@@ -4,9 +4,20 @@
 // plain mutable object read/written every frame, never a store subscription,
 // since a store subscription here would re-render on every belt rebuild.
 
-import type { Vector3 } from 'three';
+import type { BufferGeometry, Quaternion, Vector3 } from 'three';
 import type { AsteroidState } from '../systems/asteroidState';
 import type { AsteroidGrid } from '../systems/asteroidGrid';
+
+/** Inputs the fracture momentum formula needs: the (promoted or, on
+ *  graceful-degradation, freshly-recomputed pristine) asteroid's angular
+ *  velocity, orientation, and scale, so a fragment's initial velocity can
+ *  include "parent angular velocity × offset-from-center" (rigid-body point
+ *  velocity), not just the impact's own direction/force. */
+export interface AsteroidMomentumInputs {
+  angVel: Vector3;
+  quat: Quaternion;
+  scale: Vector3;
+}
 
 /** Set by AsteroidBelt.tsx once a belt is mounted — the promotion API for
  *  pulling a hit asteroid out of its shared InstancedMesh into a standalone,
@@ -20,9 +31,14 @@ export interface AsteroidPromotionApi {
   /** Locally dent a promoted asteroid's geometry at a world-space impact
    *  point. No-op if `globalIdx` isn't promoted. */
   applyDent: (globalIdx: number, worldImpactPoint: Vector3, amount: number) => void;
-  /** The promoted asteroid's angular velocity (rad/s, world-space axis*rate)
-   *  for the momentum formula in fracture — null if not promoted. */
-  getAngularVelocity: (globalIdx: number) => Vector3 | null;
+  /** Never null for a live asteroid — promoted asteroids report their live
+   *  physical state; non-promoted ones report a freshly-recomputed pristine
+   *  placement (graceful degradation, no null case needed by callers). */
+  getMomentumInputs: (globalIdx: number) => AsteroidMomentumInputs | null;
+  /** The geometry to fracture: the promoted mesh's live (possibly dented)
+   *  geometry if promoted, otherwise the shared pristine base geometry for
+   *  that (tier, variant) — never null for a live asteroid. */
+  getSourceGeometry: (globalIdx: number) => BufferGeometry | null;
 }
 
 export const asteroidRuntime: {

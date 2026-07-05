@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { InstancedMesh, MeshStandardMaterial, Matrix4, Color, type Material } from 'three/webgpu';
+import { InstancedMesh, MeshStandardMaterial, Matrix4, Vector3, Color, type Material } from 'three/webgpu';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
 import { updateDebrisBodies } from '../systems/debrisPhysics';
@@ -9,6 +9,7 @@ import { shipTelemetry } from '../ship/shipTelemetry';
 import { rockGeometry } from './rockGeometry';
 
 const _m = new Matrix4();
+const _scale = new Vector3();
 const _zero = new Matrix4().makeScale(0, 0, 0);
 const _rockColor = new Color(0.4, 0.37, 0.33);
 const _oreColor = new Color(0.75, 0.62, 0.25);
@@ -73,8 +74,8 @@ export function AsteroidDebris() {
     for (let i = 0; i < q.debrisMax; i++) {
       const d = list[i];
       if (d) {
-        _m.makeScale(d.radius, d.radius, d.radius);
-        _m.setPosition(d.pos.x, d.pos.y, d.pos.z);
+        _scale.set(d.radius, d.radius, d.radius);
+        _m.compose(d.pos, d.quat, _scale);
         inst.setMatrixAt(i, _m);
         inst.setColorAt(i, d.isOre ? _oreColor : _rockColor);
       } else {
