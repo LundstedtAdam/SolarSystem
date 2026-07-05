@@ -165,7 +165,13 @@ pipeline: felling a trunk cascades upward through the whole log column,
 yields wood, and triggers leaf-disconnection decay for any leaves left
 without a nearby log. The decorative "ambiguous alien growth" variant of the
 old tree system is untouched and stays cosmetic-only on bodies flagged
-`theoretical`/`inconclusive`, per the existing narrative rule. Currently
+`theoretical`/`inconclusive`, per the existing narrative rule. A same-round
+follow-up fix gave the ground-clutter `blade` scatter kind (grass tufts/weeds)
+an actual alpha-cutout foliage texture — it previously had no UV attribute or
+alpha texture at all and rendered as a solid colored rectangle; three other
+rendering issues reported alongside it (terrain UV stretching, missing AO,
+floating scatter/wildlife) were checked directly against the code and found
+not to be present, so were left untouched. Currently
 open as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is
 tracked here rather than by renaming or re-committing history: the roadmap
 file is the source of truth for status, git history stays as-is. Manual
