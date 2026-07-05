@@ -15,9 +15,13 @@ export function Atmosphere({ radius, data }: { radius: number; data: AtmosphereD
     const m = new MeshBasicNodeMaterial();
     const c = new Color(data.color);
     const viewDir = cameraPosition.sub(positionWorld).normalize();
-    const fresnel = float(1).sub(normalWorld.normalize().dot(viewDir).max(0));
+    const ndv = normalWorld.normalize().dot(viewDir).max(0);
+    const fresnel = float(1).sub(ndv);
+    // Soft outer rim + faint inner haze for depth
+    const rim = fresnel.pow(2.2).mul(data.intensity);
+    const haze = fresnel.pow(5.0).mul(data.intensity * 0.15);
     m.colorNode = vec3(c.r, c.g, c.b);
-    m.opacityNode = fresnel.pow(3.0).mul(data.intensity);
+    m.opacityNode = rim.add(haze);
     m.transparent = true;
     m.depthWrite = false;
     m.blending = AdditiveBlending;

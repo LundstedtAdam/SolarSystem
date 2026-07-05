@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
+import { Vector3 } from 'three';
 import { useStore } from '../store';
+import { findNearestLandable, landRange } from '../descent/descentHelpers';
 
 const TOUR_INTERVAL_MS = 7000;
 
@@ -38,6 +40,24 @@ export function Controls() {
         case ' ':
           e.preventDefault();
           s.togglePause();
+          break;
+        case 'f':
+        case 'F':
+          if (s.sceneMode.type === 'solar') s.enterShip();
+          else if (s.sceneMode.type === 'piloting') s.exitShip();
+          break;
+        case 'g':
+        case 'G':
+          if (s.sceneMode.type === 'piloting') {
+            const nearest = findNearestLandable(new Vector3(...s.shipPosition), s.simTimeDays);
+            if (nearest && nearest.distance < landRange(nearest.size)) s.beginDescent(nearest.name);
+          } else if (s.sceneMode.type === 'descending') {
+            s.abortDescent();
+          }
+          break;
+        case 'h':
+        case 'H':
+          if (s.sceneMode.type === 'surface') s.beginAscent();
           break;
       }
     };

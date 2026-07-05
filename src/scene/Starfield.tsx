@@ -9,7 +9,7 @@ import {
   Points,
   PointsMaterial,
 } from 'three/webgpu';
-import { TEXTURES } from '../systems/bodies';
+import { TEXTURES, WORLD_SCALE } from '../systems/bodies';
 import { QUALITY } from '../systems/quality';
 import { useStore } from '../store';
 
@@ -24,7 +24,7 @@ function makeStars(count: number): Points {
     const v = Math.random();
     const theta = 2 * Math.PI * u;
     const phi = Math.acos(2 * v - 1);
-    const r = 3000 + Math.random() * 7000;
+    const r = (3000 + Math.random() * 7000) * WORLD_SCALE;
     positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
     positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
     positions[i * 3 + 2] = r * Math.cos(phi);
@@ -63,7 +63,7 @@ export function Starfield() {
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[15000, 64, 64]} />
+        <sphereGeometry args={[15000 * WORLD_SCALE, 64, 64]} />
         <meshBasicMaterial map={texture} side={BackSide} fog={false} />
       </mesh>
       <primitive object={stars} />

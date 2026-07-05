@@ -1,0 +1,217 @@
+# Roadmap
+
+## Vision
+
+An AAA-quality, mobile-first solar system you can fly through, descend into, and
+explore on foot — built on a WebGPU / React Three Fiber stack with real orbital
+mechanics and physically grounded worlds. From a cinematic overview of the
+planets down to a destructible voxel surface under real gravity, every layer is
+the same world, deepened. The long arc reaches beyond our solar system to a
+procedurally generated galaxy, and ultimately ships as a standalone native game.
+
+---
+
+## Branches & PRs
+
+**`storyline` is the single active branch** — all work described below as
+"done" or "in progress" lives there. `phase-10`, `phase-11`, and
+`claude/phase-11-setup-bd8gxr` are earlier, now-stale points along this same
+history and are not being developed further.
+
+PRs #1–7 are closed without merging — each was superseded by later work that
+was folded directly into `storyline` rather than merged through the PR itself.
+**PR #8** (draft, `storyline` → `master`) is the only open PR: a cross-cutting
+technical audit + six follow-up rounds (see "Technical audit & hardening"
+below) — it is not one of the numbered phases.
+
+---
+
+## Completed phases
+
+### Phase 0 — Foundation
+Vite + React + TypeScript + React Three Fiber project scaffold and build
+pipeline.
+
+### Phase 1 — AAA rendering
+WebGPU renderer, ACES filmic tone mapping, bloom, and a Fresnel sun corona for a
+premium look pass.
+
+### Phase 2 — PBR bodies
+Physically based planets and moons with atmospheres, Earth day/night/cloud
+layers, solar wind particles, and ring shadows.
+
+### Phase 3 — Orbital mechanics
+Real J2000 orbital elements, axial tilt, signed rotation periods, and a
+simulation clock driving accurate body motion.
+
+### Phase 4 — Cinematic camera
+Intro fly-in, framed focus, follow-cam, and an automated tour mode with eased
+transitions.
+
+### Phase 5 — Procedural audio
+Fully synthesized soundscape: ambient pad bed, proximity drone near massive
+bodies, and UI sound effects — no audio assets.
+
+### Phase 6 — UI / UX
+Internationalization, body picker, labels, settings panel, and accessibility
+(reduced motion, keyboard navigation).
+
+### Phase 7 — Performance
+Quality presets (low → ultra) with device auto-detection, instanced asteroid
+belt, and level-of-detail scaling.
+
+### Phase 8 — Spaceship & planetary descent
+Ship flight model, mobile touch controls, three-phase atmospheric entry, 16
+landable bodies, and a Phase 8 procedural surface view.
+
+### Phase 9 — Voxel surface exploration
+Destructible 32³ chunk engine with a worker-pool greedy mesher, AAA TSL voxel
+material (baked ambient occlusion, fog, emissive lava/ice, sun shadows), and
+first-person movement with real NASA surface gravity per body. Six archetypes
+(rock, regolith, earth, ice, lava, dune) mapped across all 16 landable bodies,
+plus per-body weather, footstep/ambient/cave audio, and instanced surface
+scatter — distinct worlds from shared systems.
+
+### Phase 10 — Content & variation
+Per-body content spine, procedural real landmarks (Olympus Mons, Valles
+Marineris, Sputnik Planitia…), world-anchored particle emitters, modular
+ruined POIs with layered narrative-stratigraphy text, and a scan/journal
+discovery loop with a cross-body mystery thread — fanned out across all 16
+landable bodies. Sub-phases 10.0–10.4 plus the fan-out/LOD pass are complete.
+
+> **Note:** the fan-out/LOD commit (`e3e4d62`) is also labeled "Phase 10.5" in
+> its commit message. That is a *different* feature from the Phase 10.5 below
+> — a naming collision in the commit history, not two versions of the same
+> work.
+
+### Phase 10.5 — Mystery & narrative system (8-act war-lore thread)
+A wholly separate narrative thread layered on top of Phase 10's discovery
+loop: the full 8-act Junta/Coalition/Exodus war story (one act per body
+group — Earth/Moon, Mars, Phobos/Deimos, the Jupiter system, Titan, Miranda,
+Triton, Pluto/Charon), a two-tier Xenolinguistic Decoder scanner mechanic,
+retroactive journal re-interpretation as translation fragments are found (with
+an unread badge + toast), and diegetic compass/audio navigation cues (never
+an exact marker) toward undiscovered war-lore content. Coexists independently
+alongside the earlier Layer 1 (real-science notes) / Layer 2 (fictional deep
+sites) astrobiology content on the same bodies — the two never merge.
+
+Depends on Phase 10's content spine and POI system; independent of Phase 11's
+mechanics, aside from a naming coordination (see Phase 11.5 note below).
+Implemented (`f58f312`, `66d371b`); its own PR (#7) was closed without
+merging — the commits were folded directly into `storyline` instead.
+
+### Phase 11 — Game mechanics
+Resource gathering, crafting, base building, survival, and ship upgrades —
+turning exploration into progression. Built as a numbered sub-phase sequence,
+preceded by an unnumbered flight/input polish pass (`f25caa8`, `0293b3a`:
+thumb-reach audit, touch Scan button, gamepad surface support, ship-gravity
+removal, world scale-up, quick-nav autopilot) that predates and is unrelated
+to the resource/crafting system below despite sharing the "Phase 11" label.
+
+| Sub-phase | Status | What it adds |
+|---|---|---|
+| 11.0 — Mining, backpack, persistence | **Done** | Touch-hold mining, ore veins per archetype, inventory + overflow drops, localForage persistence. Two post-ship bugs (gamepad clobbering the mine flag; common terrain yielding nothing) fixed same session. |
+| 11.1 — Block placement + storage silos | **Done** | Placeable blocks/silos, deposit/withdraw, silo visuals + persistence. Includes the 11.1a UI pass (backpack/build as open/close menus with drop) and a later silo-withdrawal fix. |
+| 11.2 — Crafting | **Done** | Radial recipe menu, holographic blueprint, chest-pull from nearby silos. |
+| 11.3 — Base building (power) | **Done** | Habitat/solar/wind/thermal/refinery modules, per-body power viability, refinery smelting. |
+| 11.4 — Survival | **Done** | Oxygen/tethers/death, opt-in (creative is the default, zero survival mechanics active until switched). |
+| 11.5 — Ship upgrades | **Done, since amended** | Hyperdrive/scanner/shielding/cargo tiers, hard shielding gate on hazardous bodies, procedural hull visuals per upgrade. `storyline`'s Phase 10.5 work later renamed Hyperdrive → **Quantum Drive** and removed its distance-band gating (shielding is now the only hard descent gate), to avoid clashing with the story's own FTL beat. |
+| 11.6 — Backpack fidelity + offline progression | **Implemented, pending playtest** | PR #8 Round 6 (Minecraft-style grid inventory; extractor/condenser passive production with capped offline catch-up) delivers this sub-phase's actual goals, but was committed as part of the audit PR, not tagged `11.6`. The PR body itself flags that manual in-game playtesting of placing/producing/offline-catch-up has not been done — this is currently being manually playtested. |
+| 11.7 — Balance, persistence hardening, perf pass | **Partially covered, unlabeled — not a dedicated pass** | PR #8 Round 1 covers real ground here (persistence bug fixes: cargo capacity, resource duplication, ground-drop loss; perf: telemetry decoupling, capped raycasts, fewer setState calls) but there has been no dedicated economy-balance or full regression pass across all 16 bodies. |
+
+### Phase 12 — Procedural galaxy
+Travel beyond the solar system into procedurally generated star systems, each
+with its own unique planets to discover and explore. Not started.
+
+### Phase 13 — Visual polish
+A comprehensive AAA polish pass across every system, on all platforms and
+quality levels. Not started.
+
+### Phase 14 — Standalone game
+Package as a native application via Tauri (desktop) and Capacitor (iOS /
+Android) for a true standalone release. Not started.
+
+---
+
+## Technical audit & hardening (PR #8 — not a numbered phase)
+
+A cross-cutting audit pass plus follow-up rounds, spanning bug fixes,
+performance, settings/FOV, water physics, localization, scan-range accuracy,
+work that substantively fulfills Phase 11.6/11.7 (Round 6), and — unlike the
+rest, genuinely new capability rather than maintenance — an 8-phase "World
+Richness" pass (Round 7) increasing procedural environmental density across
+the voxel walking layer on every landable body: per-body detail/micro terrain
+noise, layered ground scatter (grass/flowers/stones/ore-tells), new POI module
+kinds plus a high-frequency micro-discovery channel, worm-tunnel caves and
+cliff overhangs, latitude-based colour/scatter biome transitions, procedural
+lakes/rivers/wetlands/derived waterfalls, instanced trees, and ambient
+wildlife — all gated by the existing no-confirmed-life narrative rule (real
+biology only on Earth; sparse deliberately-ambiguous life-like content only
+on the handful of bodies already flagged `theoretical`/`inconclusive`).
+None of this was assigned a phase number since it deepens the existing
+Phase 9-11 voxel world rather than opening new roadmap arcs. Round 8 is a
+rendering/gameplay pass in the same spirit: a **Material Identity** system
+replacing flat-vertex-color-only block identity with a small deterministic
+procedural texture atlas (no external image assets, no Canvas/DOM — a raw
+pixel buffer, since the atlas must build correctly under the vitest/jsdom
+test environment) sampled per voxel face through a new `materialUV` vertex
+attribute threaded through the greedy mesher and mesher-worker pipeline;
+biome palette tint is now a diluted overlay on natural terrain/tree blocks
+rather than the sole source of a block's visual identity. Alongside this,
+Earth's forest changed from a purely cosmetic, non-interactive InstancedMesh
+system to real voxel-embedded trees (new `WOOD_LOG`/`LEAVES` block ids)
+stamped directly into the chunk grid, choppable via the existing mining
+pipeline: felling a trunk cascades upward through the whole log column,
+yields wood, and triggers leaf-disconnection decay for any leaves left
+without a nearby log. The decorative "ambiguous alien growth" variant of the
+old tree system is untouched and stays cosmetic-only on bodies flagged
+`theoretical`/`inconclusive`, per the existing narrative rule. A same-round
+follow-up fix gave the ground-clutter `blade` scatter kind (grass tufts/weeds)
+an actual alpha-cutout foliage texture — it previously had no UV attribute or
+alpha texture at all and rendered as a solid colored rectangle; three other
+rendering issues reported alongside it (terrain UV stretching, missing AO,
+floating scatter/wildlife) were checked directly against the code and found
+not to be present, so were left untouched. A second same-round fix addressed
+a real live-device report (a screenshot of flat, dark, textureless terrain):
+the WebGPU node renderer (`SolarSystem.tsx`) registers each classic-three
+light class it uses with the renderer's node library, but `DirectionalLight`
+— the voxel surface's only directional key light (`VoxelScene.tsx`'s
+`SunLight`) — was never registered, so it was silently dropped every frame,
+leaving only flat ambient light and making the texture atlas/AO work
+invisible regardless of correctness. Now fixed; still needs confirmation on
+real hardware, since this environment's own attempted live check hit an
+unrelated sandbox GPU limitation (see PR #8 for detail). A third same-round
+fix addressed a batch of live-device reports together: the settings panel's
+active-option highlight was silently overridden by a later, equal-specificity
+CSS rule (fixed by scoping the active rule's selector); changing quality
+settings produced a screen-wide green glow then crashed — the sun's
+deliberately-HDR core material used an extreme, unevenly-scaled multiplier
+that pushed ACES tonemapping into a known hue-shift-toward-green artifact
+once bloom turned on at Medium+ quality (retuned to a lower, warm-white
+value), and `Effects.tsx` rebuilt its entire postprocessing GPU pipeline on
+every quality change without ever disposing the previous one, leaking
+render targets until a WebGPU resource-exhaustion crash (now only rebuilds
+on a structural bloom/chromatic-aberration on/off change, with proper
+disposal, using reactive uniforms for ordinary tuning in between); and,
+found while checking the texture atlas against a Minecraft-clarity
+reference the user supplied, two real orientation bugs made grass blocks'
+side faces show dirt-on-top/grass-on-bottom and rotate the gradient 90° on
+two of their four sides (both fixed). The user confirmed the green glow
+persisted specifically on High/Ultra after that fix, since it only retuned
+the sun mesh's own core material — two more uncapped HDR "sun glow" sources
+were still feeding bloom (the sky-dome sun disc shared by `VoxelSky.tsx`/
+`Sky.tsx`, peaking over 4x higher than the fixed sun mesh; and `Sun.tsx`'s
+corona inner ring, at an even more extreme colour ratio than the original
+problem). Both retuned to a consistent, modest peak magnitude — this
+explains the High/Ultra-only symptom, since `quality.ts`'s bloom threshold
+drops and strength rises at higher tiers, admitting and amplifying more of
+whatever HDR wasn't yet fixed. Currently
+open as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is
+tracked here rather than by renaming or re-committing history: the roadmap
+file is the source of truth for status, git history stays as-is. Manual
+in-game/visual playtesting of both the World Richness pass and the Material
+Identity pass has not been done (this environment cannot render WebGPU
+live) — the texture atlas's on-screen appearance, chop/felling game feel,
+and any frame-rate impact all need a live-device check before either round
+is considered closed. Once Round 6 (11.6) and Round 1 (11.7) have been
+played through and confirmed, update their status lines above accordingly.

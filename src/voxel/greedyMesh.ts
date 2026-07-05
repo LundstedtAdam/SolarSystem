@@ -1,0 +1,347 @@
+// Pure greedy voxel mesher (no DOM / worker / three dependencies, so it can be
+// unit-tested in isolation). Operates on a padded voxel neighbourhood, merges
+// coplanar same-material faces, bakes per-corner ambient occlusion into vertex
+// colours, and returns exact-size typed arrays.
+//
+// The mesh is produced in TWO groups (Minecraft-style water):
+//   - opaque:  every solid block; water counts as air, so terrain under water
+//     gets faces and stays visible through the translucent surface.
+//   - water:   water faces only where water borders AIR (never against solids —
+//     those faces would be buried in terrain and z-fight). No AO.
+//
+// Vertex pooling: scratch buffers are module-scoped and reused across calls, so
+// steady-state meshing does no per-quad allocation (only one copy-out per mesh).
+
+import { CHUNK_SIZE, PALETTE_STRIDE, paddedIndex, voxelId, BLOCK } from './voxelTypes';
+import { getBlockFaceTileIndex } from './textureAtlas';
+
+// Material Identity pass — natural terrain/tree blocks let the biome palette
+// tint blend only partway with the atlas texture (TINT_STRENGTH), so the
+// procedural material (grass/dirt/stone/bark/leaves) stays the primary visual
+// identity and biome color reads as an overlay, not a replacement. Player-built
+// and ore blocks keep their existing full-strength saturated tint unchanged —
+// that's deliberate (see voxelBiomes.ts) so built things read as artificial.
+const NATURAL_TINT: ReadonlySet<number> = new Set([
+  BLOCK.SURFACE,
+  BLOCK.SUBSOIL,
+  BLOCK.ROCK,
+  BLOCK.GRASS,
+  BLOCK.SAND,
+  BLOCK.ICE,
+  BLOCK.ICE_GLOW,
+  BLOCK.LAVA,
+  BLOCK.SULPHUR,
+  BLOCK.WOOD_LOG,
+  BLOCK.LEAVES,
+]);
+const TINT_STRENGTH = 0.4;
+
+const N = CHUNK_SIZE;
+
+// AO level (0 darkest .. 3 unoccluded) -> brightness multiplier.
+const AO_CURVE = [0.45, 0.65, 0.82, 1.0];
+/** Packed per-corner AO with every corner at level 3 (unoccluded) — used for
+ *  the water pass, which skips AO entirely. */
+const AO_NONE = 0xff;
+
+export interface MeshArrays {
+  positions: Float32Array;
+  normals: Float32Array;
+  colors: Float32Array;
+  /** Per-vertex (uLocal, vLocal, tileIndex) into the material atlas. */
+  uvs: Float32Array;
+  indices: Uint32Array;
+  indexCount: number;
+}
+
+export interface GreedyMeshResult {
+  opaque: MeshArrays;
+  water: MeshArrays;
+}
+
+// --- vertex pool (reused across calls) ---------------------------------------
+let posPool = new Float32Array(0);
+let normPool = new Float32Array(0);
+let colPool = new Float32Array(0);
+let uvPool = new Float32Array(0);
+let idxPool = new Uint32Array(0);
+let vCount = 0;
+let iCount = 0;
+
+function ensureVertexCapacity(extraVerts: number) {
+  const need3 = (vCount + extraVerts) * 3;
+  if (need3 <= posPool.length) return;
+  let cap = Math.max(posPool.length * 2, 1024 * 3);
+  while (cap < need3) cap *= 2;
+  const np = new Float32Array(cap); np.set(posPool.subarray(0, vCount * 3)); posPool = np;
+  const nn = new Float32Array(cap); nn.set(normPool.subarray(0, vCount * 3)); normPool = nn;
+  // Colours are RGBA (rgb = albedo*AO, a = emissive), so 4 floats per vertex.
+  const cap4 = (cap / 3) * 4;
+  const nc = new Float32Array(cap4); nc.set(colPool.subarray(0, vCount * 4)); colPool = nc;
+  // UVs are (uLocal, vLocal, tileIndex), 3 floats per vertex — same stride as position.
+  const nu = new Float32Array(cap); nu.set(uvPool.subarray(0, vCount * 3)); uvPool = nu;
+}
+
+function ensureIndexCapacity(extra: number) {
+  const need = iCount + extra;
+  if (need <= idxPool.length) return;
+  let cap = Math.max(idxPool.length * 2, 2048);
+  while (cap < need) cap *= 2;
+  const ni = new Uint32Array(cap); ni.set(idxPool.subarray(0, iCount)); idxPool = ni;
+}
+
+let vox: Uint32Array = new Uint32Array(0);
+/** Which block volume the current pass is meshing (see file header). */
+let pass: 'opaque' | 'water' = 'opaque';
+
+function blockAt(x: number, y: number, z: number): number {
+  return voxelId(vox[paddedIndex(x + 1, y + 1, z + 1)]);
+}
+/** Whether a voxel belongs to the current pass's volume. Also the AO occluder
+ *  test: water never darkens terrain, terrain never darkens water faces. */
+function solid(x: number, y: number, z: number): boolean {
+  const id = blockAt(x, y, z);
+  return pass === 'opaque' ? id !== BLOCK.AIR && id !== BLOCK.WATER : id === BLOCK.WATER;
+}
+function aoValue(s1: boolean, s2: boolean, cor: boolean): number {
+  if (s1 && s2) return 0;
+  return 3 - ((s1 ? 1 : 0) + (s2 ? 1 : 0) + (cor ? 1 : 0));
+}
+
+function packFaceAO(
+  sx: number, sy: number, sz: number,
+  d: number, u: number, v: number, dir: number,
+): number {
+  const base = [sx, sy, sz];
+  base[d] += dir;
+  const occ = (du: number, dv: number): boolean => {
+    const p = [base[0], base[1], base[2]];
+    p[u] += du;
+    p[v] += dv;
+    return solid(p[0], p[1], p[2]);
+  };
+  const ao00 = aoValue(occ(-1, 0), occ(0, -1), occ(-1, -1));
+  const ao10 = aoValue(occ(1, 0), occ(0, -1), occ(1, -1));
+  const ao11 = aoValue(occ(1, 0), occ(0, 1), occ(1, 1));
+  const ao01 = aoValue(occ(-1, 0), occ(0, 1), occ(-1, 1));
+  return ao00 | (ao10 << 2) | (ao11 << 4) | (ao01 << 6);
+}
+
+function pushVertex(
+  px: number, py: number, pz: number,
+  nx: number, ny: number, nz: number,
+  cr: number, cg: number, cb: number, ce: number,
+  um: number, vm: number, tileIdx: number,
+) {
+  const o = vCount * 3;
+  posPool[o] = px; posPool[o + 1] = py; posPool[o + 2] = pz;
+  normPool[o] = nx; normPool[o + 1] = ny; normPool[o + 2] = nz;
+  uvPool[o] = um; uvPool[o + 1] = vm; uvPool[o + 2] = tileIdx;
+  const c = vCount * 4;
+  colPool[c] = cr; colPool[c + 1] = cg; colPool[c + 2] = cb; colPool[c + 3] = ce;
+  vCount++;
+}
+
+function quadIndices(a: number, b: number, c: number, e: number, flip: boolean) {
+  const o = iCount;
+  if (flip) {
+    idxPool[o] = b; idxPool[o + 1] = c; idxPool[o + 2] = e;
+    idxPool[o + 3] = b; idxPool[o + 4] = e; idxPool[o + 5] = a;
+  } else {
+    idxPool[o] = a; idxPool[o + 1] = b; idxPool[o + 2] = c;
+    idxPool[o + 3] = a; idxPool[o + 4] = c; idxPool[o + 5] = e;
+  }
+  iCount += 6;
+}
+
+function emitQuad(
+  d: number, u: number, v: number, slice: number,
+  i: number, j: number, w: number, h: number,
+  dir: number, id: number, ao: number, palette: Float32Array,
+) {
+  ensureVertexCapacity(4);
+  ensureIndexCapacity(6);
+
+  const p = [0, 0, 0]; p[d] = slice; p[u] = i; p[v] = j;
+  const du = [0, 0, 0]; du[u] = w;
+  const dv = [0, 0, 0]; dv[v] = h;
+
+  const c00 = AO_CURVE[ao & 3];
+  const c10 = AO_CURVE[(ao >> 2) & 3];
+  const c11 = AO_CURVE[(ao >> 4) & 3];
+  const c01 = AO_CURVE[(ao >> 6) & 3];
+
+  const nx = d === 0 ? dir : 0;
+  const ny = d === 1 ? dir : 0;
+  const nz = d === 2 ? dir : 0;
+  let r = palette[id * PALETTE_STRIDE];
+  let g = palette[id * PALETTE_STRIDE + 1];
+  let b = palette[id * PALETTE_STRIDE + 2];
+  const em = palette[id * PALETTE_STRIDE + 3]; // emissive (not AO-darkened)
+  // Dilute the biome tint toward white on natural terrain/tree blocks so the
+  // atlas texture (sampled in voxelMaterial.ts) stays the primary material
+  // identity — biome color is an overlay, not a replacement.
+  if (NATURAL_TINT.has(id)) {
+    r = r * TINT_STRENGTH + (1 - TINT_STRENGTH);
+    g = g * TINT_STRENGTH + (1 - TINT_STRENGTH);
+    b = b * TINT_STRENGTH + (1 - TINT_STRENGTH);
+  }
+  const tileIdx = getBlockFaceTileIndex(id, d, dir);
+
+  // East/west faces (d===0) sweep u=Y, v=Z — the opposite axis pairing from
+  // north/south faces (d===2, u=X, v=Z... texture-V is Y already there).
+  // Directional side textures (grass_side's grass-on-top/dirt-on-bottom
+  // gradient) assume texture-V is always the vertical (world-Y) axis, so on
+  // d===0 swap which extent (w vs h) drives texture-U vs texture-V — keeping
+  // texture-V tied to world-Y on every side face instead of rotating the
+  // gradient 90° on two of the four.
+  const swapUV = d === 0;
+  const u1 = swapUV ? 0 : w;
+  const v1 = swapUV ? w : 0;
+  const u2 = swapUV ? h : w;
+  const v2 = swapUV ? w : h;
+  const u3 = swapUV ? h : 0;
+  const v3 = swapUV ? 0 : h;
+
+  const v0 = vCount;
+  pushVertex(p[0], p[1], p[2], nx, ny, nz, r * c00, g * c00, b * c00, em, 0, 0, tileIdx);
+  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10, em, u1, v1, tileIdx);
+  pushVertex(
+    p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2],
+    nx, ny, nz, r * c11, g * c11, b * c11, em, u2, v2, tileIdx,
+  );
+  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01, em, u3, v3, tileIdx);
+
+  const a00 = ao & 3;
+  const a10 = (ao >> 2) & 3;
+  const a11 = (ao >> 4) & 3;
+  const a01 = (ao >> 6) & 3;
+  const flip = a00 + a11 > a10 + a01;
+  if (dir > 0) quadIndices(v0, v0 + 1, v0 + 2, v0 + 3, flip);
+  else quadIndices(v0, v0 + 3, v0 + 2, v0 + 1, flip);
+}
+
+/** Greedy-mesh one pass (the module-level `pass` selects the volume). */
+function meshPass(voxels: Uint32Array, palette: Float32Array): MeshArrays {
+  vox = voxels;
+  vCount = 0;
+  iCount = 0;
+
+  const x = [0, 0, 0];
+  const q = [0, 0, 0];
+  const maskDir = new Int8Array(N * N);
+  const maskId = new Int32Array(N * N);
+  const maskAO = new Int32Array(N * N);
+
+  for (let d = 0; d < 3; d++) {
+    const u = (d + 1) % 3;
+    const v = (d + 2) % 3;
+    q[0] = 0; q[1] = 0; q[2] = 0; q[d] = 1;
+
+    for (x[d] = -1; x[d] < N; ) {
+      let n = 0;
+      for (x[v] = 0; x[v] < N; x[v]++) {
+        for (x[u] = 0; x[u] < N; x[u]++, n++) {
+          const a = solid(x[0], x[1], x[2]);
+          const b = solid(x[0] + q[0], x[1] + q[1], x[2] + q[2]);
+          if (a === b) { maskDir[n] = 0; continue; }
+          const dir = a ? 1 : -1;
+          const sx = a ? x[0] : x[0] + q[0];
+          const sy = a ? x[1] : x[1] + q[1];
+          const sz = a ? x[2] : x[2] + q[2];
+          if (pass === 'water') {
+            // Only emit water faces against AIR — a face against a solid is
+            // buried in terrain and would z-fight the opaque mesh.
+            const ox = a ? x[0] + q[0] : x[0];
+            const oy = a ? x[1] + q[1] : x[1];
+            const oz = a ? x[2] + q[2] : x[2];
+            if (blockAt(ox, oy, oz) !== BLOCK.AIR) { maskDir[n] = 0; continue; }
+          }
+          maskDir[n] = dir;
+          maskId[n] = blockAt(sx, sy, sz);
+          maskAO[n] = pass === 'water' ? AO_NONE : packFaceAO(sx, sy, sz, d, u, v, dir);
+        }
+      }
+
+      x[d]++;
+
+      n = 0;
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; ) {
+          const dir = maskDir[n];
+          if (dir === 0) { i++; n++; continue; }
+          const cid = maskId[n];
+          const cao = maskAO[n];
+
+          let w = 1;
+          while (
+            i + w < N && maskDir[n + w] === dir &&
+            maskId[n + w] === cid && maskAO[n + w] === cao
+          ) w++;
+
+          let h = 1;
+          let stop = false;
+          while (j + h < N && !stop) {
+            for (let k = 0; k < w; k++) {
+              const idx = n + k + h * N;
+              if (maskDir[idx] !== dir || maskId[idx] !== cid || maskAO[idx] !== cao) {
+                stop = true;
+                break;
+              }
+            }
+            if (!stop) h++;
+          }
+
+          emitQuad(d, u, v, x[d], i, j, w, h, dir, cid, cao, palette);
+
+          for (let l = 0; l < h; l++)
+            for (let k = 0; k < w; k++) maskDir[n + k + l * N] = 0;
+          i += w;
+          n += w;
+        }
+      }
+    }
+  }
+
+  return {
+    positions: new Float32Array(posPool.subarray(0, vCount * 3)),
+    normals: new Float32Array(normPool.subarray(0, vCount * 3)),
+    colors: new Float32Array(colPool.subarray(0, vCount * 4)),
+    uvs: new Float32Array(uvPool.subarray(0, vCount * 3)),
+    indices: new Uint32Array(idxPool.subarray(0, iCount)),
+    indexCount: iCount,
+  };
+}
+
+/** Fresh zero-length buffers — never shared, so the worker can safely list
+ *  them as transferables (transfer detaches a buffer permanently). */
+function emptyMesh(): MeshArrays {
+  return {
+    positions: new Float32Array(0),
+    normals: new Float32Array(0),
+    colors: new Float32Array(0),
+    uvs: new Float32Array(0),
+    indices: new Uint32Array(0),
+    indexCount: 0,
+  };
+}
+
+/** Greedy-mesh a padded voxel neighbourhood into two vertex/index groups:
+ *  opaque terrain and translucent water (see file header). */
+export function greedyMesh(voxels: Uint32Array, palette: Float32Array): GreedyMeshResult {
+  pass = 'opaque';
+  const opaque = meshPass(voxels, palette);
+
+  // Skip the whole water pass for the common all-dry chunk.
+  let hasWater = false;
+  for (let i = 0; i < voxels.length; i++) {
+    if (voxelId(voxels[i]) === BLOCK.WATER) { hasWater = true; break; }
+  }
+  let water = emptyMesh();
+  if (hasWater) {
+    pass = 'water';
+    water = meshPass(voxels, palette);
+    pass = 'opaque';
+  }
+  return { opaque, water };
+}

@@ -15,6 +15,10 @@ body,
 #root {
   width: 100%;
   height: 100%;
+  /* Fullscreen game, no scrollable content: block the native double-tap-zoom /
+     pinch-zoom gesture at the root so a mistimed double-tap anywhere never
+     triggers the OS magnifier instead of a game action. */
+  touch-action: manipulation;
 }
 
 body {
@@ -23,10 +27,33 @@ body {
   background: #000;
   color: var(--text-color);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* This is a fullscreen game: stop touch-dragging from selecting text or
+     popping the iOS/Android copy/paste callout & magnifier while playing. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-enable selection where it's actually wanted (settings text/date fields). */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 canvas {
   display: block;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Every native button gets the same double-tap-zoom guard by default. Drag
+   surfaces (joystick, look layer, throttle, camera-drag layer, action buttons)
+   already set touch-action: none individually, which — being a class selector
+   — wins over this element selector, so this only affects plain click targets. */
+button {
+  touch-action: manipulation;
 }
 
 .loading {
@@ -41,17 +68,255 @@ canvas {
   z-index: 1000;
 }
 
-.ui {
+/* Renderer-init failure overlay (no WebGPU and no WebGL2) — replaces the
+   otherwise silent black screen with an actionable explanation. */
+.renderer-failed {
   position: fixed;
-  top: 20px;
-  left: 20px;
-  right: 20px;
-  z-index: 200;
+  inset: 0;
+  background: var(--background-gradient);
+  color: var(--text-color);
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
   justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 24px;
 }
+.renderer-failed-inner {
+  max-width: 460px;
+  text-align: center;
+}
+.renderer-failed-inner h1 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.renderer-failed-inner p {
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+/* First-time control hints — one-shot overlay per mode (flight / on foot).
+   Sits above the HUD but below nothing critical; dismissal persists. */
+.control-hints {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 900;
+  padding: 16px;
+}
+.control-hints-card {
+  background: var(--ui-background);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 440px;
+  width: 100%;
+  backdrop-filter: blur(6px);
+}
+.control-hints-card h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.control-hints-card table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+.control-hints-card td {
+  padding: 4px 0;
+  vertical-align: top;
+}
+.control-hints-key {
+  white-space: nowrap;
+  padding-right: 14px !important;
+  color: #7fd0ff;
+  font-weight: 600;
+}
+.control-hints-dismiss {
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Underwater tint — shown while the eye voxel is water. A soft blue wash with
+   a vignette so the surface transition reads instantly without hiding the HUD. */
+.voxel-underwater {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, rgba(20, 60, 110, 0.28) 0%, rgba(8, 28, 60, 0.55) 100%);
+  z-index: 0;
+}
+
+/* Inline keyboard hint chip on HUD buttons (desktop only). */
+.voxel-key-hint {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Top bar + hamburger drawer — single navigation menu on all viewports. */
+.ui-mobile-bar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    height: 56px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+  .mobile-date {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    letter-spacing: 0.5px;
+  }
+  .hamburger-btn {
+    width: 48px;
+    height: 48px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .hamburger-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 24px;
+  }
+  .hamburger-icon span {
+    display: block;
+    height: 2px;
+    background: #fff;
+    border-radius: 1px;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+  }
+  .hamburger-icon.open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+  .hamburger-icon.open span:nth-child(2) {
+    opacity: 0;
+  }
+  .hamburger-icon.open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  .mobile-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .mobile-drawer {
+    position: fixed;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    width: min(300px, 80vw);
+    background: rgba(16, 18, 22, 0.95);
+    backdrop-filter: blur(12px);
+    z-index: 200;
+    padding: 24px 20px;
+    overflow-y: auto;
+    animation: drawer-slide 0.2s ease;
+  }
+  @keyframes drawer-slide {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  .drawer-section {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+  }
+  .drawer-section .slider {
+    margin-top: 8px;
+    width: 100%;
+  }
+  .drawer-section .level {
+    width: 100%;
+  }
+  .drawer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 12px;
+  }
+  .drawer-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 18px;
+    text-align: left;
+    padding: 14px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    min-height: 48px;
+  }
+  .drawer-btn:active {
+    background: rgba(147, 173, 136, 0.2);
+    color: #93ad88;
+  }
+  .drawer-btn-fly {
+    margin-top: 8px;
+    color: #93ad88;
+    border: 1px solid rgba(147, 173, 136, 0.3);
+  }
+  .drawer-heading {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+  }
+  .drawer-heading-bodies {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .drawer-bodies {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 4px;
+  }
+  .drawer-body-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    text-align: left;
+    padding: 12px;
+    min-height: 44px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .drawer-body-btn:active {
+    background: rgba(147, 173, 136, 0.2);
+  }
+  .drawer-body-btn.active {
+    color: #93ad88;
+    border-color: rgba(147, 173, 136, 0.5);
+  }
 
 .control {
   background: var(--ui-background);
@@ -350,38 +615,6 @@ canvas {
   background: rgba(147, 173, 136, 0.8);
 }
 
-/* Body picker (right edge) */
-.body-picker {
-  position: fixed;
-  top: 50%;
-  right: 16px;
-  transform: translateY(-50%);
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.picker-item {
-  background: var(--ui-background);
-  border: 1px solid transparent;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 13px;
-  letter-spacing: 0.5px;
-  text-align: right;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.picker-item:hover {
-  color: #fff;
-  background: rgba(0, 0, 0, 0.85);
-}
-.picker-item.active {
-  color: #93ad88;
-  border-color: #93ad88;
-}
-
 /* Settings modal */
 .settings-overlay {
   position: fixed;
@@ -392,10 +625,20 @@ canvas {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(2px);
+  /* Lets a panel taller than the overlay's centered box still be reachable —
+     without this the panel could only ever be as tall as `align-items:center`
+     allows before clipping against the (globally overflow:hidden) body. */
+  padding: 24px 0;
 }
 .settings-panel {
   position: relative;
   width: min(92vw, 420px);
+  /* The panel has grown past what fits on most phone viewports (15+ rows).
+     Cap it and let only the body scroll — the heading/close button are
+     siblings of .settings-body below, so they never scroll out of reach. */
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   background: #16181d;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
@@ -405,6 +648,15 @@ canvas {
 .settings-panel h2 {
   margin: 0 0 16px;
   font-size: 22px;
+  flex: 0 0 auto;
+}
+.settings-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+  /* Flex children default to a min-height equal to their content, which
+     defeats overflow scrolling entirely — this is the actual fix. */
+  min-height: 0;
 }
 .setting-row {
   display: flex;
@@ -432,7 +684,7 @@ canvas {
   padding: 6px 12px;
   cursor: pointer;
 }
-.seg button.active {
+.settings-panel .seg button.active {
   background: #93ad88;
   color: #16181d;
 }
@@ -473,6 +725,1177 @@ canvas {
 .info-text dd {
   margin: 0;
   text-align: right;
+}
+
+/* ---- Phase 8 Ship / Descent / Surface HUD -------------------------------- */
+
+/* Ship HUD — telemetry (bottom-left, above touch zone) */
+.ship-hud-telemetry {
+  position: fixed;
+  bottom: 180px;
+  left: 16px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-family: monospace;
+  pointer-events: none;
+}
+.ship-hud-thr-track {
+  width: 48px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ship-hud-thr-fill {
+  height: 100%;
+  background: #93ad88;
+  border-radius: 3px;
+  transition: width 0.1s ease;
+}
+
+/* Throttle indicator — upper center during flight. The track shows the four
+   response zones (the last quarter is the warm "power band"); the fill tracks
+   the lever smoothly and turns warm once it enters that final zone. */
+.throttle-indicator {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: min(420px, 78vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  font-family: monospace;
+}
+.ti-track {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.1) 0 25%,
+    rgba(255, 255, 255, 0.05) 25% 50%,
+    rgba(255, 255, 255, 0.1) 50% 75%,
+    rgba(255, 140, 50, 0.22) 75% 100%
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.ti-fill {
+  height: 100%;
+  width: 0;
+  background: rgba(147, 173, 136, 0.85);
+  transition: width 0.08s linear, background-color 0.2s ease;
+}
+.ti-fill--power {
+  background: linear-gradient(to right, #ff9a3c, #ff4d2a);
+}
+.ti-div {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.35);
+}
+.ti-readout {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Heat glow — warm orange-red edge vignette in the final throttle quarter.
+   Wrapper opacity is driven by throttle (0 at 75% -> 1 at 100%); the inner
+   layer pulses slightly. Center stays clear so it reads as exciting, not
+   disorienting. */
+.ship-heat-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+}
+.ship-heat-glow-inner {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 90, 30, 0.5) 100%);
+  mix-blend-mode: screen;
+  animation: ship-heat-pulse 1.1s ease-in-out infinite;
+}
+@keyframes ship-heat-pulse {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* Ship bottom-center action cluster — Navigate / Land / Exit (or autopilot
+   cancel), all kept inside the bottom thumb-reach band between the joystick and
+   throttle. */
+.ship-hud-actions {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.ship-hud-action {
+  pointer-events: auto;
+  min-width: 92px;
+  min-height: 54px;
+  font-size: 17px;
+}
+.ship-hud-land {
+  min-width: 100px;
+  font-size: 18px;
+}
+.ship-hud-cancel {
+  min-width: 160px;
+}
+
+/* Quick-nav destination picker — a bottom sheet so the whole list is reachable
+   without stretching to the top of the screen. */
+.ship-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.ship-nav-sheet {
+  width: min(560px, 96vw);
+  max-height: 46vh;
+  margin-bottom: 92px;
+  overflow-y: auto;
+  background: rgba(6, 10, 14, 0.92);
+  border: 1px solid rgba(150, 190, 220, 0.3);
+  border-radius: 14px;
+  padding: 14px 16px;
+  pointer-events: auto;
+}
+.ship-nav-head {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  opacity: 0.7;
+  margin-bottom: 10px;
+  color: #e8f0f4;
+}
+.ship-nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+.ship-nav-item {
+  min-height: 48px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e8f0f4;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ship-nav-item:hover,
+.ship-nav-item:active {
+  background: rgba(130, 200, 255, 0.18);
+  border-color: rgba(160, 210, 255, 0.5);
+}
+
+/* Ship upgrades sheet (Phase 11.5) — reuses .ship-nav-* for the backdrop/sheet
+   shell; these are the per-row internals. */
+.upgrades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upgrade-row {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.upgrade-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.upgrade-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8f0f4;
+}
+.upgrade-tier-dots {
+  display: flex;
+  gap: 5px;
+}
+.upgrade-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.upgrade-dot--on {
+  background: rgba(130, 220, 255, 0.9);
+  border-color: rgba(160, 230, 255, 0.9);
+}
+.upgrade-cost {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+.upgrade-btn {
+  min-height: 40px;
+  width: 100%;
+  font-size: 13px;
+}
+.upgrade-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* "Why can't I land" explanation toast (Phase 11.5) */
+.descent-blocked-toast {
+  position: fixed;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 13;
+  max-width: min(420px, 88vw);
+  text-align: center;
+  background: rgba(50, 10, 10, 0.85);
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  border-radius: 10px;
+  padding: 10px 16px;
+  color: #ffd8d8;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* Descent overlay */
+.descent-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 20;
+  padding: 24px 16px;
+}
+.descent-overlay-info {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-family: monospace;
+  text-align: center;
+}
+.descent-overlay-heat {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(255, 120, 30, 0.15) 100%);
+  mix-blend-mode: screen;
+}
+.descent-overlay-abort {
+  pointer-events: auto;
+  min-width: 100px;
+  min-height: 54px;
+  font-size: 18px;
+}
+
+/* Surface HUD */
+.surface-hud {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+  padding: 24px 16px;
+}
+.surface-hud-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.surface-hud-name {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  padding: 6px 16px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-family: monospace;
+}
+.surface-hud-compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.surface-hud-cardinal {
+  font-family: monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.surface-hud-actions {
+  display: flex;
+  gap: 12px;
+  pointer-events: none;
+}
+.surface-hud-action {
+  pointer-events: auto;
+  min-width: 100px;
+  min-height: 54px;
+  font-size: 18px;
+}
+
+/* On-foot menu toggles — top-right; open the backpack / build sheets and double
+   as compact indicators (pack count, active buildable). */
+.voxel-menu-toggles {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.voxel-toggle-btn {
+  pointer-events: auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.voxel-toggle-btn.active {
+  background: rgba(130, 200, 255, 0.22);
+  border-color: rgba(160, 210, 255, 0.6);
+}
+.voxel-power-chip {
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(150, 255, 180, 0.4);
+  color: #d6ffe2;
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.voxel-power-chip.short {
+  border-color: rgba(255, 150, 120, 0.5);
+  color: #ffcdb8;
+}
+
+/* Phase 11.4 — oxygen meter (survival mode only). Sibling of the power chip. */
+.voxel-o2-chip {
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(140, 210, 255, 0.45);
+  color: #d8f0ff;
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.voxel-o2-chip .voxel-o2-bar {
+  display: block;
+  margin-top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.voxel-o2-chip .voxel-o2-bar > span {
+  display: block;
+  height: 100%;
+  background: #7fd0ff;
+  transition: width 0.3s linear;
+}
+.voxel-o2-chip.mid {
+  border-color: rgba(255, 210, 120, 0.55);
+  color: #ffe9c2;
+}
+.voxel-o2-chip.mid .voxel-o2-bar > span {
+  background: #ffcf7d;
+}
+.voxel-o2-chip.low {
+  border-color: rgba(255, 110, 100, 0.75);
+  color: #ffd2cc;
+  animation: o2-flash 0.9s ease-in-out infinite;
+}
+.voxel-o2-chip.low .voxel-o2-bar > span {
+  background: #ff6e64;
+}
+.voxel-o2-chip.safe {
+  border-color: rgba(140, 255, 190, 0.55);
+}
+@keyframes o2-flash {
+  0%,
+  100% {
+    background: rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    background: rgba(120, 20, 15, 0.6);
+  }
+}
+
+/* Phase 11.4 — blackout (death) overlay: explains cause + where you woke up. */
+.voxel-blackout {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  animation: blackout-in 0.6s ease-out;
+}
+.voxel-blackout-card {
+  max-width: min(420px, 84vw);
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgba(8, 10, 14, 0.92);
+  border: 1px solid rgba(255, 120, 110, 0.4);
+  color: #f0e8e8;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+.voxel-blackout-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ff9c92;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.voxel-blackout-card p {
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.voxel-blackout-recover {
+  color: #a9d8b8;
+}
+@keyframes blackout-in {
+  from {
+    background: rgba(0, 0, 0, 0.95);
+    opacity: 1;
+  }
+  to {
+    background: rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* Top-left cluster: Journal (DiscoveryPanel) above, Board-ship below. Mirrors
+   the top-right menu-toggles, and is deliberately far from the joystick/action
+   cluster so neither can be pressed by accident during normal play. */
+.voxel-journal-toggle {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 11;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.voxel-back-confirm {
+  position: fixed;
+  top: 64px;
+  left: 12px;
+  z-index: 11;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(255, 90, 60, 0.14);
+  border: 1px solid rgba(255, 120, 90, 0.4);
+  color: rgba(255, 205, 190, 0.9);
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.voxel-back-confirm.armed {
+  background: rgba(255, 90, 60, 0.32);
+  border-color: rgba(255, 140, 110, 0.75);
+  color: #fff0ec;
+  box-shadow: 0 0 16px rgba(255, 110, 80, 0.45);
+}
+
+/* On-foot bottom sheet (backpack / build), thumb-reachable; mirrors ship-nav. */
+.voxel-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 13;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.voxel-sheet {
+  width: min(560px, 96vw);
+  max-height: 56vh;
+  margin-bottom: 24px;
+  overflow-y: auto;
+  background: rgba(6, 10, 14, 0.94);
+  border: 1px solid rgba(150, 190, 220, 0.3);
+  border-radius: 14px;
+  padding: 14px 16px;
+  pointer-events: auto;
+  font-family: monospace;
+  color: #e8f0f4;
+}
+.voxel-sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  opacity: 0.85;
+  margin-bottom: 10px;
+}
+.voxel-sheet-close {
+  pointer-events: auto;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #e8f0f4;
+  font-family: monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+.voxel-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.voxel-pack-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.voxel-pack-name {
+  flex: 1;
+  font-size: 14px;
+}
+.voxel-pack-amount {
+  font-size: 14px;
+  opacity: 0.85;
+  min-width: 36px;
+  text-align: right;
+}
+.voxel-drop-btn {
+  pointer-events: auto;
+  min-width: 64px;
+  min-height: 40px;
+  border-radius: 6px;
+  background: rgba(255, 120, 90, 0.16);
+  border: 1px solid rgba(255, 140, 110, 0.5);
+  color: #ffcfc2;
+  font-family: monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Minecraft-style backpack grid: one icon slot per stack (colour swatch +
+   count) instead of a text row. Responsive column count so slots never drop
+   below a comfortable tap target on a small screen — the sheet's existing
+   max-height + overflow-y (see .voxel-sheet) handles scrolling once the grid
+   grows taller than the sheet, no separate pagination needed. */
+.voxel-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+}
+.voxel-item-slot {
+  position: relative;
+  aspect-ratio: 1;
+  min-height: 56px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+button.voxel-item-slot {
+  pointer-events: auto;
+  cursor: pointer;
+}
+button.voxel-item-slot.active {
+  border-color: rgba(147, 173, 136, 0.9);
+  background: rgba(147, 173, 136, 0.18);
+}
+.voxel-item-swatch {
+  width: 58%;
+  height: 58%;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.voxel-item-count {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 0.9);
+}
+.voxel-item-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 14px;
+}
+
+/* Capacity bar (reused inside the backpack sheet). */
+.voxel-backpack-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.voxel-backpack-fill {
+  height: 100%;
+  background: rgba(147, 173, 136, 0.85);
+  transition: width 0.15s ease;
+}
+.voxel-backpack-empty {
+  opacity: 0.5;
+  font-size: 13px;
+}
+
+/* Build option rows (reused inside the build sheet). */
+.voxel-build-btn {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e8f0f4;
+  font-family: monospace;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.voxel-build-btn.active {
+  background: rgba(130, 200, 255, 0.18);
+  border-color: rgba(160, 210, 255, 0.6);
+}
+.voxel-build-cost {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.voxel-build-cost.short {
+  color: #ff9a7a;
+  opacity: 0.9;
+}
+
+/* Crafting: contextual opener, radial recipe menu, blueprint. */
+.voxel-craft-open {
+  position: fixed;
+  bottom: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  min-height: 48px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: rgba(120, 200, 255, 0.2);
+  border: 1px solid rgba(160, 210, 255, 0.6);
+  color: #dff;
+  font-family: monospace;
+  font-size: 16px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(120, 200, 255, 0.4);
+  pointer-events: auto;
+}
+/* Stacked above the Craft opener (offset) so both can show at once without
+   overlapping if a station and silo happen to be near each other. */
+.voxel-silo-open {
+  position: fixed;
+  bottom: calc(40% + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  min-height: 48px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: rgba(255, 215, 130, 0.18);
+  border: 1px solid rgba(255, 225, 150, 0.55);
+  color: #ffeab0;
+  font-family: monospace;
+  font-size: 16px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(255, 215, 130, 0.35);
+  pointer-events: auto;
+}
+.voxel-take-btn {
+  pointer-events: auto;
+  min-width: 64px;
+  min-height: 40px;
+  border-radius: 6px;
+  background: rgba(130, 200, 255, 0.16);
+  border: 1px solid rgba(150, 210, 255, 0.5);
+  color: #d8f0ff;
+  font-family: monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+.voxel-take-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.voxel-sheet-warn {
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 120, 90, 0.12);
+  border: 1px solid rgba(255, 140, 110, 0.35);
+  color: #ffcdb8;
+  font-size: 12px;
+}
+.voxel-sheet-notice {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 200, 120, 0.14);
+  border: 1px solid rgba(255, 210, 140, 0.4);
+  color: #ffe6b8;
+  font-size: 12px;
+}
+.craft-radial {
+  position: absolute;
+  left: 50%;
+  bottom: 30%;
+  width: 0;
+  height: 0;
+  pointer-events: auto;
+}
+.craft-radial-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: rgba(6, 10, 14, 0.9);
+  border: 1px solid rgba(160, 210, 255, 0.5);
+  color: #cfe6f2;
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.craft-radial-empty {
+  position: absolute;
+  left: 50%;
+  top: 90px;
+  transform: translateX(-50%);
+  width: 220px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: monospace;
+  font-size: 12px;
+}
+.craft-seg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 96px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(6, 10, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+.craft-seg.ok {
+  border-color: rgba(150, 255, 180, 0.6);
+  color: #d6ffe2;
+  box-shadow: 0 0 14px rgba(120, 255, 160, 0.3);
+}
+.craft-blueprint {
+  text-align: center;
+  color: #8fd0ff;
+  font-size: 16px;
+  padding: 10px 0 12px;
+  text-shadow: 0 0 12px rgba(120, 200, 255, 0.5);
+}
+.craft-confirm {
+  margin-top: 12px;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 8px;
+  background: rgba(120, 200, 255, 0.22);
+  border: 1px solid rgba(160, 210, 255, 0.6);
+  color: #eaf6ff;
+  font-family: monospace;
+  font-size: 15px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.craft-confirm:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.voxel-sheet-subhead {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  opacity: 0.6;
+}
+.voxel-pack-amount.short {
+  color: #ff9a7a;
+}
+
+/* On-foot aiming crosshair */
+.voxel-crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.6;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) 50% 50% / 2px 18px no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) 50% 50% / 18px 2px no-repeat;
+  mix-blend-mode: difference;
+}
+
+/* Voxel disembark/board atmospheric wash */
+.voxel-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+/* Voxel (on-foot) touch controls */
+.voxel-touch {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+.voxel-look-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+.voxel-touch .touch-joystick {
+  z-index: 1;
+  /* Pulled in from the edges for a more natural thumb position. */
+  bottom: 72px;
+  left: 52px;
+}
+.voxel-pad {
+  pointer-events: auto;
+  touch-action: none;
+}
+/* On-foot action buttons: a 2-col x 3-row cluster in the bottom-right thumb zone
+   (Dig/Jump, Place/Scan, Deposit), clear of the joystick (bottom-left) and the
+   look layer. Every button is >=44px and stays in the bottom band; landscape
+   reflows to 3 cols x 2 rows below. Board-ship lives away from this cluster
+   entirely (top-left, confirm-tap) so it can't be pressed accidentally. */
+.voxel-jump-btn,
+.voxel-dig-btn,
+.voxel-scan-btn,
+.voxel-place-btn,
+.voxel-deposit-btn {
+  position: absolute;
+  z-index: 1;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  pointer-events: auto;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+/* row 1 (bottom) */
+.voxel-dig-btn {
+  bottom: 24px;
+  right: 24px;
+  border-color: rgba(255, 200, 120, 0.45);
+  color: rgba(255, 220, 170, 0.9);
+}
+.voxel-jump-btn {
+  bottom: 24px;
+  right: 116px;
+}
+/* row 2 */
+.voxel-place-btn {
+  bottom: 116px;
+  right: 24px;
+  border-color: rgba(180, 220, 160, 0.45);
+  color: rgba(210, 240, 195, 0.9);
+}
+.voxel-scan-btn {
+  bottom: 116px;
+  right: 116px;
+  border-color: rgba(150, 210, 255, 0.45);
+  color: rgba(200, 235, 255, 0.9);
+  opacity: 0.3; /* dimmed until a scannable anomaly is in the crosshair */
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.voxel-scan-btn.active {
+  opacity: 1;
+  box-shadow: 0 0 16px rgba(130, 200, 255, 0.55);
+}
+/* row 3 (top) */
+.voxel-deposit-btn {
+  bottom: 208px;
+  right: 24px;
+  border-color: rgba(255, 225, 150, 0.5);
+  color: rgba(255, 235, 175, 0.95);
+  box-shadow: 0 0 16px rgba(255, 215, 130, 0.5);
+}
+
+/* Touch controls container — kept below the ShipHUD buttons (z-index 10) so the
+   full-screen camera-drag catcher never blocks Land / Exit taps. */
+.touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+/* Full-screen drag catcher for camera orbit; sits behind the control pads. */
+.camera-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+/* Holds the joystick + throttle above the drag layer; only this fades on idle. */
+.touch-controls-pads {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.touch-joystick {
+  position: absolute;
+  bottom: 40px;
+  left: 30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  touch-action: none;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.touch-joystick-knob {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+.touch-throttle {
+  position: absolute;
+  bottom: 40px;
+  right: 30px;
+  width: 48px;
+  height: 160px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  touch-action: none;
+  pointer-events: auto;
+  overflow: hidden;
+}
+.touch-throttle-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  background: rgba(147, 173, 136, 0.35);
+  border-radius: 0 0 22px 22px;
+  pointer-events: none;
+  transition: height 0.05s ease;
+}
+.touch-throttle-label {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+/* Landscape: push touch controls to bottom edges */
+@media (orientation: landscape) and (pointer: coarse) {
+  .touch-joystick {
+    bottom: 20px;
+    left: 20px;
+  }
+  .touch-throttle {
+    bottom: 20px;
+    right: 20px;
+  }
+  .ship-hud-telemetry {
+    bottom: 150px;
+    left: 12px;
+  }
+  .ship-hud-actions {
+    bottom: 16px;
+  }
+  .descent-overlay {
+    padding: 16px 12px;
+  }
+  .surface-hud {
+    padding: 16px 12px;
+  }
+  /* Keep the ship action cluster compact so it never reaches the corner pads. */
+  .ship-hud-action {
+    min-width: 80px;
+    font-size: 16px;
+  }
+  /* On-foot: pull the joystick to the corner and shrink the 2x2 action cluster
+     so the top row still sits inside the bottom band on short landscape screens. */
+  .voxel-touch .touch-joystick {
+    bottom: 16px;
+    left: 20px;
+  }
+  /* Landscape: 3 cols x 2 rows so the top row stays inside the bottom band. */
+  .voxel-jump-btn,
+  .voxel-dig-btn,
+  .voxel-scan-btn,
+  .voxel-place-btn,
+  .voxel-deposit-btn {
+    width: 62px;
+    height: 62px;
+  }
+  /* row 1 (bottom): Dig, Jump, Place */
+  .voxel-dig-btn {
+    bottom: 12px;
+    right: 16px;
+  }
+  .voxel-jump-btn {
+    bottom: 12px;
+    right: 86px;
+  }
+  .voxel-place-btn {
+    bottom: 12px;
+    right: 156px;
+  }
+  /* row 2 (top): Scan, Deposit */
+  .voxel-scan-btn {
+    bottom: 82px;
+    right: 16px;
+  }
+  .voxel-deposit-btn {
+    bottom: 82px;
+    right: 86px;
+  }
+  /* Journal / Board-ship (top-left) shrink to match, still stacked + offset
+     from the joystick which also moves to bottom:16,left:20 here. */
+  .voxel-back-confirm,
+  .voxel-journal-toggle {
+    min-height: 40px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

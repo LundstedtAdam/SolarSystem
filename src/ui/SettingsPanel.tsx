@@ -1,4 +1,4 @@
-import { useStore } from '../store';
+import { useStore, FOV_MIN, FOV_MAX } from '../store';
 import { useT } from '../i18n';
 import { dateFromDays } from '../systems/ephemeris';
 import { QUALITY_ORDER } from '../systems/quality';
@@ -21,6 +21,12 @@ export function SettingsPanel() {
   const setDate = useStore((s) => s.setDate);
   const quality = useStore((s) => s.quality);
   const setQuality = useStore((s) => s.setQuality);
+  const controls = useStore((s) => s.controls);
+  const setControls = useStore((s) => s.setControls);
+  const fov = useStore((s) => s.fov);
+  const setFov = useStore((s) => s.setFov);
+  const creativeMode = useStore((s) => s.creativeMode);
+  const setCreativeMode = useStore((s) => s.setCreativeMode);
   const { t } = useT();
 
   if (!open) return null;
@@ -41,75 +47,183 @@ export function SettingsPanel() {
         </button>
         <h2>{t('settings')}</h2>
 
-        <div className="setting-row">
-          <span>{t('language')}</span>
-          <div className="seg" role="group" aria-label={t('language')}>
-            <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>
-              English
-            </button>
-            <button className={language === 'sv' ? 'active' : ''} onClick={() => setLanguage('sv')}>
-              Svenska
-            </button>
-          </div>
-        </div>
-
-        <div className="setting-row">
-          <span>{t('quality')}</span>
-          <div className="seg" role="group" aria-label={t('quality')}>
-            {QUALITY_ORDER.map((q) => (
-              <button
-                key={q}
-                className={quality === q ? 'active' : ''}
-                onClick={() => setQuality(q)}
-              >
-                {q[0].toUpperCase() + q.slice(1)}
+        {/* Scrollable body: the heading and close button live outside it (siblings
+            in .settings-panel), so they stay reachable regardless of scroll
+            position, while this now-long list of rows scrolls within a
+            height-capped panel — see .settings-panel/.settings-body in styles.css. */}
+        <div className="settings-body">
+          <div className="setting-row">
+            <span>{t('language')}</span>
+            <div className="seg" role="group" aria-label={t('language')}>
+              <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>
+                English
               </button>
-            ))}
+              <button className={language === 'sv' ? 'active' : ''} onClick={() => setLanguage('sv')}>
+                Svenska
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="setting-row">
-          <label>
-            <input type="checkbox" checked={showLabels} onChange={toggleLabels} /> {t('labels')}
-          </label>
-        </div>
+          <div className="setting-row">
+            <span>{t('quality')}</span>
+            <div className="seg" role="group" aria-label={t('quality')}>
+              {QUALITY_ORDER.map((q) => (
+                <button
+                  key={q}
+                  className={quality === q ? 'active' : ''}
+                  onClick={() => setQuality(q)}
+                >
+                  {q[0].toUpperCase() + q.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        <div className="setting-row">
-          <label>
+          <div className="setting-row">
+            <label>
+              <input type="checkbox" checked={showLabels} onChange={toggleLabels} /> {t('labels')}
+            </label>
+          </div>
+
+          <div className="setting-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={reducedMotion}
+                onChange={(e) => setReducedMotion(e.target.checked)}
+              />{' '}
+              {t('reducedMotion')}
+            </label>
+          </div>
+
+          <div className="setting-row">
+            <label htmlFor="settings-fov">{t('fov')}</label>
             <input
-              type="checkbox"
-              checked={reducedMotion}
-              onChange={(e) => setReducedMotion(e.target.checked)}
-            />{' '}
-            {t('reducedMotion')}
-          </label>
-        </div>
+              id="settings-fov"
+              type="range"
+              min={FOV_MIN}
+              max={FOV_MAX}
+              step="1"
+              value={fov}
+              onChange={(e) => setFov(parseInt(e.target.value, 10))}
+            />
+            <span>{fov}°</span>
+          </div>
 
-        <div className="setting-row">
-          <label htmlFor="date-input">{t('date')}</label>
-          <input
-            id="date-input"
-            type="date"
-            value={isoDate}
-            onChange={(e) => {
-              const d = new Date(e.target.value);
-              if (!Number.isNaN(d.getTime())) setDate(d);
-            }}
-          />
-        </div>
+          <div className="setting-row">
+            <span>{t('gameMode')}</span>
+            <div className="seg" role="group" aria-label={t('gameMode')}>
+              <button className={creativeMode ? 'active' : ''} onClick={() => setCreativeMode(true)}>
+                {t('creative')}
+              </button>
+              <button className={!creativeMode ? 'active' : ''} onClick={() => setCreativeMode(false)}>
+                {t('survival')}
+              </button>
+            </div>
+          </div>
 
-        <div className="setting-row">
-          <label htmlFor="settings-volume">{t('volume')}</label>
-          <input
-            id="settings-volume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={muted ? 0 : volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-          />
-          <button onClick={toggleMuted}>{muted ? t('unmute') : t('mute')}</button>
+          <div className="setting-row">
+            <label htmlFor="date-input">{t('date')}</label>
+            <input
+              id="date-input"
+              type="date"
+              value={isoDate}
+              onChange={(e) => {
+                const d = new Date(e.target.value);
+                if (!Number.isNaN(d.getTime())) setDate(d);
+              }}
+            />
+          </div>
+
+          <div className="setting-row">
+            <label htmlFor="settings-volume">{t('volume')}</label>
+            <input
+              id="settings-volume"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={muted ? 0 : volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+            />
+            <button onClick={toggleMuted}>{muted ? t('unmute') : t('mute')}</button>
+          </div>
+
+          <div className="setting-row">
+            <span style={{ fontWeight: 600 }}>{t('flightControls')}</span>
+          </div>
+
+          <div className="setting-row">
+            <label htmlFor="ctrl-sensitivity">{t('sensitivity')}</label>
+            <input
+              id="ctrl-sensitivity"
+              type="range"
+              min="0.3"
+              max="2"
+              step="0.05"
+              value={controls.sensitivity}
+              onChange={(e) => setControls({ sensitivity: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="setting-row">
+            <label htmlFor="ctrl-mousesens">{t('mouseSensitivity')}</label>
+            <input
+              id="ctrl-mousesens"
+              type="range"
+              min="0.3"
+              max="3"
+              step="0.05"
+              value={controls.mouseSensitivity}
+              onChange={(e) => setControls({ mouseSensitivity: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="setting-row">
+            <label htmlFor="ctrl-deadzone">{t('deadzone')}</label>
+            <input
+              id="ctrl-deadzone"
+              type="range"
+              min="0.05"
+              max="0.2"
+              step="0.01"
+              value={controls.deadzone}
+              onChange={(e) => setControls({ deadzone: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="setting-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={controls.invertPitch}
+                onChange={(e) => setControls({ invertPitch: e.target.checked })}
+              />{' '}
+              {t('invertPitch')}
+            </label>
+          </div>
+
+          <div className="setting-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={controls.flightAssist}
+                onChange={(e) => setControls({ flightAssist: e.target.checked })}
+              />{' '}
+              {t('flightAssist')}
+            </label>
+          </div>
+
+          <div className="setting-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={controls.fineControl}
+                onChange={(e) => setControls({ fineControl: e.target.checked })}
+              />{' '}
+              {t('fineControl')}
+            </label>
+          </div>
         </div>
       </div>
     </div>
