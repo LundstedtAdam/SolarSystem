@@ -40,9 +40,15 @@ export interface AsteroidState {
   promoted: boolean;
 }
 
-/** Bigger rocks take more hits to fracture — scales with bounding radius. */
+/** Bigger rocks take more hits to fracture — scales with bounding radius.
+ *  Tuned so a realistic burst of sustained fire (a couple of seconds, not a
+ *  perfectly-held aim for 5+ seconds) reliably finishes off even the largest
+ *  tier-2 rocks — the original curve (8 + r*18) made big rocks take so long
+ *  to kill that aim naturally drifting onto neighboring asteroids mid-belt
+ *  meant damage got spread thin across many rocks (visible dents) without
+ *  ever concentrating enough on one to fracture it (no debris). */
 function maxHealthForRadius(radius: number): number {
-  return 8 + radius * 18;
+  return 5 + radius * 10;
 }
 
 /**
