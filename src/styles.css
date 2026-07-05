@@ -684,7 +684,7 @@ button {
   padding: 6px 12px;
   cursor: pointer;
 }
-.seg button.active {
+.settings-panel .seg button.active {
   background: #93ad88;
   color: #16181d;
 }

@@ -188,14 +188,29 @@ function emitQuad(
   }
   const tileIdx = getBlockFaceTileIndex(id, d, dir);
 
+  // East/west faces (d===0) sweep u=Y, v=Z — the opposite axis pairing from
+  // north/south faces (d===2, u=X, v=Z... texture-V is Y already there).
+  // Directional side textures (grass_side's grass-on-top/dirt-on-bottom
+  // gradient) assume texture-V is always the vertical (world-Y) axis, so on
+  // d===0 swap which extent (w vs h) drives texture-U vs texture-V — keeping
+  // texture-V tied to world-Y on every side face instead of rotating the
+  // gradient 90° on two of the four.
+  const swapUV = d === 0;
+  const u1 = swapUV ? 0 : w;
+  const v1 = swapUV ? w : 0;
+  const u2 = swapUV ? h : w;
+  const v2 = swapUV ? w : h;
+  const u3 = swapUV ? h : 0;
+  const v3 = swapUV ? 0 : h;
+
   const v0 = vCount;
   pushVertex(p[0], p[1], p[2], nx, ny, nz, r * c00, g * c00, b * c00, em, 0, 0, tileIdx);
-  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10, em, w, 0, tileIdx);
+  pushVertex(p[0] + du[0], p[1] + du[1], p[2] + du[2], nx, ny, nz, r * c10, g * c10, b * c10, em, u1, v1, tileIdx);
   pushVertex(
     p[0] + du[0] + dv[0], p[1] + du[1] + dv[1], p[2] + du[2] + dv[2],
-    nx, ny, nz, r * c11, g * c11, b * c11, em, w, h, tileIdx,
+    nx, ny, nz, r * c11, g * c11, b * c11, em, u2, v2, tileIdx,
   );
-  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01, em, 0, h, tileIdx);
+  pushVertex(p[0] + dv[0], p[1] + dv[1], p[2] + dv[2], nx, ny, nz, r * c01, g * c01, b * c01, em, u3, v3, tileIdx);
 
   const a00 = ao & 3;
   const a10 = (ao >> 2) & 3;

@@ -26,7 +26,11 @@ export function Sun() {
 
   const sunMat = useMemo(() => {
     const m = new MeshBasicNodeMaterial();
-    m.colorNode = textureNode(map).mul(vec3(3.5, 2.8, 2.0));
+    // Warm-white HDR (matches the 0xfff2e0/0xfff8f0 sunlight convention used
+    // elsewhere), not a heavily orange-skewed one — the previous extreme,
+    // unevenly-scaled multiplier (3.5/2.8/2.0) pushed ACES filmic tonemapping
+    // into its known hue-shift-toward-green artifact once bloom picked it up.
+    m.colorNode = textureNode(map).mul(vec3(1.0, 0.95, 0.85)).mul(2.0);
     return m;
   }, [map]);
 

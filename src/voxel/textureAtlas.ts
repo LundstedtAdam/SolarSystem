@@ -131,10 +131,14 @@ function paintTile(data: Uint8ClampedArray<ArrayBuffer>, tile: MaterialTile, idx
   const oy = Math.floor(idx / ATLAS_GRID) * ATLAS_TILE_PX;
 
   for (let ly = 0; ly < ATLAS_TILE_PX; ly++) {
-    // grass_side: top third reads as grass, the rest blends into dirt — the
+    // grass_side: a crisp grass cap over the rest blending into dirt — the
     // "dirt-blended sides" terrain composition rule, baked as authored color
-    // rather than left to a runtime tint.
-    const grassT = tile === 'grass_side' ? Math.max(0, Math.min(1, (ly - 3) / 5)) : 0;
+    // rather than left to a runtime tint. DataTexture's flipY=false means
+    // pixel row 0 (small ly) maps to texture v=0, which greedyMesh.ts's UV
+    // emission places at the BOTTOM of a rendered voxel face (v=1 is the
+    // top) — so small ly must read as dirt and large ly as grass, not the
+    // other way around.
+    const grassT = tile === 'grass_side' ? 1 - Math.max(0, Math.min(1, (ly - 10) / 2)) : 0;
     for (let lx = 0; lx < ATLAS_TILE_PX; lx++) {
       const v = patternValue(lx, ly, tileSeed, style.noiseFreq, style.pattern);
       let r = style.base[0] + style.variation[0] * v;

@@ -108,6 +108,26 @@ describe('greedyMesh', () => {
     // the texture per voxel unit instead of stretching one tile across it.
     expect(maxUV).toBe(2);
   });
+
+  it('keeps materialUV\'s vertical (v) axis tied to world-Y on east/west faces (d===0), not just north/south', () => {
+    const c = makeChunk();
+    c.set(5, 5, 5, BLOCK.ROCK);
+    c.set(5, 6, 5, BLOCK.ROCK); // 2-tall vertical stack -> merges along Y on d===0 faces
+    const m = greedyMesh(c.voxels, makePalette()).opaque;
+    // East/west faces have a nonzero X normal. Among just those vertices, the
+    // vertical merge must inflate texture-V (index 1), not texture-U — a
+    // face-orientation bug would swap the two, making a directional texture
+    // (e.g. a grass/dirt gradient) run horizontally instead of vertically.
+    let maxU = 0;
+    let maxV = 0;
+    for (let k = 0; k < m.normals.length / 3; k++) {
+      if (m.normals[k * 3] === 0) continue; // skip faces that aren't east/west
+      maxU = Math.max(maxU, m.uvs[k * 3]);
+      maxV = Math.max(maxV, m.uvs[k * 3 + 1]);
+    }
+    expect(maxV).toBe(2);
+    expect(maxU).toBe(1);
+  });
 });
 
 describe('greedyMesh water pass', () => {
