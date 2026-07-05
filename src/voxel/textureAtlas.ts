@@ -256,3 +256,69 @@ export function getBlockFaceTileIndex(id: BlockId, axis: number, dir: number): n
 export function tileUVRect(idx: number): [number, number] {
   return [(idx % ATLAS_GRID) / ATLAS_GRID, Math.floor(idx / ATLAS_GRID) / ATLAS_GRID];
 }
+
+// --- Grass-blade alpha-cutout billboard (VoxelScatter's 'blade' prop kind) --
+
+const BLADE_PX_W = 16;
+const BLADE_PX_H = 16;
+
+/** Alpha-mask silhouette: three tapered vertical blade strands (wide at the
+ *  base row v=0, narrowing to a point by the top row v=1) with gaps between
+ *  them, so the crossed-quad billboard reads as grass instead of a solid
+ *  rectangle. A fixed, hand-authored shape — no per-call randomness; the
+ *  per-instance variety already comes from VoxelScatter's own scale/rotation
+ *  jitter. v=0 is the blade's root (mesh local y=0); each strand narrows and
+ *  drifts sideways slightly toward the tip for a less rigid silhouette. */
+function bladeInsideStrand(u: number, v: number): boolean {
+  const strands: Array<{ cx: number; baseHalfWidth: number; tipDrift: number }> = [
+    { cx: 0.22, baseHalfWidth: 0.16, tipDrift: -0.06 },
+    { cx: 0.5, baseHalfWidth: 0.14, tipDrift: 0.05 },
+    { cx: 0.78, baseHalfWidth: 0.16, tipDrift: -0.04 },
+  ];
+  for (const s of strands) {
+    const halfWidthAtV = s.baseHalfWidth * (1 - v);
+    if (halfWidthAtV <= 0) continue;
+    const centerAtV = s.cx + s.tipDrift * v;
+    if (Math.abs(u - centerAtV) <= halfWidthAtV) return true;
+  }
+  return false;
+}
+
+let cachedBladePixels: Uint8ClampedArray<ArrayBuffer> | null = null;
+
+function getBladeAlphaPixels(): Uint8ClampedArray<ArrayBuffer> {
+  if (cachedBladePixels) return cachedBladePixels;
+  const data = new Uint8ClampedArray(BLADE_PX_W * BLADE_PX_H * 4);
+  for (let py = 0; py < BLADE_PX_H; py++) {
+    const v = (py + 0.5) / BLADE_PX_H;
+    for (let px = 0; px < BLADE_PX_W; px++) {
+      const u = (px + 0.5) / BLADE_PX_W;
+      const inside = bladeInsideStrand(u, v);
+      const o = (py * BLADE_PX_W + px) * 4;
+      // White RGB so material.color (the per-profile tint) controls the
+      // visible color entirely; only alpha carries the cutout shape.
+      data[o] = 255;
+      data[o + 1] = 255;
+      data[o + 2] = 255;
+      data[o + 3] = inside ? 255 : 0;
+    }
+  }
+  cachedBladePixels = data;
+  return data;
+}
+
+let cachedBladeTexture: DataTexture | null = null;
+
+/** Alpha-cutout grass-blade billboard texture. Small, deterministic, no
+ *  Canvas/DOM (same reasoning as getMaterialAtlasTexture: must build under
+ *  jsdom tests). Used with `alphaTest` rather than `transparent` so the
+ *  cutout stays a cheap, sort-free hard edge. */
+export function getBladeAlphaTexture(): DataTexture {
+  if (cachedBladeTexture) return cachedBladeTexture;
+  const tex = new DataTexture(getBladeAlphaPixels(), BLADE_PX_W, BLADE_PX_H, RGBAFormat);
+  tex.magFilter = NearestFilter;
+  tex.minFilter = NearestFilter;
+  tex.needsUpdate = true;
+  cachedBladeTexture = tex;
+  return tex;
+}

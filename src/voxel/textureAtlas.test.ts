@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK } from './voxelTypes';
-import { getBlockFaceTileIndex, getBlockFaceTiles, tileUVRect, ATLAS_GRID } from './textureAtlas';
+import {
+  getBlockFaceTileIndex,
+  getBlockFaceTiles,
+  tileUVRect,
+  ATLAS_GRID,
+  getBladeAlphaTexture,
+} from './textureAtlas';
 
 describe('getBlockFaceTiles', () => {
   it('gives grass distinct top/side/bottom materials', () => {
@@ -66,5 +72,50 @@ describe('tileUVRect', () => {
     const [u0] = tileUVRect(0);
     const [u1] = tileUVRect(1);
     expect(u1 - u0).toBeCloseTo(1 / ATLAS_GRID);
+  });
+});
+
+describe('getBladeAlphaTexture', () => {
+  it('is memoized (same call returns the identical texture object)', () => {
+    expect(getBladeAlphaTexture()).toBe(getBladeAlphaTexture());
+  });
+
+  it('has white RGB so material.color fully controls the visible tint', () => {
+    const tex = getBladeAlphaTexture();
+    const data = tex.image.data as Uint8ClampedArray;
+    for (let i = 0; i < data.length; i += 4) {
+      expect(data[i]).toBe(255);
+      expect(data[i + 1]).toBe(255);
+      expect(data[i + 2]).toBe(255);
+    }
+  });
+
+  it('cuts out — the alpha channel is not uniformly opaque or transparent', () => {
+    const tex = getBladeAlphaTexture();
+    const data = tex.image.data as Uint8ClampedArray;
+    let opaque = 0;
+    let transparent = 0;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] === 255) opaque++;
+      else if (data[i] === 0) transparent++;
+    }
+    expect(opaque).toBeGreaterThan(0);
+    expect(transparent).toBeGreaterThan(0);
+  });
+
+  it('narrows toward the tip (the last row, v=1, has less opaque coverage than the root row, v=0)', () => {
+    const tex = getBladeAlphaTexture();
+    const data = tex.image.data as Uint8ClampedArray;
+    const w = tex.image.width;
+    const h = tex.image.height;
+    const rowOpaqueCount = (py: number) => {
+      let n = 0;
+      for (let px = 0; px < w; px++) {
+        const o = (py * w + px) * 4;
+        if (data[o + 3] === 255) n++;
+      }
+      return n;
+    };
+    expect(rowOpaqueCount(0)).toBeGreaterThan(rowOpaqueCount(h - 1));
   });
 });

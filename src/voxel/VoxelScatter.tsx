@@ -9,7 +9,6 @@ import {
   BoxGeometry,
   CylinderGeometry,
   BufferGeometry,
-  Float32BufferAttribute,
   MeshStandardMaterial,
   Object3D,
   Color,
@@ -22,26 +21,8 @@ import { getContent } from './contentProfiles';
 import { getVoxelTerrain, latitudeOf } from './voxelBiomes';
 import { landHeightAt, oreAt, localWaterCeilingAt } from './worldGen';
 import { seedFromName, cellHash } from './noise';
-
-/** Two crossed vertical quads (an X-shaped billboard), base at local y=0 so it
- *  places like every other kind. Built by hand (no external merge utility)
- *  the same way greedyMesh.ts hand-builds its vertex buffers — cheap, and the
- *  only way to get a two-quad "cross" as a single InstancedMesh geometry. */
-function crossedQuadGeometry(width: number, height: number): BufferGeometry {
-  const hw = width / 2;
-  const geo = new BufferGeometry();
-  const positions = new Float32Array([
-    -hw, 0, 0, hw, 0, 0, hw, height, 0, -hw, 0, 0, hw, height, 0, -hw, height, 0,
-    0, 0, -hw, 0, 0, hw, 0, height, hw, 0, 0, -hw, 0, height, hw, 0, height, -hw,
-  ]);
-  const normals = new Float32Array([
-    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-    1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
-  ]);
-  geo.setAttribute('position', new Float32BufferAttribute(positions, 3));
-  geo.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-  return geo;
-}
+import { getBladeAlphaTexture } from './textureAtlas';
+import { crossedQuadGeometry } from './scatterGeometry';
 
 function makeGeometry(kind: ScatterKind): BufferGeometry {
   switch (kind) {
@@ -100,8 +81,12 @@ function PropLayer({
       metalness: 0,
       flatShading: true,
       // Billboard blades are a single-sided plane pair — double-side them so
-      // grass reads from both approach directions instead of vanishing.
-      ...(isBlade ? { side: DoubleSide } : {}),
+      // grass reads from both approach directions instead of vanishing, and
+      // alpha-cutout them to an actual blade silhouette (white RGB texture,
+      // material.color tints it) instead of a solid colored rectangle.
+      // alphaTest (not `transparent`) keeps the cutout a cheap, sort-free
+      // hard edge, consistent with the rest of the voxel rendering.
+      ...(isBlade ? { side: DoubleSide, map: getBladeAlphaTexture(), alphaTest: 0.5 } : {}),
     });
     const m = new InstancedMesh(geo, mat, Math.max(1, max));
     m.frustumCulled = false; // props are world-positioned around the player
