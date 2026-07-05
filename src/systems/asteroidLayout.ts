@@ -87,6 +87,35 @@ function pickSector(h: number): number {
   return SECTOR_COUNT - 1;
 }
 
+export interface TierVariantGroup {
+  tierIdx: number;
+  variantIdx: number;
+  n: number;
+}
+
+/**
+ * Shared tier/variant instance-count split, used identically by the render
+ * loop (`AsteroidBelt.tsx`) and the parallel per-asteroid state array
+ * (`asteroidState.ts`) so the two never drift out of sync — both must agree
+ * on exactly which (tier, variant, i) triples exist for a given quality
+ * tier's `count`.
+ */
+export function computeTierVariantCounts(count: number): TierVariantGroup[] {
+  const groups: TierVariantGroup[] = [];
+  for (let tierIdx = 0; tierIdx < TIERS.length; tierIdx++) {
+    const tier = TIERS[tierIdx];
+    const tierCount = Math.round(count * tier.frac);
+    if (tierCount === 0) continue;
+    for (let variantIdx = 0; variantIdx < tier.variants; variantIdx++) {
+      const n =
+        Math.floor(tierCount / tier.variants) + (variantIdx < tierCount % tier.variants ? 1 : 0);
+      if (n === 0) continue;
+      groups.push({ tierIdx, variantIdx, n });
+    }
+  }
+  return groups;
+}
+
 export interface PlacedAsteroid {
   pos: Vector3;
   scale: Vector3;
