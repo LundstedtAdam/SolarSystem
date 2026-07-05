@@ -97,11 +97,18 @@ export function getFracturePatterns(tierIdx: number, variantIdx: number, geometr
   return patterns;
 }
 
-/** Deterministic pattern selection for a specific hit — matches the existing
- *  `cellHash`-based hashing convention used throughout the fracture system. */
-export function pickPattern(patterns: FracturePattern[], globalIdx: number, hitSeq: number, seed: number): FracturePattern {
+/** Deterministic pattern index for a specific hit — matches the existing
+ *  `cellHash`-based hashing convention used throughout the fracture system.
+ *  Exported (not just inlined in `pickPattern`) so callers that need to
+ *  bucket rendering by shape (see AsteroidDebris.tsx) can know *which*
+ *  pattern was picked, not just get the pattern object back. */
+export function pickPatternIndex(patterns: FracturePattern[], globalIdx: number, hitSeq: number, seed: number): number {
   const idx = cellHash(globalIdx, hitSeq, seed + 7000) < 0.5 ? 0 : 1;
-  return patterns[Math.min(idx, patterns.length - 1)];
+  return Math.min(idx, patterns.length - 1);
+}
+
+export function pickPattern(patterns: FracturePattern[], globalIdx: number, hitSeq: number, seed: number): FracturePattern {
+  return patterns[pickPatternIndex(patterns, globalIdx, hitSeq, seed)];
 }
 
 /** Deterministically pick `count` distinct cluster indices out of

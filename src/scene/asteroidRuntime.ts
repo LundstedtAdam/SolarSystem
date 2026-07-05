@@ -39,6 +39,11 @@ export interface AsteroidPromotionApi {
    *  geometry if promoted, otherwise the shared pristine base geometry for
    *  that (tier, variant) — never null for a live asteroid. */
   getSourceGeometry: (globalIdx: number) => BufferGeometry | null;
+  /** The belt's shared *pristine* base geometry for a (tier, variant) pair,
+   *  independent of any specific instance — used by the debris renderer to
+   *  extract a representative shape for a fragment "bucket" (see
+   *  AsteroidDebris.tsx). Null if no belt is mounted or the pair is unknown. */
+  getBaseGeometry: (tierIdx: number, variantIdx: number) => BufferGeometry | null;
 }
 
 export const asteroidRuntime: {

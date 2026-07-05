@@ -137,6 +137,7 @@ describe('applyAsteroidDamage', () => {
       applyDent: () => {},
       getMomentumInputs: () => null,
       getSourceGeometry: () => null,
+      getBaseGeometry: () => null,
     };
 
     applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
@@ -162,6 +163,7 @@ describe('applyAsteroidDamage', () => {
       },
       getMomentumInputs: () => null,
       getSourceGeometry: () => null,
+      getBaseGeometry: () => null,
     };
 
     const result = applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
@@ -181,6 +183,7 @@ describe('applyAsteroidDamage', () => {
       },
       getMomentumInputs: () => null,
       getSourceGeometry: () => null,
+      getBaseGeometry: () => null,
     };
 
     applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
@@ -228,6 +231,7 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       applyDent: () => {},
       getMomentumInputs: () => mkMomentum(),
       getSourceGeometry: () => geom,
+      getBaseGeometry: () => null,
     };
 
     const patterns = getFracturePatterns(state.tierIdx, state.variantIdx, geom);
@@ -249,6 +253,7 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       applyDent: () => {},
       getMomentumInputs: () => mkMomentum(),
       getSourceGeometry: () => geom,
+      getBaseGeometry: () => null,
     };
 
     const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
@@ -256,6 +261,13 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       expect(spec.quat).toBeInstanceOf(Quaternion);
       expect(spec.angVel).toBeInstanceOf(Vector3);
       expect(spec.cascadeDepth).toBe(0);
+      // Bucketing key for AsteroidDebris.tsx's shape-matched rendering.
+      expect(spec.shapeKey).toEqual({
+        tierIdx: state.tierIdx,
+        variantIdx: state.variantIdx,
+        patternIdx: expect.any(Number),
+        clusterIdx: expect.any(Number),
+      });
     }
   });
 
@@ -270,6 +282,7 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       applyDent: () => {},
       getMomentumInputs: () => mkMomentum({ angVel: new Vector3(0, 0, 0) }),
       getSourceGeometry: () => geom,
+      getBaseGeometry: () => null,
     };
     const resultNoSpin = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
 
@@ -280,6 +293,7 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       applyDent: () => {},
       getMomentumInputs: () => mkMomentum({ angVel: new Vector3(0, 20, 0) }), // fast spin about Y
       getSourceGeometry: () => geom,
+      getBaseGeometry: () => null,
     };
     const resultWithSpin = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);
 
@@ -304,6 +318,7 @@ describe('applyAsteroidDamage — pattern-based fracture with momentum', () => {
       applyDent: () => {},
       getMomentumInputs: () => mkMomentum({ scale: new Vector3(5, 5, 5) }), // large parent
       getSourceGeometry: () => geom,
+      getBaseGeometry: () => null,
     };
 
     const result = applyAsteroidDamage(0, 35, IMPACT_POINT, IMPACT_VEL);

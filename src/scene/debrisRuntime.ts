@@ -22,6 +22,19 @@ export interface DebrisBody {
    *  hard collision — chips never re-trigger a further cascade (hard depth
    *  cap, see debrisPhysics.ts). */
   cascadeDepth: number;
+  /** Which extracted chunk shape this fragment is, if it came from
+   *  pattern-based fracture (see asteroidFracturePatterns.ts) — lets
+   *  AsteroidDebris.tsx render it in a bucket matching its actual shape
+   *  instead of a generic rock. Undefined for the jitter-only fallback path
+   *  and for cascade chips, which render as a generic rock. */
+  shapeKey?: DebrisShapeKey;
+}
+
+export interface DebrisShapeKey {
+  tierIdx: number;
+  variantIdx: number;
+  patternIdx: number;
+  clusterIdx: number;
 }
 
 export interface DebrisSpawnSpec {
@@ -34,6 +47,7 @@ export interface DebrisSpawnSpec {
   quat?: Quaternion;
   angVel?: Vector3;
   cascadeDepth?: number;
+  shapeKey?: DebrisShapeKey;
 }
 
 export const debrisRuntime: {
@@ -62,6 +76,7 @@ export const debrisRuntime: {
       isOre: spec.isOre ?? false,
       resourceType: spec.resourceType,
       cascadeDepth: spec.cascadeDepth ?? 0,
+      shapeKey: spec.shapeKey,
     });
   },
 };

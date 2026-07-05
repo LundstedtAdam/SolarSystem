@@ -248,6 +248,7 @@ export function AsteroidBelt() {
         if (!state) return null;
         return built.geometryByKey.get(`${state.tierIdx}:${state.variantIdx}`) ?? null;
       },
+      getBaseGeometry: (tierIdx: number, variantIdx: number) => built.geometryByKey.get(`${tierIdx}:${variantIdx}`) ?? null,
     };
     return () => {
       asteroidRuntime.states = [];

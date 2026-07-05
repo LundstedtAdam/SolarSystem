@@ -15,7 +15,12 @@ import { Quaternion, Vector3 } from 'three';
 import { cellHash } from '../voxel/noise';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
 import { debrisRuntime, type DebrisSpawnSpec } from '../scene/debrisRuntime';
-import { getFracturePatterns, pickPattern, pickClusterIndices, computeClusterCentroid } from './asteroidFracturePatterns';
+import {
+  getFracturePatterns,
+  pickPatternIndex,
+  pickClusterIndices,
+  computeClusterCentroid,
+} from './asteroidFracturePatterns';
 import type { ResourceType } from '../voxel/voxelTypes';
 
 export type FractureTier = 'none' | 'low' | 'medium' | 'high';
@@ -174,7 +179,8 @@ export function applyAsteroidDamage(
     // velocity at the fragment's offset-from-center, plus the existing
     // impact-driven ejection terms.
     const patterns = getFracturePatterns(state.tierIdx, state.variantIdx, geometry);
-    const pattern = pickPattern(patterns, globalIdx, state.hitSeq, state.seed);
+    const patternIdx = pickPatternIndex(patterns, globalIdx, state.hitSeq, state.seed);
+    const pattern = patterns[patternIdx];
     const clusterIndices = pickClusterIndices(pattern, count, globalIdx, state.hitSeq, state.seed);
 
     for (let k = 0; k < clusterIndices.length; k++) {
@@ -202,6 +208,7 @@ export function applyAsteroidDamage(
         angVel: shared.angVel,
         quat: _fragQuat.clone(),
         cascadeDepth: 0,
+        shapeKey: { tierIdx: state.tierIdx, variantIdx: state.variantIdx, patternIdx, clusterIdx: clusterIndices[k] },
       });
     }
   } else {
