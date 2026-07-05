@@ -71,9 +71,22 @@ export function applyAsteroidDamage(
   // not just a destruction effect. Integrated/damped in AsteroidBelt.tsx.
   state.vel.addScaledVector(_dir, amount * KNOCKBACK_PER_DAMAGE);
 
+  // Promote on the first damaging hit (tier/budget permitting — see
+  // AsteroidBelt.tsx's promotion API) so local damage has a standalone,
+  // individually deformable mesh to actually dent instead of just decrementing
+  // health invisibly. This is the single source of truth for `state.promoted`
+  // — the promotion API itself just reports success/failure.
+  if (!state.promoted && asteroidRuntime.promotion?.promote(globalIdx)) {
+    state.promoted = true;
+  }
+
   state.health -= amount;
   if (state.health > 0) {
-    return { tier: 'none', debrisSpawned: [] }; // low impact: crater only, no debris
+    // Low impact: real local damage — a persistent crater at the impact
+    // point — instead of the asteroid just silently losing health. No-op if
+    // this rock wasn't promoted (dust tier, or the promotion budget was full).
+    if (state.promoted) asteroidRuntime.promotion?.applyDent(globalIdx, impactPoint, amount);
+    return { tier: 'none', debrisSpawned: [] };
   }
 
   const overkillFrac = -state.health / state.maxHealth;

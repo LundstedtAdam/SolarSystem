@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import {
   InstancedMesh,
+  Mesh,
   MeshStandardNodeMaterial,
   Matrix4,
   Quaternion,
@@ -17,6 +18,7 @@ import { buildAsteroidStates } from '../systems/asteroidState';
 import { buildAsteroidGrid, removeFromGrid } from '../systems/asteroidGrid';
 import { asteroidRuntime } from './asteroidRuntime';
 import { rockGeometry } from './rockGeometry';
+import { applyDentToGeometry } from '../systems/asteroidDent';
 
 interface RotItem {
   pos: Vector3;
@@ -34,6 +36,22 @@ interface BeltMesh {
   globalOffset: number;
 }
 
+/** A hit asteroid pulled out of its shared InstancedMesh into a standalone,
+ *  individually deformable Mesh (see the promotion API below). `mesh.position`
+ *  is synced from the corresponding `AsteroidState.pos` every frame (the
+ *  existing knockback-drift integration in the tumble loop keeps mutating
+ *  that shared Vector3; `Object3D.position` can't alias it directly since
+ *  three.js declares it read-only) — spin gets its own integration here,
+ *  since promoted asteroids leave the clock-based tumble formula behind for a
+ *  real integrated quaternion (the momentum formula for fragment velocity
+ *  reads `angVel`). */
+interface PromotedEntry {
+  mesh: Mesh;
+  geometry: BufferGeometry;
+  angVel: Vector3;
+  quat: Quaternion;
+}
+
 const _zeroScale = new Matrix4().makeScale(0, 0, 0);
 
 /** Per-frame (@60fps) velocity retention for impact-knockback drift — settles
@@ -41,6 +59,11 @@ const _zeroScale = new Matrix4().makeScale(0, 0, 0);
  *  indefinitely. Below this squared speed, velocity snaps to exactly zero. */
 const KNOCKBACK_DAMPING = 0.9;
 const KNOCKBACK_MIN_VEL_SQ = 1e-4;
+
+const _dentLocalPoint = new Vector3();
+const _promoteQ = new Quaternion();
+const _spinAxis = new Vector3();
+const _spinDeltaQ = new Quaternion();
 
 /**
  * Asteroid belt rendered as a handful of InstancedMeshes (a few draw calls for
@@ -51,10 +74,15 @@ const KNOCKBACK_MIN_VEL_SQ = 1e-4;
  * Alongside the render matrices, builds the parallel per-asteroid state array
  * and spatial grid (`asteroidState.ts`/`asteroidGrid.ts`) and publishes them
  * on the `asteroidRuntime` singleton for ship collision/mining/fracture code
- * to read every frame without subscribing to this component.
+ * to read every frame without subscribing to this component. Also owns the
+ * "promotion" mechanism (`asteroidRuntime.promotion`) that pulls a hit
+ * asteroid out of its shared InstancedMesh into a standalone, individually
+ * deformable mesh — real per-vertex local damage instead of delete+replace.
  */
 export function AsteroidBelt() {
-  const count = QUALITY[useStore((s) => s.quality)].asteroids;
+  const quality = useStore((s) => s.quality);
+  const count = QUALITY[quality].asteroids;
+  const promotedMax = QUALITY[quality].promotedAsteroidMax;
   const group = useRef<Group>(null);
 
   const built = useMemo(() => {
@@ -66,7 +94,7 @@ export function AsteroidBelt() {
     material.metalnessNode = float(0);
 
     const meshes: BeltMesh[] = [];
-    const geometries: BufferGeometry[] = [];
+    const geometryByKey = new Map<string, BufferGeometry>();
     const m = new Matrix4();
 
     // Single source of truth for which (tier, variant) groups exist and how
@@ -85,7 +113,7 @@ export function AsteroidBelt() {
     for (const g of groups) {
       const tier = TIERS[g.tierIdx];
       const geom = rockGeometry(tier.detail, g.variantIdx * 7 + tier.detail * 13 + 1);
-      geometries.push(geom);
+      geometryByKey.set(`${g.tierIdx}:${g.variantIdx}`, geom);
       const inst = new InstancedMesh(geom, material, g.n);
       inst.frustumCulled = false; // ring is essentially always partly on-screen
       const items: RotItem[] = [];
@@ -112,18 +140,34 @@ export function AsteroidBelt() {
     }
 
     const grid = buildAsteroidGrid(states);
+    const promoted = new Map<number, PromotedEntry>();
 
-    return { meshes, geometries, material, states, grid };
+    return { meshes, geometryByKey, material, states, grid, promoted };
   }, [count]);
 
+  /** Zero a live instance's render matrix (renders nothing) — shared by both
+   *  the kill path and the promotion path (promotion hides the instanced
+   *  copy in favor of the new standalone mesh, without touching `alive`). */
+  function hideInstance(globalIdx: number) {
+    if (!built) return;
+    const mesh = built.meshes.find(
+      (bm) => globalIdx >= bm.globalOffset && globalIdx < bm.globalOffset + bm.inst.count,
+    );
+    if (mesh) {
+      mesh.inst.setMatrixAt(globalIdx - mesh.globalOffset, _zeroScale);
+      mesh.inst.instanceMatrix.needsUpdate = true;
+    }
+  }
+
   // Publish to the runtime singleton (ship collision / mining / fracture read
-  // it every frame) and wire the kill callback fracture/mining code uses to
-  // zero a dead asteroid's render instance and drop it from the grid.
+  // it every frame) and wire the kill callback + promotion API fracture/
+  // mining code uses.
   useEffect(() => {
     if (!built) {
       asteroidRuntime.states = [];
       asteroidRuntime.grid = null;
       asteroidRuntime.killAsteroid = null;
+      asteroidRuntime.promotion = null;
       return;
     }
     asteroidRuntime.states = built.states;
@@ -131,29 +175,78 @@ export function AsteroidBelt() {
     asteroidRuntime.killAsteroid = (globalIdx: number) => {
       const state = built.states[globalIdx];
       if (!state || !state.alive) return;
-      const mesh = built.meshes.find(
-        (bm) => globalIdx >= bm.globalOffset && globalIdx < bm.globalOffset + bm.inst.count,
-      );
-      if (mesh) {
-        mesh.inst.setMatrixAt(globalIdx - mesh.globalOffset, _zeroScale);
-        mesh.inst.instanceMatrix.needsUpdate = true;
-      }
+      hideInstance(globalIdx);
       if (built.grid) removeFromGrid(built.grid, globalIdx, state.pos.x, state.pos.z);
       state.alive = false;
+      const entry = built.promoted.get(globalIdx);
+      if (entry) {
+        group.current?.remove(entry.mesh);
+        entry.geometry.dispose();
+        built.promoted.delete(globalIdx);
+      }
+    };
+    asteroidRuntime.promotion = {
+      promote: (globalIdx: number): boolean => {
+        if (built.promoted.has(globalIdx)) return true;
+        if (built.promoted.size >= promotedMax) return false;
+        const state = built.states[globalIdx];
+        if (!state || !state.alive) return false;
+        const tier = TIERS[state.tierIdx];
+        if (!tier.rotates) return false; // dust: too small/numerous to matter visually
+        const baseGeom = built.geometryByKey.get(`${state.tierIdx}:${state.variantIdx}`);
+        const mesh = built.meshes.find(
+          (bm) => globalIdx >= bm.globalOffset && globalIdx < bm.globalOffset + bm.inst.count,
+        );
+        if (!baseGeom || !mesh) return false;
+        const it = mesh.items[globalIdx - mesh.globalOffset];
+        if (!it) return false;
+
+        const geometry = baseGeom.clone();
+        _promoteQ.setFromAxisAngle(it.axis, it.phase); // current tumble angle approximation at promotion time
+        const obj = new Mesh(geometry, built.material);
+        // Synced from `state.pos` every frame in the promoted-entry loop
+        // below (Object3D.position is read-only, can't share the Vector3
+        // instance the way RotItem.pos does for InstancedMesh items).
+        obj.position.copy(state.pos);
+        obj.quaternion.copy(_promoteQ);
+        obj.scale.copy(it.scale);
+
+        hideInstance(globalIdx);
+        const angVel = it.axis.clone().multiplyScalar(it.speed);
+        built.promoted.set(globalIdx, { mesh: obj, geometry, angVel, quat: _promoteQ.clone() });
+        // `state.promoted` itself is set by the caller (asteroidFracture.ts)
+        // based on this function's return value — single source of truth.
+        group.current?.add(obj);
+        return true;
+      },
+      applyDent: (globalIdx: number, worldImpactPoint: Vector3, amount: number) => {
+        const entry = built.promoted.get(globalIdx);
+        if (!entry) return;
+        entry.mesh.updateMatrixWorld();
+        _dentLocalPoint.copy(worldImpactPoint);
+        entry.mesh.worldToLocal(_dentLocalPoint);
+        applyDentToGeometry(entry.geometry, _dentLocalPoint, amount);
+      },
+      getAngularVelocity: (globalIdx: number): Vector3 | null => {
+        return built.promoted.get(globalIdx)?.angVel ?? null;
+      },
     };
     return () => {
       asteroidRuntime.states = [];
       asteroidRuntime.grid = null;
       asteroidRuntime.killAsteroid = null;
+      asteroidRuntime.promotion = null;
     };
-  }, [built]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [built, promotedMax]);
 
   // Free GPU resources on quality change / unmount.
   useEffect(() => {
     return () => {
       if (!built) return;
       built.meshes.forEach((bm) => bm.inst.dispose());
-      built.geometries.forEach((g) => g.dispose());
+      built.geometryByKey.forEach((g) => g.dispose());
+      built.promoted.forEach((entry) => entry.geometry.dispose());
       built.material.dispose();
     };
   }, [built]);
@@ -181,9 +274,9 @@ export function AsteroidBelt() {
         const s = built.states[globalIdx];
         if (!s?.alive) continue; // fractured — stays zero-scaled
 
-        // Impact-knockback drift: `it.pos` and `s.pos` are the same Vector3
-        // (see the build loop above), so integrating here is all rendering
-        // needs — no separate update path for hit asteroids.
+        // Impact-knockback drift: `it.pos` and `s.pos` (and, once promoted,
+        // the standalone mesh's own `.position`) are the same Vector3, so
+        // integrating here is all rendering needs — no separate update path.
         if (s.vel.lengthSq() > KNOCKBACK_MIN_VEL_SQ) {
           s.pos.addScaledVector(s.vel, dt);
           s.vel.multiplyScalar(KNOCKBACK_DAMPING ** (dt * 60));
@@ -191,11 +284,27 @@ export function AsteroidBelt() {
           s.vel.set(0, 0, 0); // snap to rest once negligible
         }
 
+        if (s.promoted) continue; // rendering/rotation now owned by the promoted loop below
+
         q.setFromAxisAngle(it.axis, it.phase + t * it.speed);
         m.compose(it.pos, q, it.scale);
         bm.inst.setMatrixAt(i, m);
       }
       bm.inst.instanceMatrix.needsUpdate = true;
+    }
+
+    // Promoted asteroids: real integrated spin (Object3D auto-updates its
+    // world matrix from position/quaternion/scale, so no manual compose
+    // needed here — position is already live via the shared Vector3 above).
+    for (const [globalIdx, entry] of built.promoted) {
+      const s = built.states[globalIdx];
+      if (!s?.alive) continue;
+      entry.mesh.position.copy(s.pos); // knockback drift, integrated in the tumble loop above
+      if (entry.angVel.lengthSq() < 1e-8) continue;
+      _spinAxis.copy(entry.angVel).normalize();
+      _spinDeltaQ.setFromAxisAngle(_spinAxis, entry.angVel.length() * dt);
+      entry.quat.multiply(_spinDeltaQ);
+      entry.mesh.quaternion.copy(entry.quat);
     }
   });
 

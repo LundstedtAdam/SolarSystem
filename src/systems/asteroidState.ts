@@ -33,6 +33,11 @@ export interface AsteroidState {
    *  hash so repeated hits on the same rock don't collide on identical
    *  hash inputs (see asteroidFracture.ts). */
   hitSeq: number;
+  /** True once this asteroid has been pulled out of its shared InstancedMesh
+   *  into a standalone, individually deformable mesh (see AsteroidBelt.tsx's
+   *  promotion API on `asteroidRuntime`) — set by `asteroidFracture.ts` on
+   *  the first damaging hit, budget/tier permitting. */
+  promoted: boolean;
 }
 
 /** Bigger rocks take more hits to fracture — scales with bounding radius. */
@@ -66,6 +71,7 @@ export function buildAsteroidStates(count: number, seed: number = BELT_SEED): As
         alive: true,
         indestructible: false,
         hitSeq: 0,
+        promoted: false,
       });
     }
   }

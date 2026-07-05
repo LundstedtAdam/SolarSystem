@@ -28,6 +28,7 @@ function mkState(pos: Vector3, radius = 2): AsteroidState {
     alive: true,
     indestructible: false,
     hitSeq: 0,
+    promoted: false,
   };
 }
 

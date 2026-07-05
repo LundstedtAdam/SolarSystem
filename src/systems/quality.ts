@@ -48,6 +48,14 @@ export interface QualitySettings {
   debrisCullDistance: number;
   /** Max simultaneous mining impact-chip spark particles (cosmetic only). */
   miningVfxBudget: number;
+  /** Max concurrently "promoted" asteroids — pulled out of the shared
+   *  InstancedMesh into a standalone, individually deformable mesh on first
+   *  damage. Small regardless of total asteroid count: each is a real draw
+   *  call plus potential per-vertex dent work. */
+  promotedAsteroidMax: number;
+  /** Whether debris can bounce (vs. stick-and-expire) and cascade into
+   *  secondary chip fragments on a hard-enough collision. */
+  cascadeFractureEnabled: boolean;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -79,6 +87,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 0,
     debrisCullDistance: 0,
     miningVfxBudget: 0,
+    promotedAsteroidMax: 0,
+    cascadeFractureEnabled: false,
   },
   medium: {
     planetSegments: 40,
@@ -108,6 +118,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 12,
     debrisCullDistance: 400,
     miningVfxBudget: 16,
+    promotedAsteroidMax: 8,
+    cascadeFractureEnabled: true,
   },
   high: {
     planetSegments: 64,
@@ -137,6 +149,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 18,
     debrisCullDistance: 700,
     miningVfxBudget: 32,
+    promotedAsteroidMax: 16,
+    cascadeFractureEnabled: true,
   },
   ultra: {
     planetSegments: 96,
@@ -166,6 +180,8 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 24,
     debrisCullDistance: 1000,
     miningVfxBudget: 48,
+    promotedAsteroidMax: 32,
+    cascadeFractureEnabled: true,
   },
 };
 

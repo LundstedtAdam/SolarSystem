@@ -19,6 +19,7 @@ function mkState(overrides: Partial<AsteroidState> = {}): AsteroidState {
     alive: true,
     indestructible: false,
     hitSeq: 0,
+    promoted: false,
     ...overrides,
   };
 }
@@ -31,6 +32,7 @@ describe('applyAsteroidDamage', () => {
     asteroidRuntime.states = [];
     asteroidRuntime.grid = null;
     asteroidRuntime.killAsteroid = null;
+    asteroidRuntime.promotion = null;
     debrisRuntime.list = [];
     debrisRuntime.maxCount = 1000;
   });
@@ -120,6 +122,66 @@ describe('applyAsteroidDamage', () => {
     asteroidRuntime.states = [state];
     const result = applyAsteroidDamage(0, 100, IMPACT_POINT, IMPACT_VEL);
     expect(result.tier).toBe('none');
+  });
+
+  it('attempts promotion on the first hit and only the first hit', () => {
+    const state = mkState({ health: 20, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    let promoteCalls = 0;
+    asteroidRuntime.promotion = {
+      promote: () => {
+        promoteCalls += 1;
+        return true;
+      },
+      applyDent: () => {},
+      getAngularVelocity: () => null,
+    };
+
+    applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
+    expect(promoteCalls).toBe(1);
+    expect(state.promoted).toBe(true);
+
+    // Second hit: already promoted, must not attempt promotion again.
+    applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
+    expect(promoteCalls).toBe(1);
+  });
+
+  it('applies a dent (not debris) on a non-lethal hit to a promoted asteroid', () => {
+    const state = mkState({ health: 20, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    let dentCalls = 0;
+    asteroidRuntime.promotion = {
+      promote: () => true,
+      applyDent: (globalIdx, point, amount) => {
+        dentCalls += 1;
+        expect(globalIdx).toBe(0);
+        expect(point).toBe(IMPACT_POINT);
+        expect(amount).toBe(2);
+      },
+      getAngularVelocity: () => null,
+    };
+
+    const result = applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
+    expect(dentCalls).toBe(1);
+    expect(result.tier).toBe('none');
+    expect(result.debrisSpawned).toHaveLength(0);
+  });
+
+  it('does not attempt promotion or dent when promotion returns false (over budget / ineligible)', () => {
+    const state = mkState({ health: 20, maxHealth: 20 });
+    asteroidRuntime.states = [state];
+    let dentCalls = 0;
+    asteroidRuntime.promotion = {
+      promote: () => false,
+      applyDent: () => {
+        dentCalls += 1;
+      },
+      getAngularVelocity: () => null,
+    };
+
+    applyAsteroidDamage(0, 2, IMPACT_POINT, IMPACT_VEL);
+    expect(state.promoted).toBe(false);
+    expect(dentCalls).toBe(0);
   });
 
   it('debris spawn is capped by debrisRuntime.maxCount', () => {

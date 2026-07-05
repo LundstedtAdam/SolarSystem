@@ -73,6 +73,7 @@ describe('updateDebrisBodies', () => {
       alive: true,
       indestructible: false,
       hitSeq: 0,
+      promoted: false,
     };
     asteroidRuntime.states = [state];
     asteroidRuntime.grid = buildAsteroidGrid([state]);
