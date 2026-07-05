@@ -86,10 +86,11 @@ export function AsteroidDebris() {
     debrisRuntime.maxCount = q.debrisMax;
     debrisRuntime.maxLifeSec = q.debrisLifetimeSec;
     debrisRuntime.cullDistance = q.debrisCullDistance;
+    debrisRuntime.cascadeEnabled = q.cascadeFractureEnabled;
     if (debrisRuntime.list.length > q.debrisMax) {
       debrisRuntime.list.length = q.debrisMax;
     }
-  }, [q.debrisMax, q.debrisLifetimeSec, q.debrisCullDistance]);
+  }, [q.debrisMax, q.debrisLifetimeSec, q.debrisCullDistance, q.cascadeFractureEnabled]);
 
   // Free GPU resources for every bucket built so far, and reset the map, any
   // time the material is (re)built (quality change) or the component unmounts.

@@ -58,12 +58,19 @@ export const debrisRuntime: {
   maxLifeSec: number;
   /** Set by AsteroidDebris.tsx from QUALITY[...].debrisCullDistance. */
   cullDistance: number;
+  /** Set by AsteroidDebris.tsx from QUALITY[...].cascadeFractureEnabled —
+   *  gates whether a hard-enough bounce chips off secondary fragments
+   *  (debrisPhysics.ts). Debris still always bounces regardless (cheap
+   *  reflection math); this only gates the extra population growth from
+   *  cascade chips on low-end tiers. */
+  cascadeEnabled: boolean;
   spawn: (spec: DebrisSpawnSpec) => void;
 } = {
   list: [],
   maxCount: 0,
   maxLifeSec: 12,
   cullDistance: 400,
+  cascadeEnabled: true,
   spawn(spec) {
     if (debrisRuntime.list.length >= debrisRuntime.maxCount) return;
     debrisRuntime.list.push({

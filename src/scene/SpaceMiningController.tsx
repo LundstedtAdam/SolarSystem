@@ -31,7 +31,7 @@ const ORE_YIELD = 1;
 
 /** How long the beam flash + chip burst stay visible per shot — short enough
  *  to read as a rapid string of discrete shots rather than a sustained beam. */
-const FLASH_DURATION = 0.06;
+const FLASH_DURATION = 0.1;
 const SPARKS_PER_SHOT = 4;
 const FIRE_INTERVAL = 1 / FIRE_RATE;
 

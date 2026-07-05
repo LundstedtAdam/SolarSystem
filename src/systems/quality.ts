@@ -53,8 +53,9 @@ export interface QualitySettings {
    *  damage. Small regardless of total asteroid count: each is a real draw
    *  call plus potential per-vertex dent work. */
   promotedAsteroidMax: number;
-  /** Whether debris can bounce (vs. stick-and-expire) and cascade into
-   *  secondary chip fragments on a hard-enough collision. */
+  /** Whether a hard-enough debris bounce can chip off secondary fragments.
+   *  Debris always bounces (cheap reflection math); this only gates the
+   *  extra population growth from cascade chips on low-end tiers. */
   cascadeFractureEnabled: boolean;
 }
 
@@ -66,7 +67,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     atmosphereSegments: 24,
     stars: 600,
     solarWind: 300,
-    asteroids: 0,
+    asteroids: 500,
     dprMax: 1,
     bloomStrength: 0,
     bloomRadius: 0.4,
@@ -83,10 +84,10 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelScatter: 120,
     voxelTrees: 60,
     shipTrailParticles: 0,
-    debrisMax: 0,
-    debrisLifetimeSec: 0,
-    debrisCullDistance: 0,
-    miningVfxBudget: 0,
+    debrisMax: 12,
+    debrisLifetimeSec: 8,
+    debrisCullDistance: 250,
+    miningVfxBudget: 8,
     promotedAsteroidMax: 0,
     cascadeFractureEnabled: false,
   },

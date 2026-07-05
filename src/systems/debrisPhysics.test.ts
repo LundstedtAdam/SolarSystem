@@ -28,6 +28,7 @@ describe('updateDebrisBodies', () => {
     asteroidRuntime.groupYaw = 0;
     debrisRuntime.list = [];
     debrisRuntime.maxCount = 0;
+    debrisRuntime.cascadeEnabled = true;
   });
 
   it('integrates a free-drifting fragment forward each frame', () => {
@@ -122,5 +123,19 @@ describe('updateDebrisBodies', () => {
     expect(debrisRuntime.list.length).toBeGreaterThan(0);
     expect(debrisRuntime.list.every((c) => c.cascadeDepth === 1)).toBe(true);
     expect(d.radius).toBeLessThan(1); // parent shrank
+  });
+
+  it('suppresses cascade chip spawning when cascadeEnabled is off, but still bounces', () => {
+    const center = mercuryCenter();
+    const d = mkDebris(center.clone().add(new Vector3(mercury.size + 0.1, 0, 0)), new Vector3(-50, 0, 0), 1);
+    const list = [d];
+    debrisRuntime.list = [];
+    debrisRuntime.maxCount = 50;
+    debrisRuntime.cascadeEnabled = false;
+    updateDebrisBodies(list, 1 / 60, SIM_TIME, new Vector3(0, 0, 0), 12, 4000);
+    expect(debrisRuntime.list.length).toBe(0); // no chips
+    expect(list).toHaveLength(1);
+    expect(d.vel.x).toBeGreaterThan(0); // still reflected, not stuck
+    expect(d.radius).toBe(1); // parent didn't shrink (no chip event)
   });
 });

@@ -204,7 +204,7 @@ export function updateDebrisBodies(
         }
       }
 
-      if (d.cascadeDepth === 0 && closing > SECONDARY_FRACTURE_SPEED) {
+      if (debrisRuntime.cascadeEnabled && d.cascadeDepth === 0 && closing > SECONDARY_FRACTURE_SPEED) {
         spawnCascadeChips(d);
       }
     }
