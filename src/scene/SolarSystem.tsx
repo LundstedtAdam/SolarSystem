@@ -14,6 +14,7 @@ import { Starfield } from './Starfield';
 import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
 import { AsteroidBelt } from './AsteroidBelt';
+import { ShipTrail } from './ShipTrail';
 import { SimClock } from './SimClock';
 import { AudioReactor } from './AudioReactor';
 import { LabelProjector } from './LabelProjector';
@@ -136,6 +137,7 @@ export function SolarSystem() {
         <>
           <ShipController />
           <ShipCamera />
+          <ShipTrail />
         </>
       )}
       {sceneMode.type === 'descending' && (

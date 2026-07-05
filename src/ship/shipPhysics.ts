@@ -1,6 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
 
 export const MAX_THRUST = 350;
+/** Collision sphere radius (world units) for ship-vs-planet/asteroid contact —
+ *  sized against the ship's ~1.2-unit target length (see ShipModel.tsx). */
+export const SHIP_COLLISION_RADIUS = 0.6;
 /** Per-frame velocity retention (@60fps) when flight assist is ON — bleeds off
  *  momentum so the ship auto-decelerates to a stop when input is released. */
 export const ASSIST_DAMPING = 0.985;

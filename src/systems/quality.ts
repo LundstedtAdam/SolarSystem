@@ -38,6 +38,8 @@ export interface QualitySettings {
   voxelScatter: number;
   /** Max instanced trees in the voxel world (World Richness Phase 7). */
   voxelTrees: number;
+  /** Pooled engine-exhaust particle cap for the piloting ship trail. */
+  shipTrailParticles: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -64,6 +66,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 180,
     voxelScatter: 120,
     voxelTrees: 60,
+    shipTrailParticles: 0,
   },
   medium: {
     planetSegments: 40,
@@ -88,6 +91,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 450,
     voxelScatter: 340,
     voxelTrees: 160,
+    shipTrailParticles: 40,
   },
   high: {
     planetSegments: 64,
@@ -112,6 +116,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 900,
     voxelScatter: 680,
     voxelTrees: 320,
+    shipTrailParticles: 90,
   },
   ultra: {
     planetSegments: 96,
@@ -136,6 +141,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 1500,
     voxelScatter: 1100,
     voxelTrees: 550,
+    shipTrailParticles: 160,
   },
 };
 

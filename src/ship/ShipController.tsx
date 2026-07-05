@@ -8,9 +8,11 @@ import {
   integrate,
   ASSIST_DAMPING,
   DRIFT_DAMPING,
+  SHIP_COLLISION_RADIUS,
   type AngularVelocity,
   type ShipInput,
 } from './shipPhysics';
+import { resolvePlanetCollision } from './shipCollision';
 import { readInput, installKeyboardListeners, removeKeyboardListeners } from './shipInput';
 import { shipTelemetry, syncTelemetryFromStore, MIRROR_INTERVAL } from './shipTelemetry';
 import { decayStick, resetStick } from './virtualStick';
@@ -188,6 +190,11 @@ export function ShipController() {
 
     const damping = cfg.flightAssist ? ASSIST_DAMPING : DRIFT_DAMPING;
     integrate(_pos, _vel, _accel, damping, dt);
+
+    // Slide off planets/moons on contact — a position/velocity constraint
+    // applied only on contact, never an added force, so it can't reintroduce
+    // the gravity well deliberately removed from free flight (Phase 11).
+    resolvePlanetCollision(_pos, _vel, store.simTimeDays, SHIP_COLLISION_RADIUS);
 
     group.position.copy(_pos);
     group.quaternion.copy(_quat);

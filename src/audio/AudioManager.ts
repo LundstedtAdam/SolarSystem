@@ -15,6 +15,8 @@ class AudioManager {
   private master?: GainNode;
   private droneGain?: GainNode;
   private droneFilter?: BiquadFilterNode;
+  private engineGain?: GainNode;
+  private engineFilter?: BiquadFilterNode;
   private started = false;
 
   // Surface ambience graph (built lazily on first landing, reused after).
@@ -118,6 +120,23 @@ class AudioManager {
     this.droneGain = droneGain;
     this.droneFilter = droneFilter;
 
+    // --- Ship engine hum: gain/pitch track throttle while piloting. ---
+    const engineFilter = ctx.createBiquadFilter();
+    engineFilter.type = 'lowpass';
+    engineFilter.frequency.value = 300;
+    const engineGain = ctx.createGain();
+    engineGain.gain.value = 0;
+    engineFilter.connect(engineGain).connect(master);
+    const engineOsc = ctx.createOscillator();
+    engineOsc.type = 'sawtooth';
+    engineOsc.frequency.value = 60;
+    const engineOscGain = ctx.createGain();
+    engineOscGain.gain.value = 0.6;
+    engineOsc.connect(engineOscGain).connect(engineFilter);
+    engineOsc.start();
+    this.engineGain = engineGain;
+    this.engineFilter = engineFilter;
+
     this.started = true;
   }
 
@@ -142,6 +161,17 @@ class AudioManager {
       this.droneGain.gain.setTargetAtTime(p * 0.22, t, 0.35);
       this.droneFilter.frequency.setTargetAtTime(80 + p * 180, t, 0.35);
     }
+  }
+
+  /** Ship engine hum, driven by throttle (0..1) while piloting. Same
+   *  last-quarter-emphasis shape as the camera shake / HUD heat glow so all
+   *  the throttle-reactive feedback kicks in together. Call with 0 when
+   *  leaving piloting to fade it out. */
+  setEngineHum(throttle: number) {
+    if (!this.engineGain || !this.engineFilter || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.engineGain.gain.setTargetAtTime(throttle * 0.05, t, 0.15);
+    this.engineFilter.frequency.setTargetAtTime(150 + throttle * 500, t, 0.15);
   }
 
   // --- Surface ambience --------------------------------------------------
