@@ -56,7 +56,7 @@ const _chipAngVel = new Vector3();
 /** Per-frame scratch: closing speed a pair collision imparted on the
  *  lower-indexed body of the pair, read back when that body gets its own
  *  turn later in the same downward pass (see `updateDebrisBodies`). */
-let _pairClosing: number[] = [];
+const _pairClosing: number[] = [];
 
 /** Real two-body impulse (mass ∝ radius^3), plus a proportional push-out so
  *  overlapping fragments don't visibly sink into each other. Returns the

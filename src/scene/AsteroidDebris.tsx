@@ -94,13 +94,15 @@ export function AsteroidDebris() {
   // Free GPU resources for every bucket built so far, and reset the map, any
   // time the material is (re)built (quality change) or the component unmounts.
   useEffect(() => {
+    const buckets = bucketsRef.current;
+    const g = group.current;
     return () => {
-      bucketsRef.current.forEach((b) => {
-        group.current?.remove(b.inst);
+      buckets.forEach((b) => {
+        g?.remove(b.inst);
         b.inst.dispose();
         b.geometry.dispose();
       });
-      bucketsRef.current.clear();
+      buckets.clear();
       material?.dispose();
     };
   }, [material]);
