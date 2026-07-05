@@ -40,6 +40,12 @@ export interface QualitySettings {
   voxelTrees: number;
   /** Pooled engine-exhaust particle cap for the piloting ship trail. */
   shipTrailParticles: number;
+  /** Max simultaneous asteroid-fracture debris/ore-chunk fragments. */
+  debrisMax: number;
+  /** Debris fragment lifetime (seconds) before it force-expires. */
+  debrisLifetimeSec: number;
+  /** Debris beyond this distance from the ship is force-culled each frame. */
+  debrisCullDistance: number;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -67,6 +73,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelScatter: 120,
     voxelTrees: 60,
     shipTrailParticles: 0,
+    debrisMax: 0,
+    debrisLifetimeSec: 0,
+    debrisCullDistance: 0,
   },
   medium: {
     planetSegments: 40,
@@ -92,6 +101,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelScatter: 340,
     voxelTrees: 160,
     shipTrailParticles: 40,
+    debrisMax: 24,
+    debrisLifetimeSec: 12,
+    debrisCullDistance: 400,
   },
   high: {
     planetSegments: 64,
@@ -117,6 +129,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelScatter: 680,
     voxelTrees: 320,
     shipTrailParticles: 90,
+    debrisMax: 64,
+    debrisLifetimeSec: 18,
+    debrisCullDistance: 700,
   },
   ultra: {
     planetSegments: 96,
@@ -142,6 +157,9 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelScatter: 1100,
     voxelTrees: 550,
     shipTrailParticles: 160,
+    debrisMax: 128,
+    debrisLifetimeSec: 24,
+    debrisCullDistance: 1000,
   },
 };
 

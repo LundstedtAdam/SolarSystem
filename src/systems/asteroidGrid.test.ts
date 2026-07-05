@@ -16,6 +16,7 @@ function mkState(x: number, z: number, alive = true): AsteroidState {
     seed: 0,
     alive,
     indestructible: false,
+    hitSeq: 0,
   };
 }
 

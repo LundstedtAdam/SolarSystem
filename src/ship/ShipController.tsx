@@ -13,6 +13,7 @@ import {
   type ShipInput,
 } from './shipPhysics';
 import { resolvePlanetCollision, resolveAsteroidCollision } from './shipCollision';
+import { applyAsteroidDamage } from '../systems/asteroidFracture';
 import { readInput, installKeyboardListeners, removeKeyboardListeners } from './shipInput';
 import { shipTelemetry, syncTelemetryFromStore, MIRROR_INTERVAL } from './shipTelemetry';
 import { decayStick, resetStick } from './virtualStick';
@@ -89,6 +90,12 @@ const AUTO_CRUISE = 650; // peak approach speed (units/s)
 const AUTO_DECEL = 320; // braking authority (units/s²) — sets the stop ramp
 const AUTO_TURN_RATE = 2.5; // facing ease rate (1/s)
 const AUTO_SAFE_RADII = 4; // stop this many body-radii out (matches orbit phase)
+
+// Collision-triggered asteroid damage: a graze at low closing speed shouldn't
+// visibly hurt a rock; a real impact should. Both this and deliberate mining
+// fire (spaceMining.ts) route through the same applyAsteroidDamage pipeline.
+const COLLISION_DAMAGE_MIN_SPEED = 8; // units/s below this, no damage at all
+const COLLISION_DAMAGE_SCALE = 0.6; // damage per unit of closing speed above the minimum
 
 export function ShipController() {
   const groupRef = useRef<Group>(null);
@@ -197,7 +204,15 @@ export function ShipController() {
     // (Phase 11). The asteroid hit info (if any) is available here for
     // future collision-triggered damage (fracture/mining systems).
     resolvePlanetCollision(_pos, _vel, store.simTimeDays, SHIP_COLLISION_RADIUS);
-    resolveAsteroidCollision(_pos, _vel, SHIP_COLLISION_RADIUS);
+    const asteroidHit = resolveAsteroidCollision(_pos, _vel, SHIP_COLLISION_RADIUS);
+    if (asteroidHit && asteroidHit.closingSpeed > COLLISION_DAMAGE_MIN_SPEED) {
+      applyAsteroidDamage(
+        asteroidHit.globalIdx,
+        (asteroidHit.closingSpeed - COLLISION_DAMAGE_MIN_SPEED) * COLLISION_DAMAGE_SCALE,
+        asteroidHit.contactPoint,
+        _vel,
+      );
+    }
 
     group.position.copy(_pos);
     group.quaternion.copy(_quat);

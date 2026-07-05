@@ -23,6 +23,10 @@ export interface AsteroidState {
   alive: boolean;
   /** Narrative-anchored asteroids (§9) no-op on damage. */
   indestructible: boolean;
+  /** Incremented on every damage hit — feeds the deterministic debris-spawn
+   *  hash so repeated hits on the same rock don't collide on identical
+   *  hash inputs (see asteroidFracture.ts). */
+  hitSeq: number;
 }
 
 /** Bigger rocks take more hits to fracture — scales with bounding radius. */
@@ -54,6 +58,7 @@ export function buildAsteroidStates(count: number, seed: number = BELT_SEED): As
         seed,
         alive: true,
         indestructible: false,
+        hitSeq: 0,
       });
     }
   }

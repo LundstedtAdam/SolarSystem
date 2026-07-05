@@ -116,8 +116,10 @@ const _localVel = new Vector3();
 const _worldContact = new Vector3();
 
 /** Rotate `(x, z)` about the world Y axis by `angle` (the belt's only degree
- *  of orbital-drift freedom), writing into `out`. */
-function rotateY(v: Vector3, angle: number, out: Vector3): void {
+ *  of orbital-drift freedom), writing into `out`. Exported so other code that
+ *  needs to convert between world space and the belt-local frame the
+ *  asteroid grid is indexed in (e.g. debris physics) can reuse it. */
+export function rotateY(v: Vector3, angle: number, out: Vector3): void {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   out.set(v.x * cos + v.z * sin, v.y, -v.x * sin + v.z * cos);

@@ -14,6 +14,7 @@ import { Starfield } from './Starfield';
 import { Sun } from './Sun';
 import { SolarWind } from './SolarWind';
 import { AsteroidBelt } from './AsteroidBelt';
+import { AsteroidDebris } from './AsteroidDebris';
 import { ShipTrail } from './ShipTrail';
 import { SimClock } from './SimClock';
 import { AudioReactor } from './AudioReactor';
@@ -122,6 +123,7 @@ export function SolarSystem() {
           <Sun />
           <SolarWind />
           <AsteroidBelt />
+          <AsteroidDebris />
           <Orbits />
           {PLANETS.map((p) => (
             <Planet key={p.name} data={p} />
