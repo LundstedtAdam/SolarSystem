@@ -180,7 +180,23 @@ light class it uses with the renderer's node library, but `DirectionalLight`
 leaving only flat ambient light and making the texture atlas/AO work
 invisible regardless of correctness. Now fixed; still needs confirmation on
 real hardware, since this environment's own attempted live check hit an
-unrelated sandbox GPU limitation (see PR #8 for detail). Currently
+unrelated sandbox GPU limitation (see PR #8 for detail). A third same-round
+fix addressed a batch of live-device reports together: the settings panel's
+active-option highlight was silently overridden by a later, equal-specificity
+CSS rule (fixed by scoping the active rule's selector); changing quality
+settings produced a screen-wide green glow then crashed — the sun's
+deliberately-HDR core material used an extreme, unevenly-scaled multiplier
+that pushed ACES tonemapping into a known hue-shift-toward-green artifact
+once bloom turned on at Medium+ quality (retuned to a lower, warm-white
+value), and `Effects.tsx` rebuilt its entire postprocessing GPU pipeline on
+every quality change without ever disposing the previous one, leaking
+render targets until a WebGPU resource-exhaustion crash (now only rebuilds
+on a structural bloom/chromatic-aberration on/off change, with proper
+disposal, using reactive uniforms for ordinary tuning in between); and,
+found while checking the texture atlas against a Minecraft-clarity
+reference the user supplied, two real orientation bugs made grass blocks'
+side faces show dirt-on-top/grass-on-bottom and rotate the gradient 90° on
+two of their four sides (both fixed). Currently
 open as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is
 tracked here rather than by renaming or re-committing history: the roadmap
 file is the source of truth for status, git history stays as-is. Manual
