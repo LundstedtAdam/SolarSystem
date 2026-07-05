@@ -51,6 +51,56 @@ export function sphereVsPlanets(
   return hit;
 }
 
+const _rayToCenter = new Vector3();
+
+/** Pure ray-vs-sphere test (no mutation) — returns the hit distance `t` along
+ *  `dir` from `origin`, or null on a miss/behind/beyond-`maxDistance`. `dir`
+ *  must be a unit vector. Extracted as a standalone primitive so callers that
+ *  need "did this segment hit something" (a projectile's per-frame swept
+ *  collision check) don't have to go through a contact-resolution function
+ *  that also mutates position/velocity. */
+export function raySphereHit(origin: Vector3, dir: Vector3, maxDistance: number, center: Vector3, radius: number): number | null {
+  _rayToCenter.copy(center).sub(origin);
+  const b = _rayToCenter.dot(dir);
+  if (b < 0) return null;
+  const perpDistSq = _rayToCenter.lengthSq() - b * b;
+  const r2 = radius * radius;
+  if (perpDistSq > r2) return null;
+  const thc = Math.sqrt(r2 - perpDistSq);
+  const t = b - thc;
+  if (t < 0 || t > maxDistance) return null;
+  return t;
+}
+
+export interface PlanetRayHit {
+  point: Vector3;
+}
+
+/** Ray-vs-planets(+moons) test for a projectile's flight path this frame —
+ *  the pure-query sibling of `sphereVsPlanets` (which mutates position/
+ *  velocity for the ship's own slide response; a projectile just needs to
+ *  know where/whether it struck a planetary surface). Returns the nearest
+ *  hit point, or null. */
+export function raycastPlanets(origin: Vector3, dir: Vector3, maxDistance: number, simTimeDays: number): PlanetRayHit | null {
+  let bestT = Infinity;
+  for (const p of PLANETS) {
+    positionAtTime(p.elements, p.distance, simTimeDays, _bodyPos);
+    const t = raySphereHit(origin, dir, maxDistance, _bodyPos, p.size);
+    if (t !== null && t < bestT) bestT = t;
+
+    for (const m of p.moons) {
+      const [ox, oy, oz] = moonLocalOffset(m, simTimeDays);
+      _bodyPos.x += ox;
+      _bodyPos.y += oy;
+      _bodyPos.z += oz;
+      const mt = raySphereHit(origin, dir, maxDistance, _bodyPos, m.size);
+      if (mt !== null && mt < bestT) bestT = mt;
+    }
+  }
+  if (bestT === Infinity) return null;
+  return { point: origin.clone().addScaledVector(dir, bestT) };
+}
+
 /** Single sphere-vs-sphere contact test + resolution against one body.
  *  Returns the pre-correction normal (into-surface) speed when a contact was
  *  resolved, or null on a miss — callers that need "how hard did it hit"

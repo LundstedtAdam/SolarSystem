@@ -1,11 +1,16 @@
-// Raycast mining/weapon system for space (asteroids only — no ship-to-ship
+// Projectile mining/weapon system for space (asteroids only — no ship-to-ship
 // combat, no NPCs; this repo has no combat system at all today). Aiming
-// mirrors the voxel mining convention (a fixed screen-center ray), broadphased
-// through the belt's spatial grid so it never iterates the full asteroid
-// population. Fire is discrete, automatic shots at a fixed cadence while held
-// (not a continuous beam) — each shot is hitscan (instant), but visible as a
-// brief flash/tracer and an impact spark burst, feeding the same
-// `applyAsteroidDamage` pipeline collision damage uses so sustained fire
+// mirrors the voxel mining convention (a fixed screen-center ray) for the
+// *direction* a shot launches in, but a shot is a real traveling projectile
+// (see projectileRuntime.ts/projectilePhysics.ts) — spawned at the ship's
+// weapon hardpoint, not resolved instantly from the camera. `raycastAsteroids`
+// here is the swept-segment collision test the projectile's own per-frame
+// update calls (this module owns it since it's also still used for the
+// crosshair's continuous "is something targetable" aim-assist query),
+// broadphased through the belt's spatial grid so it never iterates the full
+// asteroid population. Fire is discrete, automatic shots at a fixed cadence
+// while held (not a continuous beam); each connecting hit feeds the same
+// `applyAsteroidDamage` pipeline collision damage uses, so sustained fire
 // naturally produces low/medium/high fracture outcomes over several shots.
 
 import { Vector3 } from 'three';
@@ -14,15 +19,23 @@ import { TIERS } from '../systems/asteroidLayout';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
 import { rotateY } from './shipCollision';
 
-/** Max range (world units) the mining beam can reach. */
+/** Max range (world units) a shot can travel before it's spent. */
 export const MINING_RANGE = 60;
 /** Automatic fire cadence while the trigger is held (shots/sec). */
 export const FIRE_RATE = 6;
 /** Damage dealt per individual shot. */
 export const SHOT_DAMAGE = 3;
-/** Pseudo-"impact speed" fed into the fracture debris-ejection direction —
- *  not a real projectile velocity, just biases fragments away from the shot. */
-export const MINING_IMPACT_SPEED = 30;
+/** Projectile travel speed (world units/sec), before adding the ship's own
+ *  velocity (real momentum transfer — a shot fired while moving inherits the
+ *  ship's motion, same as a thrown object would). Fast enough to feel like a
+ *  weapon, slow enough that its flight across `MINING_RANGE` is genuinely
+ *  visible, not instant. */
+export const PROJECTILE_SPEED = 220;
+/** Collision sphere radius for the traveling bolt itself. */
+export const PROJECTILE_RADIUS = 0.12;
+/** Lifetime cap (seconds) derived from range/speed — a shot that hasn't hit
+ *  anything by the time it could have crossed `MINING_RANGE` expires. */
+export const PROJECTILE_MAX_LIFE_SEC = MINING_RANGE / PROJECTILE_SPEED;
 
 const MAX_ASTEROID_RADIUS = Math.max(...TIERS.map((t) => t.max));
 

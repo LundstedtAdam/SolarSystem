@@ -48,6 +48,10 @@ export interface QualitySettings {
   debrisCullDistance: number;
   /** Max simultaneous mining impact-chip spark particles (cosmetic only). */
   miningVfxBudget: number;
+  /** Max simultaneous in-flight weapon projectiles. Short-lived (flight time
+   *  is bounded by MINING_RANGE/PROJECTILE_SPEED), so this stays small even
+   *  at the fastest fire rate. */
+  projectileMax: number;
   /** Max concurrently "promoted" asteroids — pulled out of the shared
    *  InstancedMesh into a standalone, individually deformable mesh on first
    *  damage. Small regardless of total asteroid count: each is a real draw
@@ -88,6 +92,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 8,
     debrisCullDistance: 250,
     miningVfxBudget: 8,
+    projectileMax: 6,
     promotedAsteroidMax: 0,
     cascadeFractureEnabled: false,
   },
@@ -119,6 +124,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 12,
     debrisCullDistance: 400,
     miningVfxBudget: 16,
+    projectileMax: 10,
     promotedAsteroidMax: 8,
     cascadeFractureEnabled: true,
   },
@@ -150,6 +156,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 18,
     debrisCullDistance: 700,
     miningVfxBudget: 32,
+    projectileMax: 16,
     promotedAsteroidMax: 16,
     cascadeFractureEnabled: true,
   },
@@ -181,6 +188,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     debrisLifetimeSec: 24,
     debrisCullDistance: 1000,
     miningVfxBudget: 48,
+    projectileMax: 24,
     promotedAsteroidMax: 32,
     cascadeFractureEnabled: true,
   },

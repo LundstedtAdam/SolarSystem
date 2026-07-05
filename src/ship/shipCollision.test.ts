@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { resolvePlanetCollision, resolveAsteroidCollision, TANGENTIAL_RETAIN } from './shipCollision';
+import { resolvePlanetCollision, resolveAsteroidCollision, raySphereHit, raycastPlanets, TANGENTIAL_RETAIN } from './shipCollision';
 import { PLANETS } from '../systems/bodies';
 import { positionAtTime } from '../systems/ephemeris';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
@@ -63,6 +63,57 @@ describe('resolvePlanetCollision', () => {
     // outward velocity must be left untouched since it isn't driving further
     // penetration.
     expect(velocity.x).toBeCloseTo(10, 5);
+  });
+});
+
+describe('raySphereHit', () => {
+  it('returns the hit distance for a ray that intersects the sphere', () => {
+    const center = new Vector3(0, 0, -20);
+    const t = raySphereHit(new Vector3(0, 0, 0), new Vector3(0, 0, -1), 60, center, 2);
+    expect(t).not.toBeNull();
+    expect(t!).toBeCloseTo(18, 5); // 20 - radius 2
+  });
+
+  it('returns null for a ray that misses the sphere', () => {
+    const center = new Vector3(20, 5, -20);
+    const t = raySphereHit(new Vector3(0, 0, 0), new Vector3(0, 0, -1), 60, center, 2);
+    expect(t).toBeNull();
+  });
+
+  it('returns null when the sphere is behind the ray origin', () => {
+    const center = new Vector3(0, 0, 20);
+    const t = raySphereHit(new Vector3(0, 0, 0), new Vector3(0, 0, -1), 60, center, 2);
+    expect(t).toBeNull();
+  });
+
+  it('returns null when the hit is beyond maxDistance', () => {
+    const center = new Vector3(0, 0, -20);
+    const t = raySphereHit(new Vector3(0, 0, 0), new Vector3(0, 0, -1), 10, center, 2);
+    expect(t).toBeNull();
+  });
+});
+
+describe('raycastPlanets', () => {
+  it('returns null when nothing along the segment is close to any planet', () => {
+    const hit = raycastPlanets(new Vector3(1e9, 1e9, 1e9), new Vector3(0, 0, -1), 60, SIM_TIME);
+    expect(hit).toBeNull();
+  });
+
+  it('hits a planet directly ahead within range', () => {
+    const center = mercuryCenter();
+    const origin = center.clone().add(new Vector3(mercury.size + 30, 0, 0));
+    const dir = center.clone().sub(origin).normalize();
+    const hit = raycastPlanets(origin, dir, 60, SIM_TIME);
+    expect(hit).not.toBeNull();
+    expect(hit!.point.distanceTo(center)).toBeCloseTo(mercury.size, 4);
+  });
+
+  it('does not hit a planet beyond maxDistance', () => {
+    const center = mercuryCenter();
+    const origin = center.clone().add(new Vector3(mercury.size + 1000, 0, 0));
+    const dir = center.clone().sub(origin).normalize();
+    const hit = raycastPlanets(origin, dir, 60, SIM_TIME);
+    expect(hit).toBeNull();
   });
 });
 
