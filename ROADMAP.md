@@ -171,7 +171,16 @@ an actual alpha-cutout foliage texture — it previously had no UV attribute or
 alpha texture at all and rendered as a solid colored rectangle; three other
 rendering issues reported alongside it (terrain UV stretching, missing AO,
 floating scatter/wildlife) were checked directly against the code and found
-not to be present, so were left untouched. Currently
+not to be present, so were left untouched. A second same-round fix addressed
+a real live-device report (a screenshot of flat, dark, textureless terrain):
+the WebGPU node renderer (`SolarSystem.tsx`) registers each classic-three
+light class it uses with the renderer's node library, but `DirectionalLight`
+— the voxel surface's only directional key light (`VoxelScene.tsx`'s
+`SunLight`) — was never registered, so it was silently dropped every frame,
+leaving only flat ambient light and making the texture atlas/AO work
+invisible regardless of correctness. Now fixed; still needs confirmation on
+real hardware, since this environment's own attempted live check hit an
+unrelated sandbox GPU limitation (see PR #8 for detail). Currently
 open as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is
 tracked here rather than by renaming or re-committing history: the roadmap
 file is the source of truth for status, git history stays as-is. Manual
