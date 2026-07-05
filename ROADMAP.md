@@ -196,7 +196,16 @@ disposal, using reactive uniforms for ordinary tuning in between); and,
 found while checking the texture atlas against a Minecraft-clarity
 reference the user supplied, two real orientation bugs made grass blocks'
 side faces show dirt-on-top/grass-on-bottom and rotate the gradient 90° on
-two of their four sides (both fixed). Currently
+two of their four sides (both fixed). The user confirmed the green glow
+persisted specifically on High/Ultra after that fix, since it only retuned
+the sun mesh's own core material — two more uncapped HDR "sun glow" sources
+were still feeding bloom (the sky-dome sun disc shared by `VoxelSky.tsx`/
+`Sky.tsx`, peaking over 4x higher than the fixed sun mesh; and `Sun.tsx`'s
+corona inner ring, at an even more extreme colour ratio than the original
+problem). Both retuned to a consistent, modest peak magnitude — this
+explains the High/Ultra-only symptom, since `quality.ts`'s bloom threshold
+drops and strength rises at higher tiers, admitting and amplifying more of
+whatever HDR wasn't yet fixed. Currently
 open as **PR #8** (draft, `storyline` → `master`, unmerged). Its status is
 tracked here rather than by renaming or re-committing history: the roadmap
 file is the source of truth for status, git history stays as-is. Manual
