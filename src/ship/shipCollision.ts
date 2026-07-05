@@ -97,6 +97,84 @@ export function resolvePlanetCollision(
   return sphereVsPlanets(position, velocity, simTimeDays, shipRadius, TANGENTIAL_RETAIN);
 }
 
+/** Restitution/friction tuned for tumbling rock debris — rubble bounces
+ *  (unlike the ship's slide-and-damp above, which is tuned for piloting feel
+ *  and would be the wrong response for a physical chunk), but loses energy
+ *  each bounce so a debris field settles over time instead of bouncing
+ *  forever. */
+export const DEBRIS_RESTITUTION = 0.35;
+export const DEBRIS_TANGENTIAL_FRICTION = 0.8;
+
+const _tangent = new Vector3();
+
+/**
+ * Sphere-vs-sphere reflection: `v' = v - (1+e)(v·n)n`, plus a fraction of the
+ * (unchanged-by-reflection) tangential velocity bled off per bounce. Same
+ * penetration test/push-out as `resolveSphereContact`, genuinely different
+ * response — that function's strip-and-damp is a "slide," this is a real
+ * bounce. Returns the pre-correction closing speed (same contract as
+ * `resolveSphereContact`), or null on a miss.
+ */
+export function reflectSphereContact(
+  position: Vector3,
+  velocity: Vector3,
+  center: Vector3,
+  bodyRadius: number,
+  radius: number,
+  restitution: number,
+  tangentialFriction: number,
+): number | null {
+  const minDist = bodyRadius + radius;
+  _normal.copy(position).sub(center);
+  const distSq = _normal.lengthSq();
+  if (distSq >= minDist * minDist) return null;
+
+  const dist = Math.sqrt(distSq);
+  if (dist > 1e-6) _normal.multiplyScalar(1 / dist);
+  else _normal.set(0, 1, 0); // degenerate (exact center overlap) — push up arbitrarily
+
+  position.copy(center).addScaledVector(_normal, minDist + SKIN);
+
+  const normalSpeed = velocity.dot(_normal);
+  if (normalSpeed < 0) {
+    velocity.addScaledVector(_normal, -(1 + restitution) * normalSpeed);
+    // Bleed tangential energy: extract the (reflection-unaffected) tangential
+    // component and damp it by `1 - tangentialFriction`.
+    _tangent.copy(velocity).addScaledVector(_normal, -velocity.dot(_normal));
+    velocity.addScaledVector(_tangent, -(1 - tangentialFriction));
+  }
+  return normalSpeed < 0 ? -normalSpeed : 0;
+}
+
+/** Reflect-mode sibling of `sphereVsPlanets` for debris — returns the largest
+ *  closing speed observed this call (0 if nothing was touched), which
+ *  cascade-fracture triggers key off. */
+export function reflectSphereVsPlanets(
+  position: Vector3,
+  velocity: Vector3,
+  simTimeDays: number,
+  radius: number,
+  restitution: number,
+  tangentialFriction: number,
+): number {
+  let maxClosing = 0;
+  for (const p of PLANETS) {
+    positionAtTime(p.elements, p.distance, simTimeDays, _bodyPos);
+    const speed = reflectSphereContact(position, velocity, _bodyPos, p.size, radius, restitution, tangentialFriction);
+    if (speed !== null) maxClosing = Math.max(maxClosing, speed);
+
+    for (const m of p.moons) {
+      const [ox, oy, oz] = moonLocalOffset(m, simTimeDays);
+      _bodyPos.x += ox;
+      _bodyPos.y += oy;
+      _bodyPos.z += oz;
+      const moonSpeed = reflectSphereContact(position, velocity, _bodyPos, m.size, radius, restitution, tangentialFriction);
+      if (moonSpeed !== null) maxClosing = Math.max(maxClosing, moonSpeed);
+    }
+  }
+  return maxClosing;
+}
+
 export interface AsteroidHitInfo {
   globalIdx: number;
   /** World-space contact point. */
