@@ -11,6 +11,7 @@ import { Vector3 } from 'three';
 import { cellHash } from '../voxel/noise';
 import { asteroidRuntime } from '../scene/asteroidRuntime';
 import { debrisRuntime, type DebrisSpawnSpec } from '../scene/debrisRuntime';
+import type { ResourceType } from '../voxel/voxelTypes';
 
 export type FractureTier = 'none' | 'low' | 'medium' | 'high';
 
@@ -24,6 +25,13 @@ export interface FractureResult {
 const HIGH_OVERKILL_FRAC = 0.6;
 const MEDIUM_DEBRIS_RANGE: [number, number] = [1, 5];
 const HIGH_DEBRIS_RANGE: [number, number] = [4, 8];
+
+/** Fraction of a fracture's fragments that come back as collectible ore
+ *  rather than plain inert rock — applies uniformly regardless of whether the
+ *  fracture was mining- or collision-triggered (one damage pipeline, same
+ *  reward either way). */
+const ORE_FRACTION = 0.4;
+const ORE_TYPES: ResourceType[] = ['iron', 'silicon', 'titanite', 'hematite', 'lithium'];
 
 const _dir = new Vector3();
 const _jitter = new Vector3();
@@ -90,7 +98,13 @@ export function applyAsteroidDamage(
     const fragRadius = state.radius * fragFrac;
     const pos = impactPoint.clone().addScaledVector(_jitter, fragRadius * 0.5);
 
-    debrisSpawned.push({ pos, vel, radius: fragRadius });
+    const oreHash = cellHash(globalIdx, stream, state.seed + 6004);
+    const isOre = oreHash < ORE_FRACTION;
+    const resourceType = isOre
+      ? ORE_TYPES[Math.floor(cellHash(globalIdx, stream, state.seed + 6005) * ORE_TYPES.length)]
+      : undefined;
+
+    debrisSpawned.push({ pos, vel, radius: fragRadius, isOre, resourceType });
   }
 
   for (const spec of debrisSpawned) debrisRuntime.spawn(spec);

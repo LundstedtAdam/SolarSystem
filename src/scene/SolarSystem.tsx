@@ -16,6 +16,7 @@ import { SolarWind } from './SolarWind';
 import { AsteroidBelt } from './AsteroidBelt';
 import { AsteroidDebris } from './AsteroidDebris';
 import { ShipTrail } from './ShipTrail';
+import { SpaceMiningController } from './SpaceMiningController';
 import { SimClock } from './SimClock';
 import { AudioReactor } from './AudioReactor';
 import { LabelProjector } from './LabelProjector';
@@ -140,6 +141,7 @@ export function SolarSystem() {
           <ShipController />
           <ShipCamera />
           <ShipTrail />
+          <SpaceMiningController />
         </>
       )}
       {sceneMode.type === 'descending' && (
