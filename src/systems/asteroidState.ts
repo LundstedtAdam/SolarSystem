@@ -1,0 +1,86 @@
+// Per-asteroid identity/mutable-state, coexisting with the InstancedMesh-only
+// rendering in AsteroidBelt.tsx. Asteroids have no individual JS identity
+// beyond their baked transform matrix; this is the parallel plain-array-of-
+// structs that gives them one — health, indestructibility, alive/dead — index-
+// aligned with (but not stored inside) each InstancedMesh's instance index.
+// Mirrors the `Debris[]` convention already used for voxel mining debris
+// (`src/voxel/ChunkManager.tsx`), not a Map or class hierarchy.
+
+import { Vector3 } from 'three';
+import { placeAsteroid, computeTierVariantCounts, BELT_SEED } from './asteroidLayout';
+
+export interface AsteroidState {
+  tierIdx: number;
+  variantIdx: number;
+  /** Index within this asteroid's (tier, variant) InstancedMesh. */
+  instIdx: number;
+  pos: Vector3;
+  /** Impact-knockback velocity (world units/s) — zero unless something has
+   *  hit this rock recently. Only visually applied for tumbling tiers (see
+   *  AsteroidBelt.tsx); non-rotating dust-tier instances never redraw their
+   *  matrix after the initial build, so knockback there would be invisible
+   *  anyway. Integrated + damped in AsteroidBelt.tsx's per-frame tumble loop. */
+  vel: Vector3;
+  /** Approximate bounding radius (world units), from the baked scale. */
+  radius: number;
+  health: number;
+  maxHealth: number;
+  seed: number;
+  alive: boolean;
+  /** Narrative-anchored asteroids (§9) no-op on damage. */
+  indestructible: boolean;
+  /** Incremented on every damage hit — feeds the deterministic debris-spawn
+   *  hash so repeated hits on the same rock don't collide on identical
+   *  hash inputs (see asteroidFracture.ts). */
+  hitSeq: number;
+  /** True once this asteroid has been pulled out of its shared InstancedMesh
+   *  into a standalone, individually deformable mesh (see AsteroidBelt.tsx's
+   *  promotion API on `asteroidRuntime`) — set by `asteroidFracture.ts` on
+   *  the first damaging hit, budget/tier permitting. */
+  promoted: boolean;
+}
+
+/** Bigger rocks take more hits to fracture — scales with bounding radius.
+ *  Tuned so a realistic burst of sustained fire (a couple of seconds, not a
+ *  perfectly-held aim for 5+ seconds) reliably finishes off even the largest
+ *  tier-2 rocks — the original curve (8 + r*18) made big rocks take so long
+ *  to kill that aim naturally drifting onto neighboring asteroids mid-belt
+ *  meant damage got spread thin across many rocks (visible dents) without
+ *  ever concentrating enough on one to fracture it (no debris). */
+function maxHealthForRadius(radius: number): number {
+  return 5 + radius * 10;
+}
+
+/**
+ * Builds the full per-asteroid state array for a given quality tier's
+ * instance `count`. Iterates `computeTierVariantCounts` — the exact same
+ * group order/sizes `AsteroidBelt.tsx`'s render loop uses — so a state
+ * array index (`globalIdx`) and the render loop's running instance counter
+ * always agree without either side needing to share mutable data.
+ */
+export function buildAsteroidStates(count: number, seed: number = BELT_SEED): AsteroidState[] {
+  const states: AsteroidState[] = [];
+  for (const g of computeTierVariantCounts(count)) {
+    for (let i = 0; i < g.n; i++) {
+      const placed = placeAsteroid(g.tierIdx, g.variantIdx, i, seed);
+      const maxHealth = maxHealthForRadius(placed.radius);
+      states.push({
+        tierIdx: g.tierIdx,
+        variantIdx: g.variantIdx,
+        instIdx: i,
+        pos: placed.pos.clone(),
+        vel: new Vector3(),
+        radius: placed.radius,
+        health: maxHealth,
+        maxHealth,
+        seed,
+        alive: true,
+        indestructible: false,
+        hitSeq: 0,
+        promoted: false,
+      });
+    }
+  }
+  return states;
+}
+

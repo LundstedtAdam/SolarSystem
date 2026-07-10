@@ -10,7 +10,7 @@
 import localforage from 'localforage';
 import type { ResourceType } from './voxelTypes';
 import type { CraftedItem } from './recipes';
-import type { Structure, ResourceDrop } from '../store';
+import type { Structure, ResourceDrop, VoxelTool } from '../store';
 
 const SCHEMA = 'v1';
 
@@ -81,6 +81,40 @@ export async function loadMode(): Promise<{ creative: boolean } | null> {
 export async function saveMode(creative: boolean): Promise<void> {
   try {
     await store.setItem(MODE_KEY, { creative });
+  } catch {
+    /* ignore */
+  }
+}
+
+const ACTIVE_TOOL_KEY = `activeTool.${SCHEMA}`;
+const FLASHLIGHT_KEY = `flashlightOn.${SCHEMA}`;
+
+/** Item-wheel equipped tool. null = never chosen (pickaxe default). */
+export async function loadActiveTool(): Promise<VoxelTool | null> {
+  try {
+    return (await store.getItem<VoxelTool>(ACTIVE_TOOL_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+export async function saveActiveTool(tool: VoxelTool): Promise<void> {
+  try {
+    await store.setItem(ACTIVE_TOOL_KEY, tool);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function loadFlashlightOn(): Promise<boolean | null> {
+  try {
+    return (await store.getItem<boolean>(FLASHLIGHT_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+}
+export async function saveFlashlightOn(on: boolean): Promise<void> {
+  try {
+    await store.setItem(FLASHLIGHT_KEY, on);
   } catch {
     /* ignore */
   }

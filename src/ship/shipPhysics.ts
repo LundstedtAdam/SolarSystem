@@ -1,11 +1,18 @@
 import { Quaternion, Vector3 } from 'three';
 
 export const MAX_THRUST = 350;
+/** Collision sphere radius (world units) for ship-vs-planet/asteroid contact —
+ *  sized against the ship's ~1.2-unit target length (see ShipModel.tsx). */
+export const SHIP_COLLISION_RADIUS = 0.6;
 /** Per-frame velocity retention (@60fps) when flight assist is ON — bleeds off
  *  momentum so the ship auto-decelerates to a stop when input is released. */
 export const ASSIST_DAMPING = 0.985;
 /** Near-frictionless Newtonian drift when flight assist is OFF. */
 export const DRIFT_DAMPING = 0.9995;
+/** Per-frame velocity retention for free-drifting asteroid debris — no
+ *  thrust/rotation input, just inertia (reuses `integrate()` below rather
+ *  than a second physics implementation). */
+export const DEBRIS_DAMPING = 0.999;
 
 /** Max angular rate per axis (rad/s), scaled by sensitivity. Capped so the
  *  ship never feels twitchy regardless of how hard the stick is pushed. */

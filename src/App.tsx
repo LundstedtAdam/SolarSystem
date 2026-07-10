@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './store';
-import { loadInventory, loadItems, loadSeen, loadMode, loadUpgrades } from './voxel/persistence';
+import { loadInventory, loadItems, loadSeen, loadMode, loadUpgrades, loadActiveTool, loadFlashlightOn } from './voxel/persistence';
 import { DEFAULT_UPGRADES, type ShipUpgrades } from './ship/upgrades';
 import { SolarSystem } from './scene/SolarSystem';
 import { HUD } from './ui/HUD';
@@ -13,6 +13,7 @@ import { VoxelAudio } from './audio/VoxelAudio';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { Labels } from './ui/Labels';
 import { ShipHUD } from './ui/ShipHUD';
+import { SpaceCrosshair } from './ui/SpaceCrosshair';
 import { DescentOverlay } from './ui/DescentOverlay';
 import { SurfaceHUD } from './ui/SurfaceHUD';
 import { VoxelHUD } from './ui/VoxelHUD';
@@ -43,6 +44,12 @@ export default function App() {
     loadUpgrades().then((saved) => {
       if (saved) useStore.getState().setShipUpgrades({ ...DEFAULT_UPGRADES, ...saved } as ShipUpgrades);
     });
+    loadActiveTool().then((tool) => {
+      if (tool) useStore.getState().setActiveTool(tool);
+    });
+    loadFlashlightOn().then((on) => {
+      if (on) useStore.getState().setFlashlightOn(on);
+    });
   }, []);
 
   return (
@@ -53,6 +60,7 @@ export default function App() {
       <InfoPanel />
       <SettingsPanel />
       <ShipHUD />
+      <SpaceCrosshair />
       <DescentOverlay />
       <SurfaceHUD />
       <VoxelHUD />

@@ -12,6 +12,7 @@ import {
 } from 'three';
 import { useGLTF } from '@react-three/drei';
 import { ShipUpgradeVisuals } from './ShipUpgradeVisuals';
+import { shipTelemetry } from './shipTelemetry';
 
 const GLTF_PATH = '/models/spaceship.glb';
 const THRUSTER_NAMES = ['thruster', 'engine', 'exhaust', 'nozzle', 'jet'];
@@ -70,7 +71,10 @@ function FallbackShip() {
 
   useFrame(() => {
     if (glowRef.current) {
-      const scale = 0.8 + Math.random() * 0.4;
+      // Base scale tracks throttle (idle thrusters still glow faintly; full
+      // burn is visibly larger/brighter); a small residual jitter keeps the
+      // flame reading as live rather than static.
+      const scale = 0.55 + 0.55 * shipTelemetry.throttle + Math.random() * 0.1;
       glowRef.current.scale.set(scale, scale, scale);
     }
   });
@@ -140,11 +144,15 @@ function GLTFShip() {
   }, [cloned]);
 
   useFrame(() => {
+    // Base intensity tracks throttle magnitude directly (thrusters read as
+    // barely-lit at idle, fully bright at full burn); small residual flicker
+    // keeps the flame alive rather than a flat brightness.
+    const base = 0.35 + 0.85 * shipTelemetry.throttle;
+    const flicker = 0.95 + Math.random() * 0.1;
     for (const mesh of thrusterMeshes.current) {
-      const flicker = 0.9 + Math.random() * 0.2;
       const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as MeshStandardMaterial;
       if (mat && 'emissiveIntensity' in mat) {
-        mat.emissiveIntensity = 1.2 * flicker;
+        mat.emissiveIntensity = base * flicker;
       }
     }
   });

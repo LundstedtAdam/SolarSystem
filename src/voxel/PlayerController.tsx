@@ -5,12 +5,16 @@ import {
   Group,
   Mesh,
   BoxGeometry,
+  CylinderGeometry,
   MeshStandardMaterial,
   Color,
   Vector3,
+  SpotLight,
+  Object3D,
   type PerspectiveCamera,
 } from 'three';
 import { useStore } from '../store';
+import { QUALITY } from '../systems/quality';
 import { getBiome } from '../terrain/biomes';
 import { audio } from '../audio/AudioManager';
 import { Player, type VoxelApi } from './player';
@@ -49,31 +53,76 @@ const SILO_ABSORB_SQ = 5.0 * 5.0;
 const DEPOSIT_SQ = 3.5 * 3.5;
 /** Squared range within which the player can craft at a station. */
 const CRAFT_SQ = 3.5 * 3.5;
+/** Flashlight SpotLight intensity when lit — high enough to read as a real
+ *  beam against the darkness system's dimmed ambient (see darkness.ts). */
+const FLASHLIGHT_INTENSITY = 12;
 
-/** Builds the visible first-person hand + tool, parented to the camera. */
-function makeHand(biome: ReturnType<typeof getBiome>): Group {
+/** The visible first-person hand rig: one shared forearm plus three
+ *  pre-built, mutually-exclusive tool heads (toggled via `.visible`, not
+ *  rebuilt on every tool switch) — the pickaxe (unchanged from before this
+ *  feature), the gun, and the flashlight (which also carries its actual
+ *  `SpotLight`, wired on/off in the flashlight step). */
+interface HandRig {
+  group: Group;
+  pickaxe: Group;
+  gun: Group;
+  flashlight: Group;
+  spotLight: SpotLight;
+}
+
+/** Builds the visible first-person hand + all three tool heads, parented to
+ *  the camera. */
+function makeHand(biome: ReturnType<typeof getBiome>): HandRig {
   const g = new Group();
   const skin = new MeshStandardMaterial({ color: new Color(0.82, 0.66, 0.52), roughness: 0.9 });
-  const tool = new MeshStandardMaterial({
+  // Forearm/hand — shared by every tool.
+  const arm = new Mesh(new BoxGeometry(0.16, 0.16, 0.5), skin);
+  arm.position.set(0.32, -0.32, -0.5);
+  arm.rotation.set(0.2, -0.2, 0.1);
+  g.add(arm);
+
+  // Pickaxe — a simple pick/spade head, unchanged visual from before tools existed.
+  const pickaxeMat = new MeshStandardMaterial({
     color: new Color(...biome.colorHigh),
     roughness: 0.6,
     metalness: 0.1,
   });
-  // Forearm/hand.
-  const arm = new Mesh(new BoxGeometry(0.16, 0.16, 0.5), skin);
-  arm.position.set(0.32, -0.32, -0.5);
-  arm.rotation.set(0.2, -0.2, 0.1);
-  // Tool head poking forward (a simple pick/spade).
-  const head = new Mesh(new BoxGeometry(0.1, 0.28, 0.1), tool);
-  head.position.set(0.34, -0.18, -0.78);
-  head.rotation.set(0.3, 0, 0.2);
-  g.add(arm, head);
+  const pickaxe = new Group();
+  const pickaxeHead = new Mesh(new BoxGeometry(0.1, 0.28, 0.1), pickaxeMat);
+  pickaxeHead.position.set(0.34, -0.18, -0.78);
+  pickaxeHead.rotation.set(0.3, 0, 0.2);
+  pickaxe.add(pickaxeHead);
+
+  // Gun — a dark elongated barrel, visually distinct from the pickaxe's rock-toned head.
+  const gunMat = new MeshStandardMaterial({ color: new Color(0.22, 0.22, 0.25), roughness: 0.4, metalness: 0.7 });
+  const gun = new Group();
+  const gunBody = new Mesh(new BoxGeometry(0.1, 0.1, 0.46), gunMat);
+  gunBody.position.set(0.34, -0.2, -0.84);
+  gun.add(gunBody);
+
+  // Flashlight — a pale cylinder housing plus its actual SpotLight (off by
+  // default; toggled by the flashlight-toggle input, see the flashlight step).
+  const flashlight = new Group();
+  const flMat = new MeshStandardMaterial({ color: new Color(0.78, 0.78, 0.72), roughness: 0.5, metalness: 0.3 });
+  const flBody = new Mesh(new CylinderGeometry(0.05, 0.06, 0.26, 8), flMat);
+  flBody.position.set(0.34, -0.2, -0.8);
+  flBody.rotation.set(Math.PI / 2, 0, 0.2);
+  flashlight.add(flBody);
+
+  const spotLight = new SpotLight(0xfff2cc, 0, 24, Math.PI / 7, 0.4, 1.4);
+  spotLight.position.set(0.34, -0.12, -0.5);
+  const spotTarget = new Object3D();
+  spotTarget.position.set(0.34, -0.12, -5.5);
+  flashlight.add(spotLight, spotTarget);
+  spotLight.target = spotTarget;
+
+  g.add(pickaxe, gun, flashlight);
   g.renderOrder = 2;
-  for (const m of [arm, head]) {
+  for (const m of [arm, pickaxeHead, gunBody, flBody]) {
     m.castShadow = false;
     m.receiveShadow = false;
   }
-  return g;
+  return { group: g, pickaxe, gun, flashlight, spotLight };
 }
 
 /** First-person controller: reads unified input, steps the player physics
@@ -96,6 +145,7 @@ export function PlayerController({
   const stride = useRef(0); // accumulated walk distance for footsteps
   const lastCave = useRef(-1);
   const refineAcc = useRef(0); // throttles refineTick to ~1/s
+  const wasPrimaryHeld = useRef(false); // edge-detects the flashlight toggle
 
   // Phase 11.4 survival — simulated here (the frame loop owns dt + player pos);
   // the store only mirrors a throttled fraction for the HUD. All of it is
@@ -112,6 +162,10 @@ export function PlayerController({
   }, [planet]);
 
   const fov = useStore((s) => s.fov);
+  const activeTool = useStore((s) => s.activeTool);
+  const flashlightOn = useStore((s) => s.flashlightOn);
+  const shadowsEnabled = QUALITY[useStore((s) => s.quality)].shadows;
+  const handRef = useRef<HandRig | null>(null);
 
   // Camera setup + desktop input wiring. FOV is applied in its own effect so a
   // mid-session slider change doesn't reset `ready` (which would respawn the
@@ -129,13 +183,17 @@ export function PlayerController({
     camera.updateProjectionMatrix();
   }, [camera, fov]);
 
-  // Visible hand parented to the camera.
+  // Visible hand parented to the camera — built once per planet (biome-tinted
+  // pickaxe head), all three tool heads pre-built and toggled by the effect
+  // below rather than rebuilt on every tool switch.
   useEffect(() => {
     const hand = makeHand(getBiome(planet));
-    camera.add(hand);
+    handRef.current = hand;
+    camera.add(hand.group);
     return () => {
-      camera.remove(hand);
-      hand.traverse((o) => {
+      camera.remove(hand.group);
+      handRef.current = null;
+      hand.group.traverse((o) => {
         if (o instanceof Mesh) {
           o.geometry.dispose();
           (o.material as MeshStandardMaterial).dispose();
@@ -143,6 +201,22 @@ export function PlayerController({
       });
     };
   }, [camera, planet]);
+
+  // Swap which tool head is visible, and drive the flashlight's actual light
+  // output — lit only when it's both equipped AND toggled on, independent
+  // states (re-equipping it shouldn't force it back on). Cheap visibility/
+  // intensity toggle, no alloc/dispose churn on every switch.
+  useEffect(() => {
+    const hand = handRef.current;
+    if (!hand) return;
+    hand.pickaxe.visible = activeTool === 'pickaxe';
+    hand.gun.visible = activeTool === 'gun';
+    hand.flashlight.visible = activeTool === 'flashlight';
+    hand.spotLight.intensity = activeTool === 'flashlight' && flashlightOn ? FLASHLIGHT_INTENSITY : 0;
+    hand.spotLight.castShadow = shadowsEnabled;
+    // Also re-apply whenever the hand itself is rebuilt (planet change) —
+    // the freshly built rig otherwise defaults every tool head to visible.
+  }, [activeTool, flashlightOn, shadowsEnabled, planet]);
 
   useFrame((_, dt) => {
     if (useStore.getState().sceneMode.type !== 'voxel') return;
@@ -179,10 +253,25 @@ export function PlayerController({
       Math.min(PITCH_LIMIT, player.pitch - cubicLook(dy, ms)),
     );
 
-    // Continuous hold-to-mine at the crosshair (touch Dig / left mouse / RT).
-    api.mineTick(Math.min(dt, 0.05), voxelInput.mine);
+    // Continuous hold-to-mine at the crosshair (touch Dig / left mouse / RT) —
+    // only the pickaxe can mine; the gun has its own ranged tick. Non-reactive
+    // store read (no subscription/re-render) since this already runs inside
+    // useFrame.
+    const activeTool = useStore.getState().activeTool;
+    api.mineTick(Math.min(dt, 0.05), activeTool === 'pickaxe' && voxelInput.mine);
+    api.gunTick(Math.min(dt, 0.05), activeTool === 'gun' && voxelInput.mine);
     // Edge-triggered placement of the active buildable (one per tap).
     if (consumePlace()) api.place();
+
+    // Flashlight toggle: mining is a no-op for this tool, so the primary
+    // trigger is free to repurpose as an on/off toggle instead — no new input
+    // surface needed on desktop or touch. Edge-triggered on the rising edge
+    // (press), not held, so one tap/click toggles once.
+    if (activeTool === 'flashlight' && voxelInput.mine && !wasPrimaryHeld.current) {
+      const st = useStore.getState();
+      st.setFlashlightOn(!st.flashlightOn);
+    }
+    wasPrimaryHeld.current = voxelInput.mine;
 
     player.update(
       Math.min(dt, 0.05),
@@ -364,9 +453,13 @@ export function PlayerController({
       stride.current = 0;
     }
 
-    // Underground swell: how far the eye sits below the surface column.
+    // Underground swell: how far the eye sits below the surface column. Also
+    // the darkness system's cave signal (VoxelScene.tsx dims ambient light by
+    // this every frame) — published unconditionally since lighting needs the
+    // continuous value, not just the audio system's threshold-gated updates.
     const top = surfaceHeightAt(player.pos.x, player.pos.z, terrain, seed);
     const cave = Math.max(0, Math.min(1, (top - player.eyeY() + 2) / 10));
+    voxelTelemetry.cave = cave;
     if (Math.abs(cave - lastCave.current) > 0.04) {
       lastCave.current = cave;
       audio.setCaveAmount(cave);

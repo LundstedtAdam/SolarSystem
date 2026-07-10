@@ -38,6 +38,29 @@ export interface QualitySettings {
   voxelScatter: number;
   /** Max instanced trees in the voxel world (World Richness Phase 7). */
   voxelTrees: number;
+  /** Pooled engine-exhaust particle cap for the piloting ship trail. */
+  shipTrailParticles: number;
+  /** Max simultaneous asteroid-fracture debris/ore-chunk fragments. */
+  debrisMax: number;
+  /** Debris fragment lifetime (seconds) before it force-expires. */
+  debrisLifetimeSec: number;
+  /** Debris beyond this distance from the ship is force-culled each frame. */
+  debrisCullDistance: number;
+  /** Max simultaneous mining impact-chip spark particles (cosmetic only). */
+  miningVfxBudget: number;
+  /** Max simultaneous in-flight weapon projectiles. Short-lived (flight time
+   *  is bounded by MINING_RANGE/PROJECTILE_SPEED), so this stays small even
+   *  at the fastest fire rate. */
+  projectileMax: number;
+  /** Max concurrently "promoted" asteroids — pulled out of the shared
+   *  InstancedMesh into a standalone, individually deformable mesh on first
+   *  damage. Small regardless of total asteroid count: each is a real draw
+   *  call plus potential per-vertex dent work. */
+  promotedAsteroidMax: number;
+  /** Whether a hard-enough debris bounce can chip off secondary fragments.
+   *  Debris always bounces (cheap reflection math); this only gates the
+   *  extra population growth from cascade chips on low-end tiers. */
+  cascadeFractureEnabled: boolean;
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
@@ -48,7 +71,7 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     atmosphereSegments: 24,
     stars: 600,
     solarWind: 300,
-    asteroids: 0,
+    asteroids: 500,
     dprMax: 1,
     bloomStrength: 0,
     bloomRadius: 0.4,
@@ -64,6 +87,14 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 180,
     voxelScatter: 120,
     voxelTrees: 60,
+    shipTrailParticles: 0,
+    debrisMax: 12,
+    debrisLifetimeSec: 8,
+    debrisCullDistance: 250,
+    miningVfxBudget: 8,
+    projectileMax: 6,
+    promotedAsteroidMax: 0,
+    cascadeFractureEnabled: false,
   },
   medium: {
     planetSegments: 40,
@@ -88,6 +119,14 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 450,
     voxelScatter: 340,
     voxelTrees: 160,
+    shipTrailParticles: 40,
+    debrisMax: 24,
+    debrisLifetimeSec: 12,
+    debrisCullDistance: 400,
+    miningVfxBudget: 16,
+    projectileMax: 10,
+    promotedAsteroidMax: 8,
+    cascadeFractureEnabled: true,
   },
   high: {
     planetSegments: 64,
@@ -112,6 +151,14 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 900,
     voxelScatter: 680,
     voxelTrees: 320,
+    shipTrailParticles: 90,
+    debrisMax: 64,
+    debrisLifetimeSec: 18,
+    debrisCullDistance: 700,
+    miningVfxBudget: 32,
+    projectileMax: 16,
+    promotedAsteroidMax: 16,
+    cascadeFractureEnabled: true,
   },
   ultra: {
     planetSegments: 96,
@@ -136,6 +183,14 @@ export const QUALITY: Record<Quality, QualitySettings> = {
     voxelParticles: 1500,
     voxelScatter: 1100,
     voxelTrees: 550,
+    shipTrailParticles: 160,
+    debrisMax: 128,
+    debrisLifetimeSec: 24,
+    debrisCullDistance: 1000,
+    miningVfxBudget: 48,
+    projectileMax: 24,
+    promotedAsteroidMax: 32,
+    cascadeFractureEnabled: true,
   },
 };
 

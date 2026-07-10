@@ -6,7 +6,7 @@ import type { ResourceType } from './voxel/voxelTypes';
 import type { BuildableId } from './voxel/buildables';
 import { recipeById, type CraftedItem } from './voxel/recipes';
 import { planetPower } from './voxel/power';
-import { saveMode, saveUpgrades, saveInventory, saveItems } from './voxel/persistence';
+import { saveMode, saveUpgrades, saveInventory, saveItems, saveActiveTool, saveFlashlightOn } from './voxel/persistence';
 import {
   UPGRADE_COSTS,
   UPGRADE_MAX_TIER,
@@ -16,6 +16,9 @@ import {
   type UpgradeKind,
   type ShipUpgrades,
 } from './ship/upgrades';
+
+/** Item wheel: the three on-foot equippable tools. */
+export type VoxelTool = 'pickaxe' | 'gun' | 'flashlight';
 
 /** Backpack capacity with no cargo upgrades. */
 const BASE_BACKPACK_CAPACITY = 50;
@@ -462,6 +465,12 @@ interface SimState {
   /** Phase 11.2 crafted items, and the resources ever discovered (recipe reveal). */
   items: Partial<Record<CraftedItem, number>>;
   seenResources: Partial<Record<ResourceType, true>>;
+  /** Item wheel: which on-foot tool is equipped. Mining only runs when this is
+   *  'pickaxe'; the gun's alt-mining tick only runs when it's 'gun'. */
+  activeTool: VoxelTool;
+  /** Whether the flashlight is currently lit — independent of whether it's the
+   *  equipped tool, so re-equipping it doesn't force it back on. */
+  flashlightOn: boolean;
   /** Creative mode (the default): placement ignores resource/item costs and no
    *  survival mechanics (oxygen/tethers/death) apply. Survival is opt-in. */
   creativeMode: boolean;
@@ -599,6 +608,8 @@ interface SimState {
   craft: (recipeId: string, stationId: number) => boolean;
   setItems: (items: Partial<Record<CraftedItem, number>>) => void;
   setSeenResources: (seen: Partial<Record<ResourceType, true>>) => void;
+  setActiveTool: (tool: VoxelTool) => void;
+  setFlashlightOn: (on: boolean) => void;
   setCreativeMode: (v: boolean) => void;
 
   /** Phase 11.4 survival. */
@@ -682,6 +693,8 @@ export const useStore = create<SimState>((set, get) => ({
   activeBuildable: 'block',
   items: {},
   seenResources: {},
+  activeTool: 'pickaxe',
+  flashlightOn: false,
   // Creative is the default experience; survival is an explicit opt-in
   // (Settings). Hydrated from persistence in App so the choice sticks.
   creativeMode: true,
@@ -1169,6 +1182,14 @@ export const useStore = create<SimState>((set, get) => ({
   },
   setItems: (items) => set({ items }),
   setSeenResources: (seenResources) => set({ seenResources }),
+  setActiveTool: (activeTool) => {
+    set({ activeTool });
+    void saveActiveTool(activeTool);
+  },
+  setFlashlightOn: (flashlightOn) => {
+    set({ flashlightOn });
+    void saveFlashlightOn(flashlightOn);
+  },
   setCreativeMode: (creativeMode) => {
     // Entering survival always starts with a full supply; leaving it clears any
     // lingering death overlay so creative shows zero survival UI.

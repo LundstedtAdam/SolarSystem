@@ -326,3 +326,28 @@ describe('applyOfflineProduction', () => {
     expect(s.stored.iron).toBe(Math.floor(MAX_OFFLINE_SECONDS / 6));
   });
 });
+
+describe('space POI discovery (planet: "space")', () => {
+  it('records a space discovery under a "space:" key without a new data shape', () => {
+    const isNew = useStore.getState().recordDiscovery({ planet: 'space', id: 'derelict-hull-belt', name: 'Wreck' });
+    expect(isNew).toBe(true);
+    expect(useStore.getState().discovered['space:derelict-hull-belt']).toBe(true);
+    expect(useStore.getState().journal[0].planet).toBe('space');
+  });
+
+  it('does not collide with a voxel-surface discovery of the same POI id on a different planet', () => {
+    useStore.getState().recordDiscovery({ planet: 'space', id: 'poi-1', name: 'Space POI' });
+    useStore.getState().recordDiscovery({ planet: 'Jorden', id: 'poi-1', name: 'Surface POI' });
+    const s = useStore.getState();
+    expect(s.discovered['space:poi-1']).toBe(true);
+    expect(s.discovered['Jorden:poi-1']).toBe(true);
+    expect(s.journal).toHaveLength(2);
+  });
+
+  it('returns false (no duplicate journal entry) on a repeat discovery', () => {
+    useStore.getState().recordDiscovery({ planet: 'space', id: 'signal-belt', name: 'Signal' });
+    const isNew = useStore.getState().recordDiscovery({ planet: 'space', id: 'signal-belt', name: 'Signal' });
+    expect(isNew).toBe(false);
+    expect(useStore.getState().journal).toHaveLength(1);
+  });
+});

@@ -24,6 +24,10 @@ was folded directly into `storyline` rather than merged through the PR itself.
 technical audit + six follow-up rounds (see "Technical audit & hardening"
 below) — it is not one of the numbered phases.
 
+**`space`** branches off `storyline` for the Act 1 space-layer pass described
+in Phase 11.8 below (ship collision, asteroid fracture/debris, space mining,
+space-POI narrative content) — not yet merged back or manually playtested.
+
 ---
 
 ## Completed phases
@@ -118,6 +122,59 @@ to the resource/crafting system below despite sharing the "Phase 11" label.
 | 11.5 — Ship upgrades | **Done, since amended** | Hyperdrive/scanner/shielding/cargo tiers, hard shielding gate on hazardous bodies, procedural hull visuals per upgrade. `storyline`'s Phase 10.5 work later renamed Hyperdrive → **Quantum Drive** and removed its distance-band gating (shielding is now the only hard descent gate), to avoid clashing with the story's own FTL beat. |
 | 11.6 — Backpack fidelity + offline progression | **Implemented, pending playtest** | PR #8 Round 6 (Minecraft-style grid inventory; extractor/condenser passive production with capped offline catch-up) delivers this sub-phase's actual goals, but was committed as part of the audit PR, not tagged `11.6`. The PR body itself flags that manual in-game playtesting of placing/producing/offline-catch-up has not been done — this is currently being manually playtested. |
 | 11.7 — Balance, persistence hardening, perf pass | **Partially covered, unlabeled — not a dedicated pass** | PR #8 Round 1 covers real ground here (persistence bug fixes: cargo capacity, resource duplication, ground-drop loss; perf: telemetry decoupling, capped raycasts, fewer setState calls) but there has been no dedicated economy-balance or full regression pass across all 16 bodies. |
+
+### Phase 11.8 — Act 1 space layer (flight collision, asteroid fracture, space mining, space narrative) — branch `space`, unmerged
+Built to make the Solar System (Act 1) feel like an archaeological, structured
+place to fly through rather than empty traversal space, in strict priority
+order: flight feel first, then exploration density, then narrative, then
+performance — extending `shipPhysics.ts`/`ShipController.tsx`/`AsteroidBelt.tsx`/
+`quality.ts` rather than adding a parallel physics engine or ECS.
+
+- **Ship collision**: the ship previously flew straight through planets and
+  asteroids with zero physical response. It now slides off both on contact —
+  an analytic sphere push-out + tangential-velocity-retain correction, never
+  an added force, so the "Phase 11: pure thrust, no gravity" flight model is
+  untouched. Asteroid collision is broadphased through a new cylindrical
+  spatial grid (radial × angular bins tuned to the belt's thin-torus shape)
+  instead of scanning up to 9000 instances.
+- **Flight-feel juice**: fixed the thruster glow (previously a random flicker
+  unrelated to throttle) to track actual throttle; added a pooled
+  engine-exhaust particle trail and a throttle-reactive engine hum.
+- **Deterministic, structured belt**: the belt's instance placement was
+  unseeded `Math.random()` (reshuffled on every quality change). Replaced with
+  a pure function of `(tier, variant, index, seed)` using the existing
+  `cellHash`/`seedFromName` primitives, so a given index always resolves to
+  the same rock — required for asteroid collision/fracture state to stay in
+  sync with the render matrices, and for narrative content to anchor to a
+  specific asteroid. Placement is also sector-weighted (24 angular sectors,
+  deterministic gap/sparse/normal/dense density) so the belt reads as
+  corridors and clusters rather than uniform noise.
+- **Asteroid fracture + debris**: asteroids now hold real health instead of
+  being binary — a hit that doesn't finish one off just wears it down (no
+  debris); a lethal hit spawns 1–5 debris fragments, or 4–8 on a big-overkill
+  hit, with deterministically hashed (not `Math.random()`) spawn directions/
+  sizes. Debris never recursively fractures. A pooled, quality-budgeted debris
+  population drifts freely via the ship's existing `integrate()` helper and
+  sticks-and-expires on any contact rather than continuing to bounce.
+- **Space mining**: a raycast beam (mirroring the voxel mining crosshair
+  convention) feeds sustained fire into the same fracture-damage pipeline
+  collision damage uses. A fraction of any fracture's debris comes back as
+  collectible ore with a resource type from the existing inventory system;
+  ore chunks home toward the ship within range and collect into the same
+  backpack voxel mining uses.
+- **Space narrative/POI layer**: a small, fixed set of space POIs (wreckage,
+  a signal anomaly reusing the existing cross-body "signal" mystery, a
+  resource cluster, a distant landmark), discovered by proximity while
+  piloting and recorded through the *existing* `recordDiscovery` journal with
+  `planet: 'space'` — no new store field, no new narrative system. Wreckage
+  can anchor to a specific, stable belt asteroid and flags it indestructible.
+- Not done / explicitly deferred: crater cosmetics on sub-lethal hits, mining
+  muzzle-flash VFX, and space-POI density scaling were all cut as
+  cosmetic-only per the "cut simulation complexity first" performance rule —
+  no quality-tier fields were added for capabilities that don't exist yet.
+  Manual in-game/visual playtesting has not been done (this environment
+  cannot render WebGPU live); flight feel, collision weight, frame time in a
+  dense belt, and fracture-burst cost all need a live-device check.
 
 ### Phase 12 — Procedural galaxy
 Travel beyond the solar system into procedurally generated star systems, each
