@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './store';
-import { loadInventory, loadItems, loadSeen, loadMode, loadUpgrades } from './voxel/persistence';
+import { loadInventory, loadItems, loadSeen, loadMode, loadUpgrades, loadActiveTool, loadFlashlightOn } from './voxel/persistence';
 import { DEFAULT_UPGRADES, type ShipUpgrades } from './ship/upgrades';
 import { SolarSystem } from './scene/SolarSystem';
 import { HUD } from './ui/HUD';
@@ -43,6 +43,12 @@ export default function App() {
     });
     loadUpgrades().then((saved) => {
       if (saved) useStore.getState().setShipUpgrades({ ...DEFAULT_UPGRADES, ...saved } as ShipUpgrades);
+    });
+    loadActiveTool().then((tool) => {
+      if (tool) useStore.getState().setActiveTool(tool);
+    });
+    loadFlashlightOn().then((on) => {
+      if (on) useStore.getState().setFlashlightOn(on);
     });
   }, []);
 

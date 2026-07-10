@@ -14,6 +14,7 @@ import { CRAFTED_LABEL, CRAFTED_COLOR, type CraftedItem } from '../voxel/recipes
 import { planetPower } from '../voxel/power';
 import { CraftMenu } from './CraftMenu';
 import { ItemSlot } from './ItemSlot';
+import { ToolWheel } from './ToolWheel';
 import type { ResourceType } from '../voxel/voxelTypes';
 
 type Menu = 'none' | 'backpack' | 'build' | 'craft' | 'silo';
@@ -363,6 +364,7 @@ export function VoxelHUD() {
   const inventory = useStore((s) => s.inventory);
   const capacity = useStore((s) => s.backpackCapacity);
   const activeBuildable = useStore((s) => s.activeBuildable);
+  const activeTool = useStore((s) => s.activeTool);
   const structures = useStore((s) => s.structures);
   const creativeMode = useStore((s) => s.creativeMode);
   const toggleSettings = useStore((s) => s.toggleSettings);
@@ -491,6 +493,7 @@ export function VoxelHUD() {
       {/* Underwater tint + vignette while the eye is below a water surface. */}
       {hud.underwater && <div className="voxel-underwater" aria-hidden="true" />}
       <div className="voxel-crosshair" aria-hidden="true" />
+      <ToolWheel />
 
       {/* Top-right menu toggles (also serve as compact indicators). */}
       <div className="voxel-menu-toggles">
@@ -500,6 +503,10 @@ export function VoxelHUD() {
             ⚡ {t('power')} {power.generated}/{power.consumed}
           </div>
         )}
+        <div className="voxel-toggle-btn voxel-tool-indicator" aria-label={t(activeTool)}>
+          {t(activeTool)}
+          {keyHint('Q')}
+        </div>
         <button
           className={`voxel-toggle-btn${menu === 'backpack' ? ' active' : ''}`}
           onClick={() => openMenu('backpack')}

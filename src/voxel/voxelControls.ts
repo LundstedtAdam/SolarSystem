@@ -51,8 +51,57 @@ export const voxelStation = { available: false, id: -1 };
 /** Live player telemetry for the on-foot HUD (non-reactive; polled via rAF so
  *  the compass never forces a 60fps React re-render). Updated by the
  *  PlayerController each frame; the ship sits at the world origin.
- *  `underwater` = the eye voxel is liquid — drives the underwater overlay. */
-export const voxelTelemetry = { x: 0, y: 0, z: 0, yaw: 0, underwater: false };
+ *  `underwater` = the eye voxel is liquid — drives the underwater overlay.
+ *  `cave` = 0..1 how far below the surface the eye sits (also feeds the
+ *  darkness system, see VoxelScene.tsx). */
+export const voxelTelemetry = { x: 0, y: 0, z: 0, yaw: 0, underwater: false, cave: 0 };
+
+// --- Item wheel --------------------------------------------------------
+// Hold-to-open radial tool selector. Deliberately NOT modal (unlike the
+// Backpack/Craft/Silo sheets' `openMenu()`): pointer-lock stays engaged and
+// the game keeps simulating while the wheel is open — opening it just
+// redirects raw look-deltas into the wheel's own drag vector instead of the
+// camera, so the same physical drag gesture aims the wheel instead of
+// spinning the view.
+
+export type ToolSlice = 'pickaxe' | 'gun' | 'flashlight';
+const WHEEL_SLICES: ToolSlice[] = ['pickaxe', 'gun', 'flashlight'];
+/** Below this drag distance (px), a release doesn't change the selection —
+ *  lets a player tap-and-release without accidentally picking whichever
+ *  slice happens to be at angle 0. */
+export const WHEEL_DEADZONE_PX = 14;
+
+export interface WheelState {
+  open: boolean;
+  /** Accumulated drag vector since the wheel opened (px). */
+  dx: number;
+  dy: number;
+  /** Set by the input layer on release; consumed (and cleared) by the UI,
+   *  which is the one place that knows how to turn a slice into a store
+   *  action — keeps this module free of any dependency on ../store. */
+  selected: ToolSlice | null;
+}
+export const voxelWheel: WheelState = { open: false, dx: 0, dy: 0, selected: null };
+
+/** Pure angle math: which of the 3 equal 120° wedges a drag vector points
+ *  into, or null if the drag hasn't cleared the dead zone. 0° (no drag on
+ *  the y-axis, i.e. straight up) is the first slice's center, wedges run
+ *  clockwise. Exported standalone for unit testing. */
+export function resolveWheelSlice(dx: number, dy: number): ToolSlice | null {
+  if (Math.hypot(dx, dy) < WHEEL_DEADZONE_PX) return null;
+  const angle = Math.atan2(dx, -dy); // 0 = up, clockwise-positive
+  const norm = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const idx = Math.floor((norm + Math.PI / 3) / ((Math.PI * 2) / 3)) % WHEEL_SLICES.length;
+  return WHEEL_SLICES[idx];
+}
+
+/** Read and clear the wheel's resolved selection (mirrors consumePlace/
+ *  consumeScan's one-shot-read convention). */
+export function consumeWheelSelection(): ToolSlice | null {
+  const s = voxelWheel.selected;
+  voxelWheel.selected = null;
+  return s;
+}
 
 export function consumeLook(): { dx: number; dy: number } {
   const d = { dx: voxelInput.look.dx, dy: voxelInput.look.dy };
@@ -116,15 +165,28 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'KeyF') voxelInput.deposit = true; // deposit into nearby silo
     if (e.code === 'KeyV') voxelInput.openSilo = true; // view/withdraw nearby silo
+    if (e.code === 'KeyQ' && !voxelWheel.open) {
+      voxelWheel.open = true;
+      voxelWheel.dx = 0;
+      voxelWheel.dy = 0;
+    }
     keys[e.code] = true;
     refreshKeys();
   };
   const ku = (e: KeyboardEvent) => {
+    if (e.code === 'KeyQ' && voxelWheel.open) {
+      voxelWheel.open = false;
+      voxelWheel.selected = resolveWheelSlice(voxelWheel.dx, voxelWheel.dy);
+    }
     keys[e.code] = false;
     refreshKeys();
   };
   const onMouseMove = (e: MouseEvent) => {
-    if (document.pointerLockElement === dom) {
+    if (document.pointerLockElement !== dom) return;
+    if (voxelWheel.open) {
+      voxelWheel.dx += e.movementX;
+      voxelWheel.dy += e.movementY;
+    } else {
       voxelInput.look.dx += e.movementX;
       voxelInput.look.dy += e.movementY;
     }
@@ -149,9 +211,13 @@ export function attachDesktopControls(dom: HTMLElement): () => void {
   const onBlur = () => {
     for (const k in keys) keys[k] = false;
     resetVoxelInput();
+    voxelWheel.open = false;
   };
   const onLockChange = () => {
-    if (document.pointerLockElement !== dom) voxelInput.mine = false;
+    if (document.pointerLockElement !== dom) {
+      voxelInput.mine = false;
+      voxelWheel.open = false;
+    }
   };
 
   window.addEventListener('keydown', kd);

@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import type { PerspectiveCamera } from 'three';
-import { AmbientLight, DirectionalLight, PointLight } from 'three';
+import { AmbientLight, DirectionalLight, PointLight, SpotLight } from 'three';
 import {
   WebGPURenderer,
   ACESFilmicToneMapping,
@@ -9,6 +9,7 @@ import {
   AmbientLightNode,
   PointLightNode,
   DirectionalLightNode,
+  SpotLightNode,
 } from 'three/webgpu';
 import { Starfield } from './Starfield';
 import { Sun } from './Sun';
@@ -82,6 +83,7 @@ export function SolarSystem() {
     library.addLight(AmbientLightNode, AmbientLight);
     library.addLight(PointLightNode, PointLight);
     library.addLight(DirectionalLightNode, DirectionalLight);
+    library.addLight(SpotLightNode, SpotLight); // the on-foot flashlight (PlayerController.tsx)
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;

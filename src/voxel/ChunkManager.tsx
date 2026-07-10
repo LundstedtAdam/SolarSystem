@@ -519,6 +519,72 @@ export function ChunkManager({
     }
   };
 
+  /** The gun's ranged alt-mining tick: automatic fire at GUN_FIRE_RATE while
+   *  `active`, each connecting shot chipping GUN_SHOT_HARDNESS off the aimed
+   *  block's hardness (same crack-progress feedback as the pickaxe, just
+   *  driven by discrete shots instead of continuous dt). Longer reach than
+   *  the pickaxe (see the per-frame aim block below) but a reduced resource
+   *  yield, and it cannot chop trees at all — keeps the pickaxe meaningful
+   *  rather than the gun strictly superseding it. */
+  const gunState = useRef<{ key: string | null; progress: number; acc: number }>({
+    key: null,
+    progress: 0,
+    acc: 0,
+  });
+  const fireGunShot = (a: [number, number, number]) => {
+    const block = blockAtApi(a[0], a[1], a[2]);
+    if (block === BLOCK.AIR || block === BLOCK.WOOD_LOG) return; // trees are pickaxe-only
+    const gs = gunState.current;
+    const key = `${a[0]},${a[1]},${a[2]}`;
+    if (key !== gs.key) {
+      gs.key = key;
+      gs.progress = 0;
+    }
+    gs.progress += GUN_SHOT_HARDNESS;
+    const frac = Math.min(gs.progress / blockHardness(block), 1);
+
+    crack.position.set(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5);
+    crack.scale.setScalar(1.002);
+    (crack.material as MeshBasicMaterial).opacity = 0.1 + frac * 0.55;
+    crack.visible = true;
+    audio.playMineTick();
+
+    if (frac >= 1) {
+      const res = blockToResource(block);
+      // Reduced yield vs. the pickaxe's guaranteed 1 per block — the trade
+      // for the gun's longer reach and faster automatic fire.
+      if (res && Math.random() < 0.5) {
+        useStore.getState().mineResource(res, 1, planet, [a[0] + 0.5, a[1] + 0.5, a[2] + 0.5]);
+      }
+      spawnBurst(a[0] + 0.5, a[1] + 0.5, a[2] + 0.5, block);
+      audio.playMineBreak();
+      if (STRUCTURE_CORE_BLOCKS.has(block)) {
+        const st = useStore
+          .getState()
+          .structures.find((s) => s.pos[0] === a[0] && s.pos[1] === a[1] && s.pos[2] === a[2]);
+        if (st) useStore.getState().removeStructure(st.id);
+      }
+      editVoxel(a[0], a[1], a[2], BLOCK.AIR);
+      gs.key = null;
+      gs.progress = 0;
+      crack.visible = false;
+    }
+  };
+  const gunTick = (dt: number, active: boolean) => {
+    const gs = gunState.current;
+    const a = aimVoxel.current;
+    if (!active || !a) {
+      gs.acc = 0;
+      return;
+    }
+    gs.acc += dt;
+    const interval = 1 / GUN_FIRE_RATE;
+    while (gs.acc >= interval) {
+      gs.acc -= interval;
+      fireGunShot(a);
+    }
+  };
+
   /** Chopping a WOOD_LOG voxel fells every log voxel directly above it in the
    *  same column (cascading upward until a non-log voxel is hit) — chop the
    *  base to fell the whole trunk, or chop partway up to remove only the top.
@@ -605,6 +671,7 @@ export function ChunkManager({
       blockAt: blockAtApi,
       edit: editVoxel,
       mineTick,
+      gunTick,
       place: placeApi,
     };
     return () => {
@@ -696,9 +763,12 @@ export function ChunkManager({
 
     updateDebris(burst, debris.current, dt, _burstM, _burstC);
 
-    // Aim: raycast from the crosshair to find the targeted voxel (within reach)
-    // for the highlight + dig. REACH (6) is well under a chunk edge (32), so
+    // Aim: raycast from the crosshair to find the targeted voxel (within
+    // reach) for the highlight + dig/shoot. Reach is tool-dependent (the gun
+    // out-ranges the pickaxe) but both are well under a chunk edge (32), so
     // only the 3x3x3 chunk neighbourhood around the camera can be hit.
+    const reach = useStore.getState().activeTool === 'gun' ? GUN_REACH : REACH;
+    aimRay.far = reach + 1;
     aimRay.setFromCamera(aimNdc, camera);
     const targets = aimTargets.current;
     targets.length = 0;
@@ -713,7 +783,7 @@ export function ChunkManager({
     }
     const hits = aimRay.intersectObjects(targets, false);
     const hit = hits.length > 0 ? hits[0] : null;
-    if (hit && hit.face && hit.distance <= REACH) {
+    if (hit && hit.face && hit.distance <= reach) {
       const nx = Math.round(hit.face.normal.x);
       const ny = Math.round(hit.face.normal.y);
       const nz = Math.round(hit.face.normal.z);
@@ -741,7 +811,15 @@ export function ChunkManager({
   );
 }
 
-const REACH = 6; // max dig/highlight distance in voxels
+const REACH = 6; // max dig/highlight distance in voxels (pickaxe)
+/** The gun's longer reach — its tradeoff is reduced yield/no tree-chopping,
+ *  not range, so it's meaningfully better at distance than the pickaxe. */
+const GUN_REACH = 10;
+/** Automatic fire cadence while the gun is held (shots/sec). */
+const GUN_FIRE_RATE = 4;
+/** Hardness "damage" applied per connecting shot — mirrors mineTick's
+ *  dt-based progress accumulation, just driven by discrete shots instead. */
+const GUN_SHOT_HARDNESS = 0.6;
 
 /** Max simultaneous debris cubes across all active bursts. */
 const BURST_MAX = 64;

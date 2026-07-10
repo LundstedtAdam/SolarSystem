@@ -1103,6 +1103,11 @@ button {
   background: rgba(130, 200, 255, 0.22);
   border-color: rgba(160, 210, 255, 0.6);
 }
+/* Read-only equipped-tool chip — same look as the toggle buttons, but inert
+   (no click target; the wheel is hold-to-open, not click-to-toggle). */
+.voxel-tool-indicator {
+  cursor: default;
+}
 .voxel-power-chip {
   pointer-events: none;
   padding: 6px 12px;
@@ -1760,6 +1765,73 @@ button.voxel-item-slot.active {
   opacity: 1;
   box-shadow: 0 0 16px rgba(130, 200, 255, 0.55);
 }
+/* Item-wheel open button — above the joystick (left thumb zone), clear of
+   both the joystick and the right-side action cluster. Smaller than the
+   primary action buttons since it's a modifier hold, not a tap action. */
+.voxel-wheel-btn {
+  position: absolute;
+  z-index: 1;
+  bottom: 250px;
+  left: 72px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(200, 190, 255, 0.4);
+  color: rgba(220, 210, 255, 0.85);
+  font-family: monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  pointer-events: auto;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Item wheel overlay — hold-to-open radial selector. Never modal: rendered
+   directly over the (still-running) game, no backdrop that blocks the view. */
+.voxel-wheel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 220px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  pointer-events: none;
+}
+.voxel-wheel-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0.35;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+.voxel-wheel-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.voxel-wheel-label.equipped {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.voxel-wheel-label.hovered {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
 /* row 3 (top) */
 .voxel-deposit-btn {
   bottom: 208px;

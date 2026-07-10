@@ -1,9 +1,11 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import { Color, DirectionalLight, Vector3 } from 'three';
+import { Color, DirectionalLight, AmbientLight, Vector3 } from 'three';
 import { useStore } from '../store';
 import { QUALITY } from '../systems/quality';
 import { getBiome } from '../terrain/biomes';
+import { voxelTelemetry } from './voxelControls';
+import { ambientDarknessFactor } from './darkness';
 import { ChunkManager } from './ChunkManager';
 import { VoxelSky } from './VoxelSky';
 import { VoxelWeather } from './VoxelWeather';
@@ -61,6 +63,19 @@ function SunLight({ planet }: { planet: string }) {
   return null;
 }
 
+/** Ambient light, scaled every frame by the darkness system (cave depth +
+ *  the body's own archetype darkness — see darkness.ts) on top of the
+ *  biome's authored base intensity. Mutated directly via ref in useFrame,
+ *  not React state — matches this codebase's convention of keeping 60fps
+ *  values out of React/zustand (voxelTelemetry itself is the same pattern). */
+function AmbientDarkness({ intensity, color }: { intensity: number; color: Color }) {
+  const ref = useRef<AmbientLight>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.intensity = intensity * ambientDarknessFactor(intensity, voxelTelemetry.cave);
+  });
+  return <ambientLight ref={ref} intensity={intensity} color={color} />;
+}
+
 export function VoxelScene() {
   const sceneMode = useStore((s) => s.sceneMode);
   const planet = sceneMode.type === 'voxel' ? sceneMode.planet : '';
@@ -100,7 +115,7 @@ export function VoxelScene() {
       <SiloVisuals planet={planet} />
       <StationVisuals planet={planet} />
       <VoxelWeather planet={planet} />
-      <ambientLight intensity={ambientIntensity} color={ambientColor} />
+      <AmbientDarkness intensity={ambientIntensity} color={ambientColor} />
       <SunLight planet={planet} />
       <PlayerController planet={planet} apiRef={apiRef} />
     </>

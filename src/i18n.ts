@@ -130,6 +130,9 @@ const STRINGS = {
     days: 'days',
     hours: 'hours',
     millionKm: 'million km',
+    pickaxe: 'Pickaxe',
+    gun: 'Gun',
+    flashlight: 'Flashlight',
   },
   sv: {
     timeScale: 'Tidsskala',
@@ -228,6 +231,9 @@ const STRINGS = {
     days: 'dygn',
     hours: 'timmar',
     millionKm: 'miljoner km',
+    pickaxe: 'Hacka',
+    gun: 'Pistol',
+    flashlight: 'Ficklampa',
   },
 } as const;
 

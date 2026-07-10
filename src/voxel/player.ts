@@ -21,6 +21,11 @@ export interface VoxelApi {
    *  while `active`; breaks the block once its hardness is met, yielding any
    *  resource. Resets progress when the aim moves or mining stops. */
   mineTick: (dt: number, active: boolean) => void;
+  /** The gun's ranged alt-mining tick — automatic fire at a fixed cadence
+   *  while `active`, longer reach than the pickaxe, reduced resource yield,
+   *  and cannot chop trees. Same break/crack-progress feedback as `mineTick`,
+   *  just driven by discrete shots instead of continuous dt. */
+  gunTick: (dt: number, active: boolean) => void;
   /** Place the active buildable in the air cell adjacent to the aimed face
    *  (deducts its cost; registers a silo entity). No-op if nothing is aimed,
    *  the cell is occupied, or the cost is unaffordable. */

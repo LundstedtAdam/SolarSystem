@@ -5,9 +5,11 @@ import {
   voxelInput,
   voxelScan,
   voxelSilo,
+  voxelWheel,
   resetVoxelInput,
   isTouchDevice,
   radialShape,
+  resolveWheelSlice,
 } from '../voxel/voxelControls';
 
 // Mobile-first on-foot controls: left joystick to move, right-side drag to look,
@@ -135,6 +137,45 @@ function ScanButton() {
   );
 }
 
+// Hold to open the item wheel, drag to a wedge, release to select — mirrors
+// the desktop KeyQ-hold gesture (see voxelControls.ts's `resolveWheelSlice`).
+// Deliberately not modal: nothing here pauses input or exits any lock state.
+function WheelButton() {
+  const pid = useRef<number | null>(null);
+  const start = useRef({ x: 0, y: 0 });
+  const close = () => {
+    pid.current = null;
+    voxelWheel.open = false;
+  };
+  return (
+    <button
+      className="voxel-wheel-btn"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        pid.current = e.pointerId;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        start.current = { x: e.clientX, y: e.clientY };
+        voxelWheel.open = true;
+        voxelWheel.dx = 0;
+        voxelWheel.dy = 0;
+      }}
+      onPointerMove={(e) => {
+        if (e.pointerId !== pid.current) return;
+        voxelWheel.dx = e.clientX - start.current.x;
+        voxelWheel.dy = e.clientY - start.current.y;
+      }}
+      onPointerUp={(e) => {
+        if (e.pointerId !== pid.current) return;
+        voxelWheel.selected = resolveWheelSlice(voxelWheel.dx, voxelWheel.dy);
+        close();
+      }}
+      onPointerCancel={close}
+    >
+      TOOL
+    </button>
+  );
+}
+
 function JumpButton() {
   const up = () => {
     voxelInput.jump = false;
@@ -212,6 +253,7 @@ export function VoxelTouchControls() {
       <ScanButton />
       <DigButton />
       <JumpButton />
+      <WheelButton />
     </div>
   );
 }
